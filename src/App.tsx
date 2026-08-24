@@ -236,8 +236,7 @@ export default function App() {
         {!showSession && (browsePanel === 'hosts' || browsePanel === 'sftp') && (
           <HostOverviewPanel
             panel={browsePanel}
-            hosts={visibleHosts}
-            totalHostCount={hosts.length}
+            allHosts={hosts}
             groups={groups}
             searchQuery={searchQuery}
             groupFilter={groupFilter}
@@ -249,6 +248,7 @@ export default function App() {
             onEditHost={(h) => setModal({ type: 'host', host: h })}
             onDeleteHost={handleDeleteHost}
             onAddHost={() => setModal({ type: 'host' })}
+            onAddGroup={() => setModal({ type: 'group' })}
             onEditGroup={(g) => setModal({ type: 'group', group: g })}
             onDeleteGroup={handleDeleteGroup}
           />
