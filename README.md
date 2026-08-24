@@ -54,7 +54,7 @@ npm run package      # 打包为可分发安装包
 ## 项目结构
 
 ```
-my-termius/
+oh-my-cloudlink/
 ├── electron/           # Electron 主进程
 │   ├── main.ts         # 窗口 & IPC 入口
 │   ├── preload.ts      # 渲染进程 API 桥接
