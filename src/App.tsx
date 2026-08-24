@@ -5,8 +5,8 @@ import { SessionTabBar } from './components/SessionTabBar'
 import { HostOverviewPanel } from './components/HostOverviewPanel'
 import { KeysPanel } from './components/KeysPanel'
 import { SettingsPanel } from './components/SettingsPanel'
+import { SftpPanel } from './components/SftpPanel'
 import { TerminalPanel } from './components/TerminalPanel'
-import { FileBrowserPanel } from './components/FileBrowserPanel'
 import { HostFormModal, GroupFormModal, KeyFormModal, DiscoverKeysModal } from './components/Modals'
 import type { Host, Group, SSHKey, AppSession, DiscoveredKey } from './types'
 import type { AppPanel } from './types/app'
@@ -233,7 +233,7 @@ export default function App() {
       />
 
       <main className="flex-1 flex flex-col min-h-0">
-        {!showSession && (browsePanel === 'hosts' || browsePanel === 'sftp') && (
+        {!showSession && browsePanel === 'hosts' && (
           <HostOverviewPanel
             panel={browsePanel}
             allHosts={hosts}
@@ -251,6 +251,14 @@ export default function App() {
             onAddGroup={() => setModal({ type: 'group' })}
             onEditGroup={(g) => setModal({ type: 'group', group: g })}
             onDeleteGroup={handleDeleteGroup}
+          />
+        )}
+
+        {!showSession && browsePanel === 'sftp' && (
+          <SftpPanel
+            hosts={hosts}
+            groups={groups}
+            onConnect={handleConnectFromPanel}
           />
         )}
 
@@ -276,13 +284,18 @@ export default function App() {
 
               if (isFileProtocol(session.protocol)) {
                 return (
-                  <FileBrowserPanel
+                  <SftpPanel
                     key={sessionId}
                     sessionId={sessionId}
                     hostId={session.hostId}
+                    hostName={session.hostName}
                     protocol={session.protocol as 'sftp' | 'ftp'}
                     active={activeSessionId === sessionId}
+                    hosts={hosts}
+                    groups={groups}
+                    onConnect={handleConnectFromPanel}
                     onStatusChange={updateSessionStatus}
+                    onDisconnectSession={() => closeSession(sessionId)}
                   />
                 )
               }

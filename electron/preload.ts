@@ -75,6 +75,9 @@ const electronAPI = {
   fileRename: (sessionId: string, oldPath: string, newPath: string) =>
     ipcRenderer.invoke('file:rename', sessionId, oldPath, newPath),
   fileHome: (sessionId: string) => ipcRenderer.invoke('file:home', sessionId) as Promise<string>,
+
+  localHome: () => ipcRenderer.invoke('local:home') as Promise<string>,
+  localList: (dirPath: string) => ipcRenderer.invoke('local:list', dirPath),
 }
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPI)

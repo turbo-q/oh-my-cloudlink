@@ -41,6 +41,9 @@ export interface ElectronAPI {
   fileDelete: (sessionId: string, remotePath: string, isDirectory: boolean) => Promise<boolean>
   fileRename: (sessionId: string, oldPath: string, newPath: string) => Promise<boolean>
   fileHome: (sessionId: string) => Promise<string>
+
+  localHome: () => Promise<string>
+  localList: (dirPath: string) => Promise<RemoteFileEntry[]>
 }
 
 declare global {

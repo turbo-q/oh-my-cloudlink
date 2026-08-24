@@ -3,6 +3,7 @@ import path from 'path'
 import { DataStore } from './data-store'
 import { SshManager } from './ssh-manager'
 import { FileManager } from './file-manager'
+import { LocalFileManager } from './local-file-manager'
 import { discoverLocalKeys, readKeyFromFile } from './key-discovery'
 
 const isDev = !app.isPackaged
@@ -11,6 +12,7 @@ let mainWindow: BrowserWindow | null = null
 const dataStore = new DataStore()
 const sshManager = new SshManager()
 const fileManager = new FileManager()
+const localFileManager = new LocalFileManager()
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -167,6 +169,12 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle('file:home', (_e, sessionId: string) => {
     return fileManager.getHome(sessionId)
+  })
+
+  // 本机文件浏览
+  ipcMain.handle('local:home', () => localFileManager.getHome())
+  ipcMain.handle('local:list', async (_e, dirPath: string) => {
+    return localFileManager.list(dirPath)
   })
 }
 
