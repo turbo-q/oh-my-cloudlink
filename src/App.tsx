@@ -8,7 +8,8 @@ import { TerminalPanel } from './components/TerminalPanel'
 import { FileBrowserPanel } from './components/FileBrowserPanel'
 import { HostFormModal, GroupFormModal, KeyFormModal, DiscoverKeysModal } from './components/Modals'
 import type { Host, Group, SSHKey, AppSession, DiscoveredKey } from './types'
-import { isFileProtocol, PROTOCOL_COLORS, isSshHost, getHostFileProtocol } from './types'
+import { isFileProtocol, PROTOCOL_COLORS, isSshHost, getHostFileProtocol, GROUP_COLORS } from './types'
+import type { GroupFilter } from './components/HostList'
 
 type ModalState =
   | { type: 'none' }
@@ -34,6 +35,7 @@ export default function App() {
   } = useAppData()
 
   const [searchQuery, setSearchQuery] = useState('')
+  const [groupFilter, setGroupFilter] = useState<GroupFilter>(null)
   const [activePanel, setActivePanel] = useState<AppPanel>('hosts')
   const [selectedHostId, setSelectedHostId] = useState<string | null>(null)
   const [sessions, setSessions] = useState<AppSession[]>([])
@@ -121,7 +123,16 @@ export default function App() {
   const handleDeleteGroup = async (group: Group) => {
     if (!confirm(`确定删除分组「${group.name}」？组内主机将变为未分组。`)) return
     await deleteGroup(group.id)
+    if (groupFilter === group.id) setGroupFilter(null)
   }
+
+  const handleCreateGroup = useCallback(
+    async (name: string) => {
+      const color = GROUP_COLORS[groups.length % GROUP_COLORS.length]
+      return saveGroup({ name, color })
+    },
+    [groups.length, saveGroup],
+  )
 
   const handleDeleteKey = async (key: SSHKey) => {
     if (!confirm(`确定删除密钥「${key.name}」？`)) return
@@ -191,15 +202,16 @@ export default function App() {
           keys={keys}
           selectedHostId={selectedHostId}
           searchQuery={searchQuery}
+          groupFilter={groupFilter}
           activePanel={activePanel}
           connectMode={connectMode}
           onSearchChange={setSearchQuery}
+          onGroupFilterChange={setGroupFilter}
           onSelectHost={(h) => setSelectedHostId(h.id)}
           onConnectHost={handleConnectFromPanel}
           onEditHost={(h) => setModal({ type: 'host', host: h })}
           onDeleteHost={handleDeleteHost}
           onAddHost={() => setModal({ type: 'host' })}
-          onAddGroup={() => setModal({ type: 'group' })}
           onEditGroup={(g) => setModal({ type: 'group', group: g })}
           onDeleteGroup={handleDeleteGroup}
           onAddKey={() => setModal({ type: 'key' })}
@@ -314,6 +326,7 @@ export default function App() {
         groups={groups}
         keys={keys}
         onSave={saveHost}
+        onCreateGroup={handleCreateGroup}
         onClose={() => setModal({ type: 'none' })}
       />
       <GroupFormModal

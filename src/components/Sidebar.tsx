@@ -1,6 +1,6 @@
 import type { Host, Group, SSHKey } from '../types'
 import type { AppPanel } from './TopNav'
-import { HostList as HostListPanel } from './HostList'
+import { HostList as HostListPanel, type GroupFilter } from './HostList'
 
 interface SidebarProps {
   hosts: Host[]
@@ -8,15 +8,16 @@ interface SidebarProps {
   keys: SSHKey[]
   selectedHostId: string | null
   searchQuery: string
+  groupFilter: GroupFilter
   activePanel: AppPanel
   connectMode: 'ssh' | 'sftp'
   onSearchChange: (query: string) => void
+  onGroupFilterChange: (filter: GroupFilter) => void
   onSelectHost: (host: Host) => void
   onConnectHost: (host: Host) => void
   onEditHost: (host: Host) => void
   onDeleteHost: (host: Host) => void
   onAddHost: () => void
-  onAddGroup: () => void
   onEditGroup: (group: Group) => void
   onDeleteGroup: (group: Group) => void
   onAddKey: () => void
@@ -33,15 +34,16 @@ export function Sidebar({
   keys,
   selectedHostId,
   searchQuery,
+  groupFilter,
   activePanel,
   connectMode,
   onSearchChange,
+  onGroupFilterChange,
   onSelectHost,
   onConnectHost,
   onEditHost,
   onDeleteHost,
   onAddHost,
-  onAddGroup,
   onEditGroup,
   onDeleteGroup,
   onAddKey,
@@ -74,9 +76,6 @@ export function Sidebar({
                 <button onClick={onAddHost} className="btn-primary flex-1 text-xs py-1.5">
                   + 添加主机
                 </button>
-                <button onClick={onAddGroup} className="btn-secondary text-xs py-1.5 px-3" title="新建分组">
-                  分组
-                </button>
               </div>
               {activePanel === 'sftp' && (
                 <p className="mt-2 text-xs text-slate-500 leading-relaxed">
@@ -86,28 +85,65 @@ export function Sidebar({
             </div>
 
             {groups.length > 0 && (
-              <div className="px-3 mb-3 flex flex-wrap gap-1">
-                {groups.map((g) => (
-                  <span
-                    key={g.id}
-                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-white/5 text-slate-400 group/tag cursor-default"
+              <div className="px-3 mb-3">
+                <div className="flex flex-wrap gap-1">
+                  <button
+                    type="button"
+                    onClick={() => onGroupFilterChange(null)}
+                    className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs transition-colors ${
+                      groupFilter === null
+                        ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                        : 'bg-white/5 text-slate-400 hover:text-slate-200 hover:bg-white/10'
+                    }`}
                   >
-                    <span className="w-1.5 h-1.5 rounded-full" style={{ background: g.color }} />
-                    {g.name}
+                    全部
+                  </button>
+                  {groups.map((g) => (
+                    <span key={g.id} className="inline-flex items-center group/tag">
+                      <button
+                        type="button"
+                        onClick={() => onGroupFilterChange(groupFilter === g.id ? null : g.id)}
+                        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs transition-colors ${
+                          groupFilter === g.id
+                            ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                            : 'bg-white/5 text-slate-400 hover:text-slate-200 hover:bg-white/10'
+                        }`}
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full" style={{ background: g.color }} />
+                        {g.name}
+                      </button>
+                      <button
+                        className="hidden group-hover/tag:inline p-0.5 ml-0.5 text-slate-500 hover:text-white"
+                        title="编辑分组"
+                        onClick={() => onEditGroup(g)}
+                      >
+                        ✎
+                      </button>
+                      <button
+                        className="hidden group-hover/tag:inline p-0.5 text-red-400/60 hover:text-red-400"
+                        title="删除分组"
+                        onClick={() => onDeleteGroup(g)}
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                  {hosts.some((h) => !h.groupId) && (
                     <button
-                      className="hidden group-hover/tag:inline text-slate-500 hover:text-white ml-0.5"
-                      onClick={() => onEditGroup(g)}
+                      type="button"
+                      onClick={() =>
+                        onGroupFilterChange(groupFilter === '__ungrouped__' ? null : '__ungrouped__')
+                      }
+                      className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs transition-colors ${
+                        groupFilter === '__ungrouped__'
+                          ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                          : 'bg-white/5 text-slate-400 hover:text-slate-200 hover:bg-white/10'
+                      }`}
                     >
-                      ✎
+                      未分组
                     </button>
-                    <button
-                      className="hidden group-hover/tag:inline text-red-400/60 hover:text-red-400"
-                      onClick={() => onDeleteGroup(g)}
-                    >
-                      ×
-                    </button>
-                  </span>
-                ))}
+                  )}
+                </div>
               </div>
             )}
 
@@ -116,6 +152,7 @@ export function Sidebar({
               groups={groups}
               selectedHostId={selectedHostId}
               searchQuery={searchQuery}
+              groupFilter={groupFilter}
               connectMode={connectMode}
               onSelectHost={onSelectHost}
               onConnectHost={onConnectHost}

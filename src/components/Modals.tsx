@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { Host, Group, SSHKey, AuthType, DiscoveredKey } from '../types'
 import { DEFAULT_FTP_PORT, DEFAULT_SSH_PORT, GROUP_COLORS } from '../types'
+import { GroupCombobox } from './GroupCombobox'
 
 interface HostFormModalProps {
   open: boolean
@@ -8,6 +9,7 @@ interface HostFormModalProps {
   groups: Group[]
   keys: SSHKey[]
   onSave: (data: Partial<Host> & { name: string; hostname: string; username: string }) => Promise<unknown>
+  onCreateGroup: (name: string) => Promise<Group>
   onClose: () => void
 }
 
@@ -25,7 +27,7 @@ const emptyForm = {
   notes: '',
 }
 
-export function HostFormModal({ open, host, groups, keys, onSave, onClose }: HostFormModalProps) {
+export function HostFormModal({ open, host, groups, keys, onSave, onCreateGroup, onClose }: HostFormModalProps) {
   const [form, setForm] = useState(emptyForm)
   const [saving, setSaving] = useState(false)
 
@@ -227,18 +229,12 @@ export function HostFormModal({ open, host, groups, keys, onSave, onClose }: Hos
 
           <div>
             <label className="block text-sm text-slate-400 mb-1">分组</label>
-            <select
-              value={form.groupId}
-              onChange={(e) => setForm({ ...form, groupId: e.target.value })}
-              className="input-field"
-            >
-              <option value="">无分组</option>
-              {groups.map((g) => (
-                <option key={g.id} value={g.id}>
-                  {g.name}
-                </option>
-              ))}
-            </select>
+            <GroupCombobox
+              groupId={form.groupId}
+              groups={groups}
+              onChange={(groupId) => setForm({ ...form, groupId })}
+              onCreateGroup={onCreateGroup}
+            />
           </div>
 
           <div>
