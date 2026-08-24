@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { RemoteFileEntry } from '../types'
-import { FileListPane, joinPath, parentPath } from './FileListPane'
+import { FileListPane, joinPath, parentPath, type FileDragData } from './FileListPane'
 
 interface RemoteFilePaneProps {
   sessionId: string
@@ -161,6 +161,26 @@ export function RemoteFilePane({
     }
   }
 
+  const handleDropFromLocal = async (items: FileDragData[]) => {
+    setOperating(true)
+    setMessage(null)
+    try {
+      let count = 0
+      for (const item of items) {
+        if (item.source !== 'local') continue
+        await window.electronAPI.fileUpload(sessionId, item.path, joinPath(currentPath, item.name))
+        count++
+      }
+      if (count === 0) return
+      setMessage(`已上传 ${count} 个文件`)
+      await loadDirectory(currentPath)
+    } catch (err) {
+      setMessage(`上传失败: ${(err as Error).message}`)
+    } finally {
+      setOperating(false)
+    }
+  }
+
   return (
     <FileListPane
       title="Remote"
@@ -178,6 +198,8 @@ export function RemoteFilePane({
         void loadDirectory(home)
       }}
       onRefresh={() => void loadDirectory(currentPath)}
+      onPathSubmit={(path) => void loadDirectory(path)}
+      onFileDrop={handleDropFromLocal}
       onUpload={() => void handleUpload()}
       onMkdir={() => void handleMkdir()}
       onDownload={(e) => void handleDownload(e)}

@@ -39,7 +39,7 @@ export function SftpPanel({
   return (
     <div className={`${connected ? 'absolute inset-0' : 'flex-1'} flex min-h-0 bg-[#0f1117]`}>
       <div className="flex-1 min-w-0">
-        <LocalFilePane />
+        <LocalFilePane sessionId={connected ? sessionId! : undefined} remoteConnected={connected} />
       </div>
 
       <div className="flex-1 min-w-0">

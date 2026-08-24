@@ -44,6 +44,7 @@ export interface ElectronAPI {
 
   localHome: () => Promise<string>
   localList: (dirPath: string) => Promise<RemoteFileEntry[]>
+  getPathForFile: (file: File) => string
 }
 
 declare global {

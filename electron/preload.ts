@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webUtils } from 'electron'
 
 const electronAPI = {
   // 主机
@@ -78,6 +78,8 @@ const electronAPI = {
 
   localHome: () => ipcRenderer.invoke('local:home') as Promise<string>,
   localList: (dirPath: string) => ipcRenderer.invoke('local:list', dirPath),
+
+  getPathForFile: (file: File) => webUtils.getPathForFile(file),
 }
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPI)

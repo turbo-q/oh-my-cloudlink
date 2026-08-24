@@ -1,5 +1,14 @@
+import { useEffect, useState, type DragEvent } from 'react'
 import type { RemoteFileEntry } from '../types'
 import { formatFileSize, formatDate } from '../types'
+
+export const SFTP_FILE_DRAG_MIME = 'application/x-yunlian-sftp-file'
+
+export interface FileDragData {
+  source: 'local' | 'remote'
+  path: string
+  name: string
+}
 
 export interface FileListPaneProps {
   title: string
@@ -14,6 +23,8 @@ export interface FileListPaneProps {
   onGoUp: () => void
   onGoHome: () => void
   onRefresh: () => void
+  onPathSubmit?: (path: string) => void
+  onFileDrop?: (items: FileDragData[]) => void | Promise<void>
   onUpload?: () => void
   onMkdir?: () => void
   onDownload?: (entry: RemoteFileEntry) => void
@@ -44,6 +55,38 @@ function pathSegments(currentPath: string): { label: string; path: string }[] {
   return segments
 }
 
+function parseDropItems(e: DragEvent, variant: 'local' | 'remote'): FileDragData[] {
+  const acceptFrom = variant === 'local' ? 'remote' : 'local'
+  const items: FileDragData[] = []
+
+  const raw = e.dataTransfer.getData(SFTP_FILE_DRAG_MIME)
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw) as FileDragData | FileDragData[]
+      const list = Array.isArray(parsed) ? parsed : [parsed]
+      for (const item of list) {
+        if (item.source === acceptFrom) items.push(item)
+      }
+      if (items.length > 0) return items
+    } catch {
+      // ignore malformed payload
+    }
+  }
+
+  if (variant === 'remote') {
+    for (const file of Array.from(e.dataTransfer.files)) {
+      const filePath =
+        (file as File & { path?: string }).path ??
+        (typeof window !== 'undefined' ? window.electronAPI?.getPathForFile(file) : '')
+      if (filePath) {
+        items.push({ source: 'local', path: filePath, name: file.name })
+      }
+    }
+  }
+
+  return items
+}
+
 export function FileListPane({
   title,
   variant,
@@ -57,6 +100,8 @@ export function FileListPane({
   onGoUp,
   onGoHome,
   onRefresh,
+  onPathSubmit,
+  onFileDrop,
   onUpload,
   onMkdir,
   onDownload,
@@ -66,6 +111,46 @@ export function FileListPane({
 }: FileListPaneProps) {
   const segments = pathSegments(currentPath)
   const canGoUp = segments.length > 1 || (currentPath !== '/' && currentPath.length > 3)
+  const [pathInput, setPathInput] = useState(currentPath)
+  const [dragOver, setDragOver] = useState(false)
+
+  useEffect(() => {
+    setPathInput(currentPath)
+  }, [currentPath])
+
+  const submitPath = () => {
+    const next = pathInput.trim()
+    if (!next || next === currentPath) return
+    onPathSubmit?.(next)
+  }
+
+  const handleDragStart = (entry: RemoteFileEntry) => (e: DragEvent) => {
+    if (entry.isDirectory) return
+    const payload: FileDragData = { source: variant, path: entry.path, name: entry.name }
+    e.dataTransfer.setData(SFTP_FILE_DRAG_MIME, JSON.stringify(payload))
+    e.dataTransfer.effectAllowed = 'copy'
+  }
+
+  const handleDragOver = (e: DragEvent) => {
+    if (!onFileDrop || operating) return
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'copy'
+    setDragOver(true)
+  }
+
+  const handleDragLeave = (e: DragEvent) => {
+    if (e.currentTarget.contains(e.relatedTarget as Node)) return
+    setDragOver(false)
+  }
+
+  const handleDrop = (e: DragEvent) => {
+    e.preventDefault()
+    setDragOver(false)
+    if (!onFileDrop || operating) return
+    const items = parseDropItems(e, variant)
+    if (items.length === 0) return
+    void onFileDrop(items)
+  }
 
   return (
     <div className="flex flex-col h-full min-w-0 border-r border-white/5 last:border-r-0">
@@ -111,7 +196,23 @@ export function FileListPane({
         )}
       </div>
 
-      <div className="flex items-center gap-1 px-4 py-2 text-xs text-slate-500 border-b border-white/5 overflow-x-auto shrink-0">
+      <div className="flex items-center gap-2 px-4 py-2 border-b border-white/5 shrink-0 bg-[#10131a]">
+        <input
+          type="text"
+          value={pathInput}
+          onChange={(e) => setPathInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') submitPath()
+            if (e.key === 'Escape') setPathInput(currentPath)
+          }}
+          disabled={operating || !onPathSubmit}
+          placeholder="输入路径后按 Enter"
+          className="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg bg-[#0f1117] border border-white/10 text-xs font-mono text-slate-300 placeholder:text-slate-600 focus:outline-none focus:border-emerald-500/50 disabled:opacity-50"
+          spellCheck={false}
+        />
+      </div>
+
+      <div className="flex items-center gap-1 px-4 py-1.5 text-xs text-slate-500 border-b border-white/5 overflow-x-auto shrink-0">
         {segments.map((seg, i) => (
           <span key={seg.path} className="flex items-center gap-1 shrink-0">
             {i > 0 && <span className="text-slate-700">›</span>}
@@ -135,11 +236,20 @@ export function FileListPane({
         </div>
       )}
 
-      <div className="flex-1 overflow-auto min-h-0">
+      <div
+        className={`flex-1 overflow-auto min-h-0 transition-colors ${
+          dragOver ? 'bg-emerald-500/5 ring-1 ring-inset ring-emerald-500/30' : ''
+        }`}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+      >
         {loading ? (
           <div className="flex items-center justify-center h-full text-slate-500 text-sm">加载中...</div>
         ) : entries.length === 0 ? (
-          <div className="flex items-center justify-center h-full text-slate-500 text-sm">此目录为空</div>
+          <div className="flex items-center justify-center h-full text-slate-500 text-sm">
+            {onFileDrop ? '此目录为空，可将文件拖入此处' : '此目录为空'}
+          </div>
         ) : (
           <table className="w-full text-sm">
             <thead className="sticky top-0 bg-[#141720] text-slate-500 text-xs uppercase tracking-wider z-10">
@@ -156,7 +266,11 @@ export function FileListPane({
               {entries.map((entry) => (
                 <tr
                   key={entry.path}
-                  className="border-t border-white/5 hover:bg-white/5 cursor-pointer transition-colors"
+                  draggable={!entry.isDirectory}
+                  onDragStart={handleDragStart(entry)}
+                  className={`border-t border-white/5 hover:bg-white/5 cursor-pointer transition-colors ${
+                    !entry.isDirectory ? 'cursor-grab active:cursor-grabbing' : ''
+                  }`}
                   onClick={() => onNavigate(entry)}
                   onDoubleClick={() => {
                     if (entry.isDirectory) onNavigate(entry)
