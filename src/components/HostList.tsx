@@ -1,6 +1,7 @@
 import type { Host, Group } from '../types'
+import { filterHosts, type GroupFilter } from '../utils/filterHosts'
 
-export type GroupFilter = string | null | '__ungrouped__'
+export type { GroupFilter }
 
 interface HostListProps {
   hosts: Host[]
@@ -27,29 +28,14 @@ export function HostList({
   onEditHost,
   onDeleteHost,
 }: HostListProps) {
-  const query = searchQuery.toLowerCase().trim()
-
-  let filtered = hosts.filter(
-    (h) =>
-      !query ||
-      h.name.toLowerCase().includes(query) ||
-      h.hostname.toLowerCase().includes(query) ||
-      h.username.toLowerCase().includes(query) ||
-      h.tags.some((t) => t.toLowerCase().includes(query)),
-  )
-
-  if (groupFilter === '__ungrouped__') {
-    filtered = filtered.filter((h) => !h.groupId)
-  } else if (groupFilter) {
-    filtered = filtered.filter((h) => h.groupId === groupFilter)
-  }
+  const filtered = filterHosts(hosts, searchQuery, groupFilter)
 
   const connectTitle = connectMode === 'ssh' ? 'SSH 连接' : 'SFTP 连接'
 
   if (filtered.length === 0) {
     return (
       <div className="px-4 py-8 text-center text-slate-500 text-sm">
-        {query || groupFilter ? '未找到匹配的主机' : '暂无主机，点击上方 + 添加'}
+        {searchQuery || groupFilter ? '未找到匹配的主机' : '暂无主机，点击上方 + 添加'}
       </div>
     )
   }

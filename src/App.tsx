@@ -1,15 +1,16 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import { useAppData } from './hooks/useAppData'
 import { Sidebar } from './components/Sidebar'
 import { TopNav, type AppPanel } from './components/TopNav'
-import { WelcomeScreen } from './components/WelcomeScreen'
+import { HostOverviewPanel } from './components/HostOverviewPanel'
 import { TerminalPanel } from './components/TerminalPanel'
 import { FileBrowserPanel } from './components/FileBrowserPanel'
 import { HostFormModal, GroupFormModal, KeyFormModal, DiscoverKeysModal } from './components/Modals'
 import type { Host, Group, SSHKey, AppSession, DiscoveredKey } from './types'
 import { isFileProtocol, PROTOCOL_COLORS, isSshHost, getHostFileProtocol, GROUP_COLORS } from './types'
 import type { GroupFilter } from './components/HostList'
+import { filterHosts } from './utils/filterHosts'
 
 type ModalState =
   | { type: 'none' }
@@ -43,7 +44,20 @@ export default function App() {
   const [modal, setModal] = useState<ModalState>({ type: 'none' })
   const [mountedSessions, setMountedSessions] = useState<Set<string>>(new Set())
 
-  const selectedHost = hosts.find((h) => h.id === selectedHostId) ?? null
+  const visibleHosts = useMemo(
+    () => filterHosts(hosts, searchQuery, groupFilter),
+    [hosts, searchQuery, groupFilter],
+  )
+
+  useEffect(() => {
+    if (visibleHosts.length === 0) {
+      if (selectedHostId !== null) setSelectedHostId(null)
+      return
+    }
+    if (!selectedHostId || !visibleHosts.some((h) => h.id === selectedHostId)) {
+      setSelectedHostId(visibleHosts[0].id)
+    }
+  }, [visibleHosts, selectedHostId])
 
   const connectHost = useCallback((host: Host, mode: 'ssh' | 'sftp' = 'ssh') => {
     if (mode === 'ssh' && !isSshHost(host)) {
@@ -268,10 +282,15 @@ export default function App() {
 
           <div className="flex-1 relative min-h-0">
             {!hasActiveSessions && (activePanel === 'hosts' || activePanel === 'sftp') && (
-              <WelcomeScreen
+              <HostOverviewPanel
                 panel={activePanel}
-                selectedHost={selectedHost}
+                hosts={visibleHosts}
+                totalHostCount={hosts.length}
+                groups={groups}
+                selectedHostId={selectedHostId}
+                onSelectHost={(h) => setSelectedHostId(h.id)}
                 onConnect={handleConnectFromPanel}
+                onEditHost={(h) => setModal({ type: 'host', host: h })}
                 onAddHost={() => setModal({ type: 'host' })}
               />
             )}
