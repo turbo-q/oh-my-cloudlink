@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog, type IpcMainInvokeEvent } from 'electron'
 import path from 'path'
 import { DataStore } from './data-store'
 import { SshManager } from './ssh-manager'
@@ -43,35 +43,43 @@ function createWindow(): void {
   })
 }
 
+function safeHandle(
+  channel: string,
+  handler: (event: IpcMainInvokeEvent, ...args: any[]) => unknown,
+): void {
+  ipcMain.removeHandler(channel)
+  ipcMain.handle(channel, handler)
+}
+
 function registerIpcHandlers(): void {
   // 主机 CRUD
-  ipcMain.handle('data:getHosts', () => dataStore.getHosts())
-  ipcMain.handle('data:saveHost', (_e, host) => dataStore.saveHost(host))
-  ipcMain.handle('data:deleteHost', (_e, id: string) => dataStore.deleteHost(id))
+  safeHandle('data:getHosts', () => dataStore.getHosts())
+  safeHandle('data:saveHost', (_e, host) => dataStore.saveHost(host))
+  safeHandle('data:deleteHost', (_e, id: string) => dataStore.deleteHost(id))
 
   // 分组 CRUD
-  ipcMain.handle('data:getGroups', () => dataStore.getGroups())
-  ipcMain.handle('data:saveGroup', (_e, group) => dataStore.saveGroup(group))
-  ipcMain.handle('data:deleteGroup', (_e, id: string) => dataStore.deleteGroup(id))
+  safeHandle('data:getGroups', () => dataStore.getGroups())
+  safeHandle('data:saveGroup', (_e, group) => dataStore.saveGroup(group))
+  safeHandle('data:deleteGroup', (_e, id: string) => dataStore.deleteGroup(id))
 
   // 密钥 CRUD
-  ipcMain.handle('data:getKeys', () => dataStore.getKeys())
-  ipcMain.handle('data:saveKey', (_e, key) => dataStore.saveKey(key))
-  ipcMain.handle('data:deleteKey', (_e, id: string) => dataStore.deleteKey(id))
+  safeHandle('data:getKeys', () => dataStore.getKeys())
+  safeHandle('data:saveKey', (_e, key) => dataStore.saveKey(key))
+  safeHandle('data:deleteKey', (_e, id: string) => dataStore.deleteKey(id))
 
   // 本机密钥发现
-  ipcMain.handle('keys:discover', () => discoverLocalKeys())
-  ipcMain.handle('keys:readFile', (_e, filePath: string) => readKeyFromFile(filePath))
+  safeHandle('keys:discover', () => discoverLocalKeys())
+  safeHandle('keys:readFile', (_e, filePath: string) => readKeyFromFile(filePath))
 
   // 导入导出
-  ipcMain.handle('data:export', () => dataStore.exportData())
-  ipcMain.handle('data:import', (_e, data) => {
+  safeHandle('data:export', () => dataStore.exportData())
+  safeHandle('data:import', (_e, data) => {
     dataStore.importData(data)
     return true
   })
 
   // 系统对话框
-  ipcMain.handle('dialog:openFile', async (_e, options?: { title?: string; multi?: boolean; filters?: { name: string; extensions: string[] }[] }) => {
+  safeHandle('dialog:openFile', async (_e, options?: { title?: string; multi?: boolean; filters?: { name: string; extensions: string[] }[] }) => {
     if (!mainWindow) return null
     const result = await dialog.showOpenDialog(mainWindow, {
       title: options?.title ?? '选择文件',
@@ -81,7 +89,7 @@ function registerIpcHandlers(): void {
     return result.canceled ? null : result.filePaths
   })
 
-  ipcMain.handle('dialog:openDirectory', async (_e, options?: { title?: string }) => {
+  safeHandle('dialog:openDirectory', async (_e, options?: { title?: string }) => {
     if (!mainWindow) return null
     const result = await dialog.showOpenDialog(mainWindow, {
       title: options?.title ?? '选择目录',
@@ -90,7 +98,7 @@ function registerIpcHandlers(): void {
     return result.canceled ? null : result.filePaths[0] ?? null
   })
 
-  ipcMain.handle('dialog:saveFile', async (_e, options?: { title?: string; defaultPath?: string }) => {
+  safeHandle('dialog:saveFile', async (_e, options?: { title?: string; defaultPath?: string }) => {
     if (!mainWindow) return null
     const result = await dialog.showSaveDialog(mainWindow, {
       title: options?.title ?? '保存文件',
@@ -100,7 +108,7 @@ function registerIpcHandlers(): void {
   })
 
   // SSH 连接
-  ipcMain.handle('ssh:connect', async (_e, sessionId: string, hostId: string) => {
+  safeHandle('ssh:connect', async (_e, sessionId: string, hostId: string) => {
     if (!mainWindow) throw new Error('窗口未就绪')
     const host = dataStore.getHosts().find((h) => h.id === hostId)
     if (!host) throw new Error('主机不存在')
@@ -111,20 +119,20 @@ function registerIpcHandlers(): void {
     )
   })
 
-  ipcMain.handle('ssh:write', (_e, sessionId: string, data: string) => {
+  safeHandle('ssh:write', (_e, sessionId: string, data: string) => {
     sshManager.write(sessionId, data)
   })
 
-  ipcMain.handle('ssh:resize', (_e, sessionId: string, cols: number, rows: number) => {
+  safeHandle('ssh:resize', (_e, sessionId: string, cols: number, rows: number) => {
     sshManager.resize(sessionId, cols, rows)
   })
 
-  ipcMain.handle('ssh:disconnect', async (_e, sessionId: string) => {
+  safeHandle('ssh:disconnect', async (_e, sessionId: string) => {
     await sshManager.disconnect(sessionId)
   })
 
   // 文件传输 (SFTP / FTP)
-  ipcMain.handle(
+  safeHandle(
     'file:connect',
     async (_e, sessionId: string, hostId: string, fileProtocol?: 'sftp' | 'ftp') => {
       const host = dataStore.getHosts().find((h) => h.id === hostId)
@@ -134,52 +142,55 @@ function registerIpcHandlers(): void {
     },
   )
 
-  ipcMain.handle('file:disconnect', async (_e, sessionId: string) => {
+  safeHandle('file:disconnect', async (_e, sessionId: string) => {
     await fileManager.disconnect(sessionId)
   })
 
-  ipcMain.handle('file:list', async (_e, sessionId: string, dirPath: string) => {
+  safeHandle('file:list', async (_e, sessionId: string, dirPath: string) => {
     return fileManager.list(sessionId, dirPath)
   })
 
-  ipcMain.handle('file:download', async (_e, sessionId: string, remotePath: string, localPath: string) => {
+  safeHandle('file:download', async (_e, sessionId: string, remotePath: string, localPath: string) => {
     await fileManager.download(sessionId, remotePath, localPath)
     return true
   })
 
-  ipcMain.handle('file:upload', async (_e, sessionId: string, localPath: string, remotePath: string) => {
+  safeHandle('file:upload', async (_e, sessionId: string, localPath: string, remotePath: string) => {
     await fileManager.upload(sessionId, localPath, remotePath)
     return true
   })
 
-  ipcMain.handle('file:mkdir', async (_e, sessionId: string, remotePath: string) => {
+  safeHandle('file:mkdir', async (_e, sessionId: string, remotePath: string) => {
     await fileManager.mkdir(sessionId, remotePath)
     return true
   })
 
-  ipcMain.handle('file:delete', async (_e, sessionId: string, remotePath: string, isDirectory: boolean) => {
+  safeHandle('file:delete', async (_e, sessionId: string, remotePath: string, isDirectory: boolean) => {
     await fileManager.delete(sessionId, remotePath, isDirectory)
     return true
   })
 
-  ipcMain.handle('file:rename', async (_e, sessionId: string, oldPath: string, newPath: string) => {
+  safeHandle('file:rename', async (_e, sessionId: string, oldPath: string, newPath: string) => {
     await fileManager.rename(sessionId, oldPath, newPath)
     return true
   })
 
-  ipcMain.handle('file:home', (_e, sessionId: string) => {
+  safeHandle('file:home', (_e, sessionId: string) => {
     return fileManager.getHome(sessionId)
   })
 
   // 本机文件浏览
-  ipcMain.handle('local:home', () => localFileManager.getHome())
-  ipcMain.handle('local:list', async (_e, dirPath: string) => {
+  safeHandle('local:home', () => localFileManager.getHome())
+  safeHandle('local:list', async (_e, dirPath: string) => {
     return localFileManager.list(dirPath)
   })
+
+  console.log('[main] IPC handlers registered (local:home, local:list ready)')
 }
 
+registerIpcHandlers()
+
 app.whenReady().then(() => {
-  registerIpcHandlers()
   createWindow()
 
   app.on('activate', () => {

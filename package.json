@@ -8,8 +8,8 @@
   "scripts": {
     "dev": "env -u ELECTRON_RUN_AS_NODE concurrently -k \"npm run dev:vite\" \"npm run dev:electron\"",
     "dev:vite": "vite",
-    "dev:electron": "npm run build:electron && concurrently -k \"npm run build:electron:watch\" \"npm run dev:electron:run\"",
-    "dev:electron:run": "wait-on http://localhost:5173 dist-electron/preload.js && nodemon --watch dist-electron --ext js --delay 400ms --exec \"env -u ELECTRON_RUN_AS_NODE electron .\"",
+    "dev:electron": "node scripts/kill-stale-electron.mjs && npm run build:electron && concurrently -k \"npm run build:electron:watch\" \"npm run dev:electron:run\"",
+    "dev:electron:run": "wait-on http://localhost:5173 dist-electron/main.js dist-electron/preload.js && nodemon --watch dist-electron/main.js --watch dist-electron/preload.js --delay 500ms --exec \"env -u ELECTRON_RUN_AS_NODE electron .\"",
     "build:electron:watch": "tsc -p electron/tsconfig.json --watch --preserveWatchOutput",
     "build:electron": "tsc -p electron/tsconfig.json && node -e \"require('fs').writeFileSync('dist-electron/package.json', '{\\\"type\\\":\\\"commonjs\\\"}')\"",
     "build": "npm run build:electron && tsc -b && vite build",
