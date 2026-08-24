@@ -112,6 +112,16 @@ export function isFileProtocol(protocol: ConnectionProtocol): boolean {
   return protocol === 'sftp' || protocol === 'ftp'
 }
 
+/** 主机是否支持 SSH 终端 */
+export function isSshHost(host: Host): boolean {
+  return host.protocol !== 'ftp'
+}
+
+/** 根据主机配置推断文件传输协议 */
+export function getHostFileProtocol(host: Host): 'sftp' | 'ftp' {
+  return host.protocol === 'ftp' ? 'ftp' : 'sftp'
+}
+
 export function formatFileSize(bytes: number): string {
   if (bytes === 0) return '—'
   const units = ['B', 'KB', 'MB', 'GB', 'TB']

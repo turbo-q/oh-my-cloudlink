@@ -32,7 +32,7 @@ export interface ElectronAPI {
   onSshClose: (callback: (sessionId: string) => void) => () => void
   onSshError: (callback: (sessionId: string, error: string) => void) => () => void
 
-  fileConnect: (sessionId: string, hostId: string) => Promise<string>
+  fileConnect: (sessionId: string, hostId: string, fileProtocol?: 'sftp' | 'ftp') => Promise<string>
   fileDisconnect: (sessionId: string) => Promise<void>
   fileList: (sessionId: string, dirPath: string) => Promise<RemoteFileEntry[]>
   fileDownload: (sessionId: string, remotePath: string, localPath: string) => Promise<boolean>

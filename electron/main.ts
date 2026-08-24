@@ -122,14 +122,15 @@ function registerIpcHandlers(): void {
   })
 
   // 文件传输 (SFTP / FTP)
-  ipcMain.handle('file:connect', async (_e, sessionId: string, hostId: string) => {
-    const host = dataStore.getHosts().find((h) => h.id === hostId)
-    if (!host) throw new Error('主机不存在')
-    if (host.protocol !== 'sftp' && host.protocol !== 'ftp') {
-      throw new Error('该主机协议不支持文件传输')
-    }
-    return fileManager.connect(sessionId, host, dataStore.getKeys())
-  })
+  ipcMain.handle(
+    'file:connect',
+    async (_e, sessionId: string, hostId: string, fileProtocol?: 'sftp' | 'ftp') => {
+      const host = dataStore.getHosts().find((h) => h.id === hostId)
+      if (!host) throw new Error('主机不存在')
+      const protocol = fileProtocol ?? (host.protocol === 'ftp' ? 'ftp' : 'sftp')
+      return fileManager.connect(sessionId, host, dataStore.getKeys(), protocol)
+    },
+  )
 
   ipcMain.handle('file:disconnect', async (_e, sessionId: string) => {
     await fileManager.disconnect(sessionId)

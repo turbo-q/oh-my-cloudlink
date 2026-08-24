@@ -11,8 +11,8 @@ export class SshManager {
   private sessions = new Map<string, ActiveSession>()
 
   async connect(sessionId: string, options: ConnectOptions, win: BrowserWindow): Promise<void> {
-    if (options.host.protocol !== 'ssh') {
-      throw new Error(`${options.host.protocol.toUpperCase()} 请使用文件传输模式连接`)
+    if (options.host.protocol === 'ftp') {
+      throw new Error('FTP 主机请使用 SFTP 菜单进行文件传输')
     }
 
     if (this.sessions.has(sessionId)) {

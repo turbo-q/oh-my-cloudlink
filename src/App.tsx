@@ -2,12 +2,13 @@ import { useCallback, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import { useAppData } from './hooks/useAppData'
 import { Sidebar } from './components/Sidebar'
+import { TopNav, type AppPanel } from './components/TopNav'
 import { WelcomeScreen } from './components/WelcomeScreen'
 import { TerminalPanel } from './components/TerminalPanel'
 import { FileBrowserPanel } from './components/FileBrowserPanel'
 import { HostFormModal, GroupFormModal, KeyFormModal, DiscoverKeysModal } from './components/Modals'
 import type { Host, Group, SSHKey, AppSession, DiscoveredKey } from './types'
-import { isFileProtocol, PROTOCOL_COLORS } from './types'
+import { isFileProtocol, PROTOCOL_COLORS, isSshHost, getHostFileProtocol } from './types'
 
 type ModalState =
   | { type: 'none' }
@@ -33,7 +34,7 @@ export default function App() {
   } = useAppData()
 
   const [searchQuery, setSearchQuery] = useState('')
-  const [activePanel, setActivePanel] = useState<'hosts' | 'keys' | 'settings'>('hosts')
+  const [activePanel, setActivePanel] = useState<AppPanel>('hosts')
   const [selectedHostId, setSelectedHostId] = useState<string | null>(null)
   const [sessions, setSessions] = useState<AppSession[]>([])
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
@@ -42,8 +43,16 @@ export default function App() {
 
   const selectedHost = hosts.find((h) => h.id === selectedHostId) ?? null
 
-  const connectHost = useCallback((host: Host) => {
-    const existing = sessions.find((s) => s.hostId === host.id && s.status !== 'disconnected')
+  const connectHost = useCallback((host: Host, mode: 'ssh' | 'sftp' = 'ssh') => {
+    if (mode === 'ssh' && !isSshHost(host)) {
+      alert('FTP 主机请切换到 SFTP 菜单进行文件传输')
+      return
+    }
+
+    const sessionProtocol = mode === 'ssh' ? 'ssh' : getHostFileProtocol(host)
+    const existing = sessions.find(
+      (s) => s.hostId === host.id && s.protocol === sessionProtocol && s.status !== 'disconnected',
+    )
     if (existing) {
       setActiveSessionId(existing.id)
       return
@@ -55,7 +64,7 @@ export default function App() {
       hostId: host.id,
       hostName: host.name,
       hostname: host.hostname,
-      protocol: host.protocol,
+      protocol: sessionProtocol,
       status: 'connecting',
     }
 
@@ -63,6 +72,13 @@ export default function App() {
     setActiveSessionId(sessionId)
     setMountedSessions((prev) => new Set(prev).add(sessionId))
   }, [sessions])
+
+  const handleConnectFromPanel = useCallback(
+    (host: Host) => {
+      connectHost(host, activePanel === 'sftp' ? 'sftp' : 'ssh')
+    },
+    [activePanel, connectHost],
+  )
 
   const closeSession = useCallback((sessionId: string) => {
     const session = sessions.find((s) => s.id === sessionId)
@@ -162,127 +178,134 @@ export default function App() {
   }
 
   const hasActiveSessions = sessions.length > 0
+  const connectMode = activePanel === 'sftp' ? 'sftp' : 'ssh'
 
   return (
-    <div className="h-screen flex overflow-hidden bg-[#0f1117]">
-      <Sidebar
-        hosts={hosts}
-        groups={groups}
-        keys={keys}
-        selectedHostId={selectedHostId}
-        searchQuery={searchQuery}
-        activePanel={activePanel}
-        onSearchChange={setSearchQuery}
-        onPanelChange={setActivePanel}
-        onSelectHost={(h) => setSelectedHostId(h.id)}
-        onConnectHost={connectHost}
-        onEditHost={(h) => setModal({ type: 'host', host: h })}
-        onDeleteHost={handleDeleteHost}
-        onAddHost={() => setModal({ type: 'host' })}
-        onAddGroup={() => setModal({ type: 'group' })}
-        onEditGroup={(g) => setModal({ type: 'group', group: g })}
-        onDeleteGroup={handleDeleteGroup}
-        onAddKey={() => setModal({ type: 'key' })}
-        onDiscoverKeys={() => setModal({ type: 'discoverKeys' })}
-        onEditKey={(k) => setModal({ type: 'key', key: k })}
-        onDeleteKey={handleDeleteKey}
-        onExport={handleExport}
-        onImport={handleImport}
-      />
+    <div className="h-screen flex flex-col overflow-hidden bg-[#0f1117]">
+      <TopNav activePanel={activePanel} onPanelChange={setActivePanel} />
 
-      <main className="flex-1 flex flex-col min-w-0">
-        {/* macOS 标题栏安全区 + 拖拽 */}
-        {!hasActiveSessions && (
-          <div className="titlebar-safe drag-region shrink-0 bg-[#0f1117] flex items-end justify-center pb-2">
-            <span className="text-xs text-slate-600 no-drag select-none">云连 SSH</span>
-          </div>
-        )}
+      <div className="flex flex-1 min-h-0">
+        <Sidebar
+          hosts={hosts}
+          groups={groups}
+          keys={keys}
+          selectedHostId={selectedHostId}
+          searchQuery={searchQuery}
+          activePanel={activePanel}
+          connectMode={connectMode}
+          onSearchChange={setSearchQuery}
+          onSelectHost={(h) => setSelectedHostId(h.id)}
+          onConnectHost={handleConnectFromPanel}
+          onEditHost={(h) => setModal({ type: 'host', host: h })}
+          onDeleteHost={handleDeleteHost}
+          onAddHost={() => setModal({ type: 'host' })}
+          onAddGroup={() => setModal({ type: 'group' })}
+          onEditGroup={(g) => setModal({ type: 'group', group: g })}
+          onDeleteGroup={handleDeleteGroup}
+          onAddKey={() => setModal({ type: 'key' })}
+          onDiscoverKeys={() => setModal({ type: 'discoverKeys' })}
+          onEditKey={(k) => setModal({ type: 'key', key: k })}
+          onDeleteKey={handleDeleteKey}
+          onExport={handleExport}
+          onImport={handleImport}
+        />
 
-        {/* Tab bar */}
-        {hasActiveSessions && (
-          <div className="titlebar-safe drag-region flex items-end bg-[#141720] border-b border-white/5 overflow-x-auto shrink-0">
-            <div className="flex items-center no-drag">
-            {sessions.map((session) => (
-              <button
-                key={session.id}
-                onClick={() => setActiveSessionId(session.id)}
-                className={`flex items-center gap-2 px-4 py-2.5 text-sm border-r border-white/5 transition-colors shrink-0 ${
-                  activeSessionId === session.id
-                    ? 'bg-[#0f1117] text-white'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
-                }`}
-              >
-                <span
-                  className="w-1.5 h-1.5 rounded-full"
-                  style={{
-                    background:
-                      session.status === 'connected'
-                        ? PROTOCOL_COLORS[session.protocol]
-                        : session.status === 'connecting'
-                          ? '#fbbf24'
-                          : session.status === 'error'
-                            ? '#ef4444'
-                            : '#64748b',
-                  }}
-                />
-                <span className="text-[10px] uppercase text-slate-600 font-mono">
-                  {session.protocol}
-                </span>
-                <span className="truncate max-w-[120px]">{session.hostName}</span>
-                <span
-                  className="ml-1 p-0.5 rounded hover:bg-white/10 text-slate-500 hover:text-white"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    closeSession(session.id)
-                  }}
+        <main className="flex-1 flex flex-col min-w-0">
+          {hasActiveSessions && (
+            <div className="flex items-center bg-[#141720] border-b border-white/5 overflow-x-auto shrink-0">
+              {sessions.map((session) => (
+                <button
+                  key={session.id}
+                  onClick={() => setActiveSessionId(session.id)}
+                  className={`flex items-center gap-2 px-4 py-2.5 text-sm border-r border-white/5 transition-colors shrink-0 ${
+                    activeSessionId === session.id
+                      ? 'bg-[#0f1117] text-white'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
+                  }`}
                 >
-                  ×
-                </span>
-              </button>
-            ))}
+                  <span
+                    className="w-1.5 h-1.5 rounded-full"
+                    style={{
+                      background:
+                        session.status === 'connected'
+                          ? PROTOCOL_COLORS[session.protocol]
+                          : session.status === 'connecting'
+                            ? '#fbbf24'
+                            : session.status === 'error'
+                              ? '#ef4444'
+                              : '#64748b',
+                    }}
+                  />
+                  <span className="text-[10px] uppercase text-slate-600 font-mono">
+                    {session.protocol}
+                  </span>
+                  <span className="truncate max-w-[120px]">{session.hostName}</span>
+                  <span
+                    className="ml-1 p-0.5 rounded hover:bg-white/10 text-slate-500 hover:text-white"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      closeSession(session.id)
+                    }}
+                  >
+                    ×
+                  </span>
+                </button>
+              ))}
             </div>
-          </div>
-        )}
-
-        {/* Content area */}
-        <div className="flex-1 relative min-h-0">
-          {!hasActiveSessions && (
-            <WelcomeScreen
-              selectedHost={selectedHost}
-              onConnect={connectHost}
-              onAddHost={() => setModal({ type: 'host' })}
-            />
           )}
 
-          {Array.from(mountedSessions).map((sessionId) => {
-            const session = sessions.find((s) => s.id === sessionId)
-            if (!session) return null
+          <div className="flex-1 relative min-h-0">
+            {!hasActiveSessions && (activePanel === 'hosts' || activePanel === 'sftp') && (
+              <WelcomeScreen
+                panel={activePanel}
+                selectedHost={selectedHost}
+                onConnect={handleConnectFromPanel}
+                onAddHost={() => setModal({ type: 'host' })}
+              />
+            )}
 
-            if (isFileProtocol(session.protocol)) {
+            {!hasActiveSessions && activePanel === 'keys' && (
+              <div className="flex-1 flex items-center justify-center bg-[#0f1117] text-slate-500 text-sm">
+                在左侧管理 SSH 密钥，添加主机时可选择使用
+              </div>
+            )}
+
+            {!hasActiveSessions && activePanel === 'settings' && (
+              <div className="flex-1 flex items-center justify-center bg-[#0f1117] text-slate-500 text-sm">
+                在左侧进行数据导入导出与应用设置
+              </div>
+            )}
+
+            {Array.from(mountedSessions).map((sessionId) => {
+              const session = sessions.find((s) => s.id === sessionId)
+              if (!session) return null
+
+              if (isFileProtocol(session.protocol)) {
+                return (
+                  <FileBrowserPanel
+                    key={sessionId}
+                    sessionId={sessionId}
+                    hostId={session.hostId}
+                    protocol={session.protocol as 'sftp' | 'ftp'}
+                    active={activeSessionId === sessionId}
+                    onStatusChange={updateSessionStatus}
+                  />
+                )
+              }
+
               return (
-                <FileBrowserPanel
+                <TerminalPanel
                   key={sessionId}
                   sessionId={sessionId}
                   hostId={session.hostId}
-                  protocol={session.protocol}
                   active={activeSessionId === sessionId}
                   onStatusChange={updateSessionStatus}
                 />
               )
-            }
-
-            return (
-              <TerminalPanel
-                key={sessionId}
-                sessionId={sessionId}
-                hostId={session.hostId}
-                active={activeSessionId === sessionId}
-                onStatusChange={updateSessionStatus}
-              />
-            )
-          })}
-        </div>
-      </main>
+            })}
+          </div>
+        </main>
+      </div>
 
       {/* Modals */}
       <HostFormModal

@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { RemoteFileEntry, ConnectionProtocol } from '../types'
+import type { RemoteFileEntry } from '../types'
 import { formatFileSize, formatDate } from '../types'
 
 interface FileBrowserPanelProps {
   sessionId: string
   hostId: string
-  protocol: ConnectionProtocol
+  protocol: 'sftp' | 'ftp'
   active: boolean
   onStatusChange: (
     sessionId: string,
@@ -61,7 +61,7 @@ export function FileBrowserPanel({
     onStatusChange(sessionId, 'connecting')
 
     void window.electronAPI
-      .fileConnect(sessionId, hostId)
+      .fileConnect(sessionId, hostId, protocol)
       .then((homePath) => {
         onStatusChange(sessionId, 'connected')
         return loadDirectory(homePath)

@@ -13,20 +13,28 @@ export class FileManager {
   private ftp = new FtpManager()
   private meta = new Map<string, FileSessionMeta>()
 
-  async connect(sessionId: string, host: StoredHost, keys: StoredKey[]): Promise<string> {
-    if (host.protocol === 'sftp') {
+  async connect(
+    sessionId: string,
+    host: StoredHost,
+    keys: StoredKey[],
+    fileProtocol?: 'sftp' | 'ftp',
+  ): Promise<string> {
+    const protocol =
+      fileProtocol ?? (host.protocol === 'ftp' ? 'ftp' : 'sftp')
+
+    if (protocol === 'sftp') {
       const homePath = await this.sftp.connect(sessionId, { host, keys })
       this.meta.set(sessionId, { protocol: 'sftp', homePath })
       return homePath
     }
 
-    if (host.protocol === 'ftp') {
+    if (protocol === 'ftp') {
       const homePath = await this.ftp.connect(sessionId, host)
       this.meta.set(sessionId, { protocol: 'ftp', homePath })
       return homePath
     }
 
-    throw new Error(`协议 ${host.protocol} 不支持文件传输`)
+    throw new Error(`不支持的文件传输协议: ${protocol}`)
   }
 
   async disconnect(sessionId: string): Promise<void> {

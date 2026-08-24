@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import type { Host, Group, SSHKey, ConnectionProtocol, AuthType, DiscoveredKey } from '../types'
-import { PROTOCOL_LABELS, getDefaultPort, GROUP_COLORS } from '../types'
+import type { Host, Group, SSHKey, AuthType, DiscoveredKey } from '../types'
+import { DEFAULT_FTP_PORT, DEFAULT_SSH_PORT, GROUP_COLORS } from '../types'
 
 interface HostFormModalProps {
   open: boolean
@@ -16,7 +16,7 @@ const emptyForm = {
   hostname: '',
   port: 22,
   username: 'root',
-  protocol: 'ssh' as ConnectionProtocol,
+  isFtpServer: false,
   authType: 'password' as AuthType,
   password: '',
   keyId: '',
@@ -36,7 +36,7 @@ export function HostFormModal({ open, host, groups, keys, onSave, onClose }: Hos
         hostname: host.hostname,
         port: host.port,
         username: host.username,
-        protocol: host.protocol,
+        isFtpServer: host.protocol === 'ftp',
         authType: host.authType,
         password: host.password ?? '',
         keyId: host.keyId ?? '',
@@ -61,7 +61,7 @@ export function HostFormModal({ open, host, groups, keys, onSave, onClose }: Hos
         hostname: form.hostname.trim(),
         port: form.port,
         username: form.username.trim(),
-        protocol: form.protocol,
+        protocol: form.isFtpServer ? 'ftp' : 'ssh',
         authType: form.authType,
         password: form.authType === 'password' ? form.password : undefined,
         keyId: form.authType === 'key' ? form.keyId || undefined : undefined,
@@ -78,7 +78,7 @@ export function HostFormModal({ open, host, groups, keys, onSave, onClose }: Hos
     }
   }
 
-  const isFtp = form.protocol === 'ftp'
+  const isFtp = form.isFtpServer
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
@@ -131,40 +131,39 @@ export function HostFormModal({ open, host, groups, keys, onSave, onClose }: Hos
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm text-slate-400 mb-1">用户名</label>
-              <input
-                required
-                value={form.username}
-                onChange={(e) => setForm({ ...form, username: e.target.value })}
-                className="input-field"
-                placeholder="root"
-              />
-            </div>
-            <div>
-              <label className="block text-sm text-slate-400 mb-1">协议</label>
-              <select
-                value={form.protocol}
-                onChange={(e) => {
-                  const protocol = e.target.value as ConnectionProtocol
-                  setForm({
-                    ...form,
-                    protocol,
-                    port: getDefaultPort(protocol),
-                    authType: protocol === 'ftp' ? 'password' : form.authType,
-                  })
-                }}
-                className="input-field"
-              >
-                {(Object.keys(PROTOCOL_LABELS) as ConnectionProtocol[]).map((p) => (
-                  <option key={p} value={p}>
-                    {PROTOCOL_LABELS[p]}
-                  </option>
-                ))}
-              </select>
-            </div>
+          <div>
+            <label className="block text-sm text-slate-400 mb-1">用户名</label>
+            <input
+              required
+              value={form.username}
+              onChange={(e) => setForm({ ...form, username: e.target.value })}
+              className="input-field"
+              placeholder="root"
+            />
           </div>
+
+          <label className="flex items-start gap-3 cursor-pointer rounded-lg border border-white/5 bg-white/[0.02] px-3 py-3">
+            <input
+              type="checkbox"
+              checked={form.isFtpServer}
+              onChange={(e) => {
+                const isFtpServer = e.target.checked
+                setForm({
+                  ...form,
+                  isFtpServer,
+                  port: isFtpServer ? DEFAULT_FTP_PORT : DEFAULT_SSH_PORT,
+                  authType: isFtpServer ? 'password' : form.authType,
+                })
+              }}
+              className="mt-0.5 rounded border-white/20 bg-white/5 text-emerald-500 focus:ring-emerald-500/30"
+            />
+            <span>
+              <span className="block text-sm text-slate-300">这是 FTP 服务器</span>
+              <span className="block text-xs text-slate-500 mt-0.5">
+                普通 SSH 主机无需勾选，SFTP 传输在顶部「SFTP」菜单中直接使用
+              </span>
+            </span>
+          </label>
 
           {isFtp && (
             <div className="text-xs text-amber-400/80 bg-amber-400/10 rounded-lg px-3 py-2">
