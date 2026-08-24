@@ -1,16 +1,17 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import { useAppData } from './hooks/useAppData'
-import { Sidebar } from './components/Sidebar'
-import { TopNav, type AppPanel } from './components/TopNav'
+import { SessionTabBar } from './components/SessionTabBar'
 import { HostOverviewPanel } from './components/HostOverviewPanel'
+import { KeysPanel } from './components/KeysPanel'
+import { SettingsPanel } from './components/SettingsPanel'
 import { TerminalPanel } from './components/TerminalPanel'
 import { FileBrowserPanel } from './components/FileBrowserPanel'
 import { HostFormModal, GroupFormModal, KeyFormModal, DiscoverKeysModal } from './components/Modals'
 import type { Host, Group, SSHKey, AppSession, DiscoveredKey } from './types'
-import { isFileProtocol, PROTOCOL_COLORS, isSshHost, getHostFileProtocol, GROUP_COLORS } from './types'
-import type { GroupFilter } from './components/HostList'
-import { filterHosts } from './utils/filterHosts'
+import type { AppPanel } from './types/app'
+import { isFileProtocol, isSshHost, getHostFileProtocol, GROUP_COLORS } from './types'
+import { filterHosts, type GroupFilter } from './utils/filterHosts'
 
 type ModalState =
   | { type: 'none' }
@@ -37,7 +38,8 @@ export default function App() {
 
   const [searchQuery, setSearchQuery] = useState('')
   const [groupFilter, setGroupFilter] = useState<GroupFilter>(null)
-  const [activePanel, setActivePanel] = useState<AppPanel>('hosts')
+  const [browsePanel, setBrowsePanel] = useState<AppPanel>('hosts')
+  const [showSession, setShowSession] = useState(false)
   const [selectedHostId, setSelectedHostId] = useState<string | null>(null)
   const [sessions, setSessions] = useState<AppSession[]>([])
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
@@ -61,7 +63,7 @@ export default function App() {
 
   const connectHost = useCallback((host: Host, mode: 'ssh' | 'sftp' = 'ssh') => {
     if (mode === 'ssh' && !isSshHost(host)) {
-      alert('FTP 主机请切换到 SFTP 菜单进行文件传输')
+      alert('FTP 主机请切换到 SFTP 进行文件传输')
       return
     }
 
@@ -71,6 +73,7 @@ export default function App() {
     )
     if (existing) {
       setActiveSessionId(existing.id)
+      setShowSession(true)
       return
     }
 
@@ -87,13 +90,14 @@ export default function App() {
     setSessions((prev) => [...prev, session])
     setActiveSessionId(sessionId)
     setMountedSessions((prev) => new Set(prev).add(sessionId))
+    setShowSession(true)
   }, [sessions])
 
   const handleConnectFromPanel = useCallback(
     (host: Host) => {
-      connectHost(host, activePanel === 'sftp' ? 'sftp' : 'ssh')
+      connectHost(host, browsePanel === 'sftp' ? 'sftp' : 'ssh')
     },
-    [activePanel, connectHost],
+    [browsePanel, connectHost],
   )
 
   const closeSession = useCallback((sessionId: string) => {
@@ -115,7 +119,11 @@ export default function App() {
     setActiveSessionId((current) => {
       if (current !== sessionId) return current
       const remaining = sessions.filter((s) => s.id !== sessionId)
-      return remaining.length > 0 ? remaining[remaining.length - 1].id : null
+      if (remaining.length === 0) {
+        setShowSession(false)
+        return null
+      }
+      return remaining[remaining.length - 1].id
     })
   }, [sessions])
 
@@ -127,6 +135,16 @@ export default function App() {
     },
     [],
   )
+
+  const handleBrowsePanelChange = (panel: AppPanel) => {
+    setBrowsePanel(panel)
+    setShowSession(false)
+  }
+
+  const handleSelectSession = (sessionId: string) => {
+    setActiveSessionId(sessionId)
+    setShowSession(true)
+  }
 
   const handleDeleteHost = async (host: Host) => {
     if (!confirm(`确定删除主机「${host.name}」？`)) return
@@ -202,111 +220,56 @@ export default function App() {
     )
   }
 
-  const hasActiveSessions = sessions.length > 0
-  const connectMode = activePanel === 'sftp' ? 'sftp' : 'ssh'
-
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-[#0f1117]">
-      <TopNav activePanel={activePanel} onPanelChange={setActivePanel} />
+      <SessionTabBar
+        sessions={sessions}
+        activeSessionId={activeSessionId}
+        browsePanel={browsePanel}
+        showSession={showSession}
+        onBrowsePanelChange={handleBrowsePanelChange}
+        onSelectSession={handleSelectSession}
+        onCloseSession={closeSession}
+      />
 
-      <div className="flex flex-1 min-h-0">
-        <Sidebar
-          hosts={hosts}
-          groups={groups}
-          keys={keys}
-          selectedHostId={selectedHostId}
-          searchQuery={searchQuery}
-          groupFilter={groupFilter}
-          activePanel={activePanel}
-          connectMode={connectMode}
-          onSearchChange={setSearchQuery}
-          onGroupFilterChange={setGroupFilter}
-          onSelectHost={(h) => setSelectedHostId(h.id)}
-          onConnectHost={handleConnectFromPanel}
-          onEditHost={(h) => setModal({ type: 'host', host: h })}
-          onDeleteHost={handleDeleteHost}
-          onAddHost={() => setModal({ type: 'host' })}
-          onEditGroup={(g) => setModal({ type: 'group', group: g })}
-          onDeleteGroup={handleDeleteGroup}
-          onAddKey={() => setModal({ type: 'key' })}
-          onDiscoverKeys={() => setModal({ type: 'discoverKeys' })}
-          onEditKey={(k) => setModal({ type: 'key', key: k })}
-          onDeleteKey={handleDeleteKey}
-          onExport={handleExport}
-          onImport={handleImport}
-        />
+      <main className="flex-1 flex flex-col min-h-0">
+        {!showSession && (browsePanel === 'hosts' || browsePanel === 'sftp') && (
+          <HostOverviewPanel
+            panel={browsePanel}
+            hosts={visibleHosts}
+            totalHostCount={hosts.length}
+            groups={groups}
+            searchQuery={searchQuery}
+            groupFilter={groupFilter}
+            selectedHostId={selectedHostId}
+            onSearchChange={setSearchQuery}
+            onGroupFilterChange={setGroupFilter}
+            onSelectHost={(h) => setSelectedHostId(h.id)}
+            onConnect={handleConnectFromPanel}
+            onEditHost={(h) => setModal({ type: 'host', host: h })}
+            onDeleteHost={handleDeleteHost}
+            onAddHost={() => setModal({ type: 'host' })}
+            onEditGroup={(g) => setModal({ type: 'group', group: g })}
+            onDeleteGroup={handleDeleteGroup}
+          />
+        )}
 
-        <main className="flex-1 flex flex-col min-w-0">
-          {hasActiveSessions && (
-            <div className="flex items-center bg-[#141720] border-b border-white/5 overflow-x-auto shrink-0">
-              {sessions.map((session) => (
-                <button
-                  key={session.id}
-                  onClick={() => setActiveSessionId(session.id)}
-                  className={`flex items-center gap-2 px-4 py-2.5 text-sm border-r border-white/5 transition-colors shrink-0 ${
-                    activeSessionId === session.id
-                      ? 'bg-[#0f1117] text-white'
-                      : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
-                  }`}
-                >
-                  <span
-                    className="w-1.5 h-1.5 rounded-full"
-                    style={{
-                      background:
-                        session.status === 'connected'
-                          ? PROTOCOL_COLORS[session.protocol]
-                          : session.status === 'connecting'
-                            ? '#fbbf24'
-                            : session.status === 'error'
-                              ? '#ef4444'
-                              : '#64748b',
-                    }}
-                  />
-                  <span className="text-[10px] uppercase text-slate-600 font-mono">
-                    {session.protocol}
-                  </span>
-                  <span className="truncate max-w-[120px]">{session.hostName}</span>
-                  <span
-                    className="ml-1 p-0.5 rounded hover:bg-white/10 text-slate-500 hover:text-white"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      closeSession(session.id)
-                    }}
-                  >
-                    ×
-                  </span>
-                </button>
-              ))}
-            </div>
-          )}
+        {!showSession && browsePanel === 'keys' && (
+          <KeysPanel
+            keys={keys}
+            onAddKey={() => setModal({ type: 'key' })}
+            onDiscoverKeys={() => setModal({ type: 'discoverKeys' })}
+            onEditKey={(k) => setModal({ type: 'key', key: k })}
+            onDeleteKey={handleDeleteKey}
+          />
+        )}
 
+        {!showSession && browsePanel === 'settings' && (
+          <SettingsPanel onExport={handleExport} onImport={handleImport} />
+        )}
+
+        {showSession && (
           <div className="flex-1 relative min-h-0">
-            {!hasActiveSessions && (activePanel === 'hosts' || activePanel === 'sftp') && (
-              <HostOverviewPanel
-                panel={activePanel}
-                hosts={visibleHosts}
-                totalHostCount={hosts.length}
-                groups={groups}
-                selectedHostId={selectedHostId}
-                onSelectHost={(h) => setSelectedHostId(h.id)}
-                onConnect={handleConnectFromPanel}
-                onEditHost={(h) => setModal({ type: 'host', host: h })}
-                onAddHost={() => setModal({ type: 'host' })}
-              />
-            )}
-
-            {!hasActiveSessions && activePanel === 'keys' && (
-              <div className="flex-1 flex items-center justify-center bg-[#0f1117] text-slate-500 text-sm">
-                在左侧管理 SSH 密钥，添加主机时可选择使用
-              </div>
-            )}
-
-            {!hasActiveSessions && activePanel === 'settings' && (
-              <div className="flex-1 flex items-center justify-center bg-[#0f1117] text-slate-500 text-sm">
-                在左侧进行数据导入导出与应用设置
-              </div>
-            )}
-
             {Array.from(mountedSessions).map((sessionId) => {
               const session = sessions.find((s) => s.id === sessionId)
               if (!session) return null
@@ -335,10 +298,9 @@ export default function App() {
               )
             })}
           </div>
-        </main>
-      </div>
+        )}
+      </main>
 
-      {/* Modals */}
       <HostFormModal
         open={modal.type === 'host'}
         host={modal.type === 'host' ? modal.host : null}
