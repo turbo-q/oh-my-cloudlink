@@ -1,0 +1,36 @@
+---
+description: 每次代码修改完成后自动 git commit
+alwaysApply: true
+---
+
+# 自动提交规范
+
+完成代码修改后，必须立即执行 git commit，无需等待用户再次确认。
+
+## 流程
+
+1. 修改完成后，根据全量 diff 生成 commit 文案
+2. 执行 `git add`（仅添加相关文件，排除 `.env`、密钥等敏感文件）
+3. 使用 HEREDOC 格式提交：
+   ```bash
+   git commit -m "$(cat <<'EOF'
+   <commit message>
+   EOF
+   )"
+   ```
+4. 提交后运行 `git status` 确认成功
+
+## Commit 类型
+
+- `feat`: 新功能
+- `fix`: Bug 修复
+- `refactor`: 重构（不改变外部行为）
+- `test`: 测试
+- `docs`: 文档
+- `chore`: CI/CD、构建配置
+
+## 注意
+
+- 不要 push，除非用户明确要求
+- 不要提交含 secrets 的文件
+- commit 消息聚焦「为什么」，1-2 句为宜
