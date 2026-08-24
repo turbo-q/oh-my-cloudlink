@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { RemoteFileEntry } from '../types'
 import { FileListPane, parentPath } from './FileListPane'
+import { assertElectronMethod } from '../utils/electronApi'
 
 export function LocalFilePane() {
   const [currentPath, setCurrentPath] = useState('')
@@ -12,8 +13,10 @@ export function LocalFilePane() {
     setLoading(true)
     setMessage(null)
     try {
-      const target = path ?? (await window.electronAPI.localHome())
-      const list = await window.electronAPI.localList(target)
+      const localHome = assertElectronMethod('localHome')
+      const localList = assertElectronMethod('localList')
+      const target = path ?? (await localHome())
+      const list = await localList(target)
       setEntries(list)
       setCurrentPath(target)
     } catch (err) {
