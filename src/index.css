@@ -1,11 +1,60 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+@custom-variant light (&:where(.light, .light *));
+
 @theme {
   --font-sans: "PingFang SC", "Microsoft YaHei", "Helvetica Neue", system-ui, sans-serif;
 }
 
 * {
   box-sizing: border-box;
+}
+
+html.dark {
+  color-scheme: dark;
+  --app-bg: #0f1117;
+  --app-surface: #141720;
+  --app-surface-2: #10131a;
+  --app-elevated: #1a1d27;
+  --app-text: #ffffff;
+  --app-text-secondary: #e2e8f0;
+  --app-text-muted: #94a3b8;
+  --app-text-subtle: #64748b;
+  --app-text-faint: #475569;
+  --app-border: rgb(255 255 255 / 0.05);
+  --app-border-strong: rgb(255 255 255 / 0.1);
+  --app-border-emphasis: rgb(255 255 255 / 0.25);
+  --app-hover: rgb(255 255 255 / 0.05);
+  --app-hover-strong: rgb(255 255 255 / 0.1);
+  --app-input-bg: rgb(255 255 255 / 0.05);
+  --app-card-bg: rgb(255 255 255 / 0.02);
+  --app-overlay: rgb(0 0 0 / 0.6);
+  --app-scrollbar: rgb(255 255 255 / 0.1);
+  --app-scrollbar-hover: rgb(255 255 255 / 0.2);
+}
+
+html.light {
+  color-scheme: light;
+  --app-bg: #f1f5f9;
+  --app-surface: #ffffff;
+  --app-surface-2: #f8fafc;
+  --app-elevated: #ffffff;
+  --app-text: #0f172a;
+  --app-text-secondary: #334155;
+  --app-text-muted: #64748b;
+  --app-text-subtle: #94a3b8;
+  --app-text-faint: #cbd5e1;
+  --app-border: rgb(15 23 42 / 0.08);
+  --app-border-strong: rgb(15 23 42 / 0.12);
+  --app-border-emphasis: rgb(15 23 42 / 0.2);
+  --app-hover: rgb(15 23 42 / 0.04);
+  --app-hover-strong: rgb(15 23 42 / 0.08);
+  --app-input-bg: #ffffff;
+  --app-card-bg: rgb(15 23 42 / 0.02);
+  --app-overlay: rgb(15 23 42 / 0.45);
+  --app-scrollbar: rgb(15 23 42 / 0.15);
+  --app-scrollbar-hover: rgb(15 23 42 / 0.25);
 }
 
 html, body, #root {
@@ -17,12 +66,42 @@ html, body, #root {
 
 body {
   font-family: var(--font-sans);
+  background-color: var(--app-bg);
+  color: var(--app-text);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
+.bg-app { background-color: var(--app-bg); }
+.bg-surface { background-color: var(--app-surface); }
+.bg-surface-2 { background-color: var(--app-surface-2); }
+.bg-elevated { background-color: var(--app-elevated); }
+.bg-app-hover { background-color: var(--app-hover); }
+.bg-app-card { background-color: var(--app-card-bg); }
+
+.text-app { color: var(--app-text); }
+.text-app-secondary { color: var(--app-text-secondary); }
+.text-app-muted { color: var(--app-text-muted); }
+.text-app-subtle { color: var(--app-text-subtle); }
+.text-app-faint { color: var(--app-text-faint); }
+
+.border-app { border-color: var(--app-border); }
+.border-app-strong { border-color: var(--app-border-strong); }
+.border-app-emphasis { border-color: var(--app-border-emphasis); }
+
+.hover\:bg-app-hover:hover { background-color: var(--app-hover); }
+.hover\:bg-app-hover-strong:hover { background-color: var(--app-hover-strong); }
+.hover\:border-app-emphasis:hover { border-color: var(--app-border-emphasis); }
+
 .input-field {
-  @apply w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/20 transition-colors;
+  @apply w-full px-3 py-2 rounded-lg text-sm focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/20 transition-colors;
+  background-color: var(--app-input-bg);
+  border: 1px solid var(--app-border-strong);
+  color: var(--app-text-secondary);
+}
+
+.input-field::placeholder {
+  color: var(--app-text-faint);
 }
 
 .btn-primary {
@@ -30,7 +109,31 @@ body {
 }
 
 .btn-secondary {
-  @apply px-4 py-2 bg-white/5 hover:bg-white/10 text-slate-300 text-sm font-medium rounded-lg border border-white/10 transition-colors;
+  @apply px-4 py-2 text-sm font-medium rounded-lg transition-colors;
+  background-color: var(--app-hover);
+  color: var(--app-text-secondary);
+  border: 1px solid var(--app-border-strong);
+}
+
+.btn-secondary:hover {
+  background-color: var(--app-hover-strong);
+}
+
+.theme-option {
+  @apply flex flex-col items-start gap-1 px-4 py-3 rounded-xl border text-left transition-colors;
+  border-color: var(--app-border-strong);
+  background-color: var(--app-card-bg);
+  color: var(--app-text-muted);
+}
+
+.theme-option:hover {
+  background-color: var(--app-hover);
+}
+
+.theme-option-active {
+  border-color: rgb(16 185 129 / 0.5);
+  background-color: rgb(16 185 129 / 0.08);
+  color: var(--app-text);
 }
 
 /* xterm overrides */
@@ -54,12 +157,12 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--app-scrollbar);
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--app-scrollbar-hover);
 }
 
 /* macOS 标题栏安全区 — 避开交通灯按钮 */

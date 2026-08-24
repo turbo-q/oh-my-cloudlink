@@ -83,13 +83,13 @@ export function HostFormModal({ open, host, groups, keys, onSave, onCreateGroup,
   const isFtp = form.isFtpServer
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="bg-[#1a1d27] border border-white/10 rounded-xl shadow-2xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
-          <h2 className="text-lg font-semibold text-white">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--app-overlay)] backdrop-blur-sm">
+      <div className="bg-elevated border border-app-strong rounded-xl shadow-2xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-app-strong">
+          <h2 className="text-lg font-semibold text-app">
             {host ? '编辑主机' : '添加主机'}
           </h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-white p-1">
+          <button onClick={onClose} className="text-app-muted hover:text-app p-1">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
@@ -98,7 +98,7 @@ export function HostFormModal({ open, host, groups, keys, onSave, onCreateGroup,
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           <div>
-            <label className="block text-sm text-slate-400 mb-1">名称</label>
+            <label className="block text-sm text-app-muted mb-1">名称</label>
             <input
               required
               value={form.name}
@@ -110,7 +110,7 @@ export function HostFormModal({ open, host, groups, keys, onSave, onCreateGroup,
 
           <div className="grid grid-cols-3 gap-3">
             <div className="col-span-2">
-              <label className="block text-sm text-slate-400 mb-1">主机地址</label>
+              <label className="block text-sm text-app-muted mb-1">主机地址</label>
               <input
                 required
                 value={form.hostname}
@@ -120,7 +120,7 @@ export function HostFormModal({ open, host, groups, keys, onSave, onCreateGroup,
               />
             </div>
             <div>
-              <label className="block text-sm text-slate-400 mb-1">端口</label>
+              <label className="block text-sm text-app-muted mb-1">端口</label>
               <input
                 type="number"
                 required
@@ -134,7 +134,7 @@ export function HostFormModal({ open, host, groups, keys, onSave, onCreateGroup,
           </div>
 
           <div>
-            <label className="block text-sm text-slate-400 mb-1">用户名</label>
+            <label className="block text-sm text-app-muted mb-1">用户名</label>
             <input
               required
               value={form.username}
@@ -144,7 +144,7 @@ export function HostFormModal({ open, host, groups, keys, onSave, onCreateGroup,
             />
           </div>
 
-          <label className="flex items-start gap-3 cursor-pointer rounded-lg border border-white/5 bg-white/[0.02] px-3 py-3">
+          <label className="flex items-start gap-3 cursor-pointer rounded-lg border border-app bg-app-card px-3 py-3">
             <input
               type="checkbox"
               checked={form.isFtpServer}
@@ -157,11 +157,11 @@ export function HostFormModal({ open, host, groups, keys, onSave, onCreateGroup,
                   authType: isFtpServer ? 'password' : form.authType,
                 })
               }}
-              className="mt-0.5 rounded border-white/20 bg-white/5 text-emerald-500 focus:ring-emerald-500/30"
+              className="mt-0.5 rounded border-app-emphasis bg-app-hover text-emerald-500 focus:ring-emerald-500/30"
             />
             <span>
-              <span className="block text-sm text-slate-300">这是 FTP 服务器</span>
-              <span className="block text-xs text-slate-500 mt-0.5">
+              <span className="block text-sm text-app-secondary">这是 FTP 服务器</span>
+              <span className="block text-xs text-app-subtle mt-0.5">
                 普通 SSH 主机无需勾选，SFTP 传输在顶部「SFTP」菜单中直接使用
               </span>
             </span>
@@ -174,7 +174,7 @@ export function HostFormModal({ open, host, groups, keys, onSave, onCreateGroup,
           )}
 
           <div>
-            <label className="block text-sm text-slate-400 mb-1">认证方式</label>
+            <label className="block text-sm text-app-muted mb-1">认证方式</label>
             <div className="flex gap-2">
               {(['password', 'key'] as AuthType[]).map((type) => (
                 <button
@@ -185,7 +185,7 @@ export function HostFormModal({ open, host, groups, keys, onSave, onCreateGroup,
                   className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-30 disabled:cursor-not-allowed ${
                     form.authType === type
                       ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                      : 'bg-white/5 text-slate-400 border border-transparent hover:bg-white/10'
+                      : 'bg-app-hover text-app-muted border border-transparent hover:bg-app-hover-strong'
                   }`}
                 >
                   {type === 'password' ? '密码' : 'SSH 密钥'}
@@ -196,7 +196,7 @@ export function HostFormModal({ open, host, groups, keys, onSave, onCreateGroup,
 
           {form.authType === 'password' ? (
             <div>
-              <label className="block text-sm text-slate-400 mb-1">密码</label>
+              <label className="block text-sm text-app-muted mb-1">密码</label>
               <input
                 type="password"
                 value={form.password}
@@ -207,7 +207,7 @@ export function HostFormModal({ open, host, groups, keys, onSave, onCreateGroup,
             </div>
           ) : (
             <div>
-              <label className="block text-sm text-slate-400 mb-1">选择密钥</label>
+              <label className="block text-sm text-app-muted mb-1">选择密钥</label>
               <select
                 value={form.keyId}
                 onChange={(e) => setForm({ ...form, keyId: e.target.value })}
@@ -222,13 +222,13 @@ export function HostFormModal({ open, host, groups, keys, onSave, onCreateGroup,
                 ))}
               </select>
               {keys.length === 0 && (
-                <p className="text-xs text-slate-500 mt-1">请先在「密钥管理」中添加 SSH 密钥</p>
+                <p className="text-xs text-app-subtle mt-1">请先在「密钥管理」中添加 SSH 密钥</p>
               )}
             </div>
           )}
 
           <div>
-            <label className="block text-sm text-slate-400 mb-1">分组</label>
+            <label className="block text-sm text-app-muted mb-1">分组</label>
             <GroupCombobox
               groupId={form.groupId}
               groups={groups}
@@ -238,7 +238,7 @@ export function HostFormModal({ open, host, groups, keys, onSave, onCreateGroup,
           </div>
 
           <div>
-            <label className="block text-sm text-slate-400 mb-1">标签（逗号分隔）</label>
+            <label className="block text-sm text-app-muted mb-1">标签（逗号分隔）</label>
             <input
               value={form.tags}
               onChange={(e) => setForm({ ...form, tags: e.target.value })}
@@ -248,7 +248,7 @@ export function HostFormModal({ open, host, groups, keys, onSave, onCreateGroup,
           </div>
 
           <div>
-            <label className="block text-sm text-slate-400 mb-1">备注</label>
+            <label className="block text-sm text-app-muted mb-1">备注</label>
             <textarea
               value={form.notes}
               onChange={(e) => setForm({ ...form, notes: e.target.value })}
@@ -307,14 +307,14 @@ export function GroupFormModal({ open, group, onSave, onClose }: GroupFormModalP
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="bg-[#1a1d27] border border-white/10 rounded-xl shadow-2xl w-full max-w-sm mx-4">
-        <div className="px-6 py-4 border-b border-white/10">
-          <h2 className="text-lg font-semibold text-white">{group ? '编辑分组' : '新建分组'}</h2>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--app-overlay)] backdrop-blur-sm">
+      <div className="bg-elevated border border-app-strong rounded-xl shadow-2xl w-full max-w-sm mx-4">
+        <div className="px-6 py-4 border-b border-app-strong">
+          <h2 className="text-lg font-semibold text-app">{group ? '编辑分组' : '新建分组'}</h2>
         </div>
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           <div>
-            <label className="block text-sm text-slate-400 mb-1">分组名称</label>
+            <label className="block text-sm text-app-muted mb-1">分组名称</label>
             <input
               required
               value={name}
@@ -324,7 +324,7 @@ export function GroupFormModal({ open, group, onSave, onClose }: GroupFormModalP
             />
           </div>
           <div>
-            <label className="block text-sm text-slate-400 mb-2">颜色</label>
+            <label className="block text-sm text-app-muted mb-2">颜色</label>
             <div className="flex flex-wrap gap-2">
               {GROUP_COLORS.map((c) => (
                 <button
@@ -417,10 +417,10 @@ export function KeyFormModal({ open, keyItem, onSave, onClose }: KeyFormModalPro
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="bg-[#1a1d27] border border-white/10 rounded-xl shadow-2xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
-        <div className="px-6 py-4 border-b border-white/10">
-          <h2 className="text-lg font-semibold text-white">{keyItem ? '编辑密钥' : '添加 SSH 密钥'}</h2>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--app-overlay)] backdrop-blur-sm">
+      <div className="bg-elevated border border-app-strong rounded-xl shadow-2xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
+        <div className="px-6 py-4 border-b border-app-strong">
+          <h2 className="text-lg font-semibold text-app">{keyItem ? '编辑密钥' : '添加 SSH 密钥'}</h2>
         </div>
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           {!keyItem && (
@@ -433,7 +433,7 @@ export function KeyFormModal({ open, keyItem, onSave, onClose }: KeyFormModalPro
             </button>
           )}
           <div>
-            <label className="block text-sm text-slate-400 mb-1">密钥名称</label>
+            <label className="block text-sm text-app-muted mb-1">密钥名称</label>
             <input
               required
               value={name}
@@ -443,7 +443,7 @@ export function KeyFormModal({ open, keyItem, onSave, onClose }: KeyFormModalPro
             />
           </div>
           <div>
-            <label className="block text-sm text-slate-400 mb-1">私钥内容</label>
+            <label className="block text-sm text-app-muted mb-1">私钥内容</label>
             <textarea
               required
               value={privateKey}
@@ -453,7 +453,7 @@ export function KeyFormModal({ open, keyItem, onSave, onClose }: KeyFormModalPro
             />
           </div>
           <div>
-            <label className="block text-sm text-slate-400 mb-1">公钥（可选）</label>
+            <label className="block text-sm text-app-muted mb-1">公钥（可选）</label>
             <textarea
               value={publicKey}
               onChange={(e) => setPublicKey(e.target.value)}
@@ -462,7 +462,7 @@ export function KeyFormModal({ open, keyItem, onSave, onClose }: KeyFormModalPro
             />
           </div>
           <div>
-            <label className="block text-sm text-slate-400 mb-1">密钥口令（可选）</label>
+            <label className="block text-sm text-app-muted mb-1">密钥口令（可选）</label>
             <input
               type="password"
               value={passphrase}
@@ -548,18 +548,18 @@ export function DiscoverKeysModal({ open, existingKeys, onImport, onClose }: Dis
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="bg-[#1a1d27] border border-white/10 rounded-xl shadow-2xl w-full max-w-lg mx-4 max-h-[85vh] flex flex-col">
-        <div className="px-6 py-4 border-b border-white/10 shrink-0">
-          <h2 className="text-lg font-semibold text-white">发现本机 SSH 密钥</h2>
-          <p className="text-xs text-slate-500 mt-1">扫描 ~/.ssh 目录及 config 中的 IdentityFile</p>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--app-overlay)] backdrop-blur-sm">
+      <div className="bg-elevated border border-app-strong rounded-xl shadow-2xl w-full max-w-lg mx-4 max-h-[85vh] flex flex-col">
+        <div className="px-6 py-4 border-b border-app-strong shrink-0">
+          <h2 className="text-lg font-semibold text-app">发现本机 SSH 密钥</h2>
+          <p className="text-xs text-app-subtle mt-1">扫描 ~/.ssh 目录及 config 中的 IdentityFile</p>
         </div>
 
         <div className="flex-1 overflow-y-auto p-4">
-          {loading && <p className="text-center text-slate-500 py-8">正在扫描...</p>}
+          {loading && <p className="text-center text-app-subtle py-8">正在扫描...</p>}
           {error && <p className="text-center text-red-400 py-8">{error}</p>}
           {!loading && !error && discovered.length === 0 && (
-            <p className="text-center text-slate-500 py-8">未在 ~/.ssh 中发现私钥文件</p>
+            <p className="text-center text-app-subtle py-8">未在 ~/.ssh 中发现私钥文件</p>
           )}
           {!loading && discovered.length > 0 && (
             <div className="space-y-2">
@@ -571,7 +571,7 @@ export function DiscoverKeysModal({ open, existingKeys, onImport, onClose }: Dis
                     className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
                       selected.has(key.filePath)
                         ? 'border-emerald-500/40 bg-emerald-500/10'
-                        : 'border-white/5 bg-white/5 hover:bg-white/10'
+                        : 'border-app bg-app-hover hover:bg-app-hover-strong'
                     } ${imported ? 'opacity-50' : ''}`}
                   >
                     <input
@@ -583,9 +583,9 @@ export function DiscoverKeysModal({ open, existingKeys, onImport, onClose }: Dis
                     />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-white">{key.name}</span>
+                        <span className="text-sm font-medium text-app">{key.name}</span>
                         {imported && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-700 text-slate-400">
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-700 text-app-muted">
                             已导入
                           </span>
                         )}
@@ -595,7 +595,7 @@ export function DiscoverKeysModal({ open, existingKeys, onImport, onClose }: Dis
                           </span>
                         )}
                       </div>
-                      <p className="text-xs text-slate-500 truncate mt-0.5">{key.filePath}</p>
+                      <p className="text-xs text-app-subtle truncate mt-0.5">{key.filePath}</p>
                     </div>
                   </label>
                 )
@@ -604,7 +604,7 @@ export function DiscoverKeysModal({ open, existingKeys, onImport, onClose }: Dis
           )}
         </div>
 
-        <div className="px-6 py-4 border-t border-white/10 flex gap-3 shrink-0">
+        <div className="px-6 py-4 border-t border-app-strong flex gap-3 shrink-0">
           <button type="button" onClick={onClose} className="btn-secondary flex-1">
             取消
           </button>

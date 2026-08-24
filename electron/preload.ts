@@ -80,6 +80,9 @@ const electronAPI = {
   localList: (dirPath: string) => ipcRenderer.invoke('local:list', dirPath),
 
   getPathForFile: (file: File) => webUtils.getPathForFile(file),
+
+  setNativeTheme: (source: 'system' | 'light' | 'dark') =>
+    ipcRenderer.invoke('theme:setSource', source) as Promise<boolean>,
 }
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPI)

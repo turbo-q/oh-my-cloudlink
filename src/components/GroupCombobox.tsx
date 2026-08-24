@@ -81,12 +81,12 @@ export function GroupCombobox({ groupId, groups, onChange, onCreateGroup }: Grou
       />
 
       {open && (filtered.length > 0 || showCreate || !trimmed) && (
-        <div className="absolute z-10 mt-1 w-full max-h-48 overflow-y-auto rounded-lg border border-white/10 bg-[#1a1d27] shadow-xl py-1">
+        <div className="absolute z-10 mt-1 w-full max-h-48 overflow-y-auto rounded-lg border border-app-strong bg-elevated shadow-xl py-1">
           {!trimmed && (
             <button
               type="button"
               onClick={clearGroup}
-              className="w-full px-3 py-2 text-left text-sm text-slate-400 hover:bg-white/5"
+              className="w-full px-3 py-2 text-left text-sm text-app-muted hover:bg-app-hover"
             >
               无分组
             </button>
@@ -96,7 +96,7 @@ export function GroupCombobox({ groupId, groups, onChange, onCreateGroup }: Grou
               key={g.id}
               type="button"
               onClick={() => selectGroup(g.id, g.name)}
-              className="w-full px-3 py-2 text-left text-sm text-slate-300 hover:bg-white/5 flex items-center gap-2"
+              className="w-full px-3 py-2 text-left text-sm text-app-secondary hover:bg-app-hover flex items-center gap-2"
             >
               <span className="w-2 h-2 rounded-full shrink-0" style={{ background: g.color }} />
               {g.name}
@@ -107,7 +107,7 @@ export function GroupCombobox({ groupId, groups, onChange, onCreateGroup }: Grou
               type="button"
               disabled={creating}
               onClick={() => void handleCreate()}
-              className="w-full px-3 py-2 text-left text-sm text-emerald-400 hover:bg-emerald-500/10 border-t border-white/5"
+              className="w-full px-3 py-2 text-left text-sm text-emerald-400 hover:bg-emerald-500/10 border-t border-app"
             >
               {creating ? '创建中...' : `创建分组「${trimmed}」`}
             </button>

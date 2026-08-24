@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, type IpcMainInvokeEvent } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog, nativeTheme, type IpcMainInvokeEvent } from 'electron'
 import path from 'path'
 import { DataStore } from './data-store'
 import { SshManager } from './ssh-manager'
@@ -183,6 +183,11 @@ function registerIpcHandlers(): void {
   safeHandle('local:home', () => localFileManager.getHome())
   safeHandle('local:list', async (_e, dirPath: string) => {
     return localFileManager.list(dirPath)
+  })
+
+  safeHandle('theme:setSource', (_e, source: 'system' | 'light' | 'dark') => {
+    nativeTheme.themeSource = source
+    return nativeTheme.shouldUseDarkColors
   })
 
   console.log('[main] IPC handlers registered (local:home, local:list ready)')

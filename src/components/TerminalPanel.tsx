@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { Terminal } from 'xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
+import { getStoredTheme, getTerminalTheme, resolveTheme, THEME_CHANGE_EVENT } from '../theme'
 import 'xterm/css/xterm.css'
 
 interface TerminalPanelProps {
@@ -24,20 +25,7 @@ export function TerminalPanel({ sessionId, hostId, active, onStatusChange }: Ter
       cursorBlink: true,
       fontSize: 14,
       fontFamily: '"JetBrains Mono", "SF Mono", Menlo, Monaco, "Courier New", monospace',
-      theme: {
-        background: '#0f1117',
-        foreground: '#e2e8f0',
-        cursor: '#10b981',
-        selectionBackground: '#10b98144',
-        black: '#1e293b',
-        red: '#f87171',
-        green: '#34d399',
-        yellow: '#fbbf24',
-        blue: '#60a5fa',
-        magenta: '#c084fc',
-        cyan: '#22d3ee',
-        white: '#f1f5f9',
-      },
+      theme: getTerminalTheme(resolveTheme(getStoredTheme())),
       allowProposedApi: true,
     })
 
@@ -95,6 +83,13 @@ export function TerminalPanel({ sessionId, hostId, active, onStatusChange }: Ter
       }
     })
 
+    const handleThemeChange = (event: Event) => {
+      const { resolved } = (event as CustomEvent<{ resolved: 'light' | 'dark' }>).detail
+      term.options.theme = getTerminalTheme(resolved)
+    }
+
+    window.addEventListener(THEME_CHANGE_EVENT, handleThemeChange)
+
     const handleResize = () => {
       if (fitAddonRef.current && terminalRef.current) {
         fitAddonRef.current.fit()
@@ -110,6 +105,7 @@ export function TerminalPanel({ sessionId, hostId, active, onStatusChange }: Ter
     observer.observe(containerRef.current)
 
     return () => {
+      window.removeEventListener(THEME_CHANGE_EVENT, handleThemeChange)
       window.removeEventListener('resize', handleResize)
       observer.disconnect()
       unsubData()
@@ -131,8 +127,7 @@ export function TerminalPanel({ sessionId, hostId, active, onStatusChange }: Ter
   return (
     <div
       ref={containerRef}
-      className={`absolute inset-0 p-2 ${active ? 'block' : 'hidden'}`}
-      style={{ background: '#0f1117' }}
+      className={`absolute inset-0 p-2 bg-app ${active ? 'block' : 'hidden'}`}
     />
   )
 }

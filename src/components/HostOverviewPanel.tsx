@@ -75,7 +75,7 @@ export function HostOverviewPanel({
 
   if (allHosts.length === 0) {
     return (
-      <div className="flex-1 flex flex-col bg-[#0f1117]">
+      <div className="flex-1 flex flex-col bg-app">
         <SearchBar
           searchQuery={searchQuery}
           isSftp={isSftp}
@@ -86,10 +86,10 @@ export function HostOverviewPanel({
         />
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center max-w-md px-6">
-            <h2 className="text-2xl font-bold text-white mb-2">
+            <h2 className="text-2xl font-bold text-app mb-2">
               {isSftp ? '暂无可用主机' : '欢迎使用云连 SSH'}
             </h2>
-            <p className="text-slate-400 mb-8">
+            <p className="text-app-muted mb-8">
               {isSftp ? '请先添加服务器配置' : '添加你的第一台服务器，开始安全连接'}
             </p>
             {!isSftp && (
@@ -104,7 +104,7 @@ export function HostOverviewPanel({
   }
 
   return (
-    <div className="flex-1 flex flex-col bg-[#0f1117] min-h-0">
+    <div className="flex-1 flex flex-col bg-app min-h-0">
       <SearchBar
         searchQuery={searchQuery}
         isSftp={isSftp}
@@ -118,7 +118,7 @@ export function HostOverviewPanel({
         <div className="px-8 pb-4">
           <button
             onClick={onAddHost}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#141720] border border-white/10 text-sm font-medium text-white hover:bg-white/5"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-surface border border-app-strong text-sm font-medium text-app hover:bg-app-hover"
           >
             <span className="text-emerald-400">+</span>
             新建主机
@@ -131,11 +131,11 @@ export function HostOverviewPanel({
         {(groups.length > 0 || !isSftp) && (
           <section>
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-base font-semibold text-white">Groups</h3>
+              <h3 className="text-base font-semibold text-app">Groups</h3>
               {!isSftp && (
                 <button
                   onClick={onAddGroup}
-                  className="text-xs text-slate-500 hover:text-emerald-400 transition-colors"
+                  className="text-xs text-app-subtle hover:text-emerald-400 transition-colors"
                 >
                   + 新建分组
                 </button>
@@ -143,7 +143,7 @@ export function HostOverviewPanel({
             </div>
 
             {groups.length === 0 ? (
-              <p className="text-sm text-slate-600 py-4">暂无分组，添加主机时可输入分组名创建</p>
+              <p className="text-sm text-app-faint py-4">暂无分组，添加主机时可输入分组名创建</p>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                 <button
@@ -152,18 +152,18 @@ export function HostOverviewPanel({
                   className={`text-left rounded-2xl border px-5 py-4 transition-all ${
                     groupFilter === null
                       ? 'border-blue-500/60 bg-blue-500/5 shadow-lg shadow-blue-500/10'
-                      : 'border-white/10 bg-[#141720] hover:border-white/25'
+                      : 'border-app-strong bg-surface hover:border-app-emphasis'
                   }`}
                 >
                   <div className="flex items-center gap-3">
-                    <div className="w-11 h-11 rounded-xl bg-white/5 flex items-center justify-center shrink-0">
-                      <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div className="w-11 h-11 rounded-xl bg-app-hover flex items-center justify-center shrink-0">
+                      <svg className="w-5 h-5 text-app-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
                       </svg>
                     </div>
                     <div>
-                      <h4 className="font-semibold text-white">全部主机</h4>
-                      <p className="text-xs text-slate-500 mt-1">{searchFilteredHosts.length} Hosts</p>
+                      <h4 className="font-semibold text-app">全部主机</h4>
+                      <p className="text-xs text-app-subtle mt-1">{searchFilteredHosts.length} Hosts</p>
                     </div>
                   </div>
                 </button>
@@ -182,7 +182,7 @@ export function HostOverviewPanel({
                       className={`group/card relative text-left rounded-2xl border px-5 py-4 cursor-pointer transition-all ${
                         isActive
                           ? 'border-blue-500/60 bg-blue-500/5 shadow-lg shadow-blue-500/10'
-                          : 'border-white/10 bg-[#141720] hover:border-white/25'
+                          : 'border-app-strong bg-surface hover:border-app-emphasis'
                       }`}
                     >
                       <div className="flex items-center gap-3">
@@ -195,8 +195,8 @@ export function HostOverviewPanel({
                           </svg>
                         </div>
                         <div className="flex-1 min-w-0">
-                          <h4 className="font-semibold text-white truncate">{group.name}</h4>
-                          <p className="text-xs text-slate-500 mt-1">
+                          <h4 className="font-semibold text-app truncate">{group.name}</h4>
+                          <p className="text-xs text-app-subtle mt-1">
                             {count} Host{count !== 1 ? 's' : ''}
                           </p>
                         </div>
@@ -207,7 +207,7 @@ export function HostOverviewPanel({
                             e.stopPropagation()
                             onEditGroup(group)
                           }}
-                          className="p-1 rounded text-slate-400 hover:text-white text-xs"
+                          className="p-1 rounded text-app-muted hover:text-app text-xs"
                         >
                           编辑
                         </button>
@@ -232,16 +232,16 @@ export function HostOverviewPanel({
                     className={`text-left rounded-2xl border px-5 py-4 transition-all ${
                       groupFilter === '__ungrouped__'
                         ? 'border-blue-500/60 bg-blue-500/5 shadow-lg shadow-blue-500/10'
-                        : 'border-white/10 bg-[#141720] hover:border-white/25'
+                        : 'border-app-strong bg-surface hover:border-app-emphasis'
                     }`}
                   >
                     <div className="flex items-center gap-3">
                       <div className="w-11 h-11 rounded-xl bg-slate-500/10 flex items-center justify-center shrink-0">
-                        <span className="text-slate-500 text-lg">—</span>
+                        <span className="text-app-subtle text-lg">—</span>
                       </div>
                       <div>
-                        <h4 className="font-semibold text-white">未分组</h4>
-                        <p className="text-xs text-slate-500 mt-1">{ungroupedCount} Hosts</p>
+                        <h4 className="font-semibold text-app">未分组</h4>
+                        <p className="text-xs text-app-subtle mt-1">{ungroupedCount} Hosts</p>
                       </div>
                     </div>
                   </button>
@@ -254,7 +254,7 @@ export function HostOverviewPanel({
         {/* Hosts — 分组筛选结果 */}
         <section>
           <div className="flex items-center gap-3 mb-4">
-            <h3 className="text-base font-semibold text-white">Hosts</h3>
+            <h3 className="text-base font-semibold text-app">Hosts</h3>
             {groupFilter && groupFilter !== '__ungrouped__' && (
               <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-400">
                 {groups.find((g) => g.id === groupFilter)?.name}
@@ -263,11 +263,11 @@ export function HostOverviewPanel({
             {groupFilter === '__ungrouped__' && (
               <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-400">未分组</span>
             )}
-            <span className="text-xs text-slate-600">{displayHosts.length} 台</span>
+            <span className="text-xs text-app-faint">{displayHosts.length} 台</span>
           </div>
 
           {displayHosts.length === 0 ? (
-            <p className="text-sm text-slate-500 py-8 text-center">
+            <p className="text-sm text-app-subtle py-8 text-center">
               {searchQuery ? '没有匹配的主机' : '该分组下暂无主机'}
             </p>
           ) : (
@@ -320,7 +320,7 @@ function HostCard({
       className={`group relative rounded-2xl border px-5 py-4 cursor-pointer transition-all ${
         isSelected
           ? 'border-blue-500/60 bg-blue-500/5 shadow-lg shadow-blue-500/10'
-          : 'border-white/10 bg-[#141720] hover:border-white/25 hover:shadow-md'
+          : 'border-app-strong bg-surface hover:border-app-emphasis hover:shadow-md'
       }`}
     >
       <div className="flex items-start gap-3">
@@ -334,8 +334,8 @@ function HostCard({
           {host.name.charAt(0).toUpperCase()}
         </div>
         <div className="flex-1 min-w-0 pt-0.5">
-          <h3 className="font-semibold text-white truncate leading-tight">{host.name}</h3>
-          <p className="text-xs text-slate-500 mt-1.5 truncate">
+          <h3 className="font-semibold text-app truncate leading-tight">{host.name}</h3>
+          <p className="text-xs text-app-subtle mt-1.5 truncate">
             {subtitle || `${host.username}@${host.hostname}`}
           </p>
         </div>
@@ -346,7 +346,7 @@ function HostCard({
             e.stopPropagation()
             onEdit()
           }}
-          className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 text-xs"
+          className="p-1.5 rounded-lg text-app-muted hover:text-app hover:bg-app-hover-strong text-xs"
         >
           编辑
         </button>
@@ -383,14 +383,14 @@ function SearchBar({
     <div className="px-8 pt-5 pb-4">
       <div className="flex gap-3 max-w-3xl">
         <div className="relative flex-1">
-          <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-app-subtle" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
           <input
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
             onKeyDown={onSearchKeyDown}
-            className="w-full pl-11 pr-4 py-3 bg-[#141720] border border-white/10 rounded-xl text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-emerald-500/40"
+            className="w-full pl-11 pr-4 py-3 bg-surface border border-app-strong rounded-xl text-sm text-app-secondary placeholder:text-app-faint focus:outline-none focus:border-emerald-500/40"
             placeholder="搜索主机，或 user@hostname..."
           />
         </div>

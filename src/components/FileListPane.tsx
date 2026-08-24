@@ -153,10 +153,10 @@ export function FileListPane({
   }
 
   return (
-    <div className="flex flex-col h-full min-w-0 border-r border-white/5 last:border-r-0">
-      <div className="flex items-center gap-2 px-4 py-3 border-b border-white/5 bg-[#141720] shrink-0">
-        <span className="text-sm font-semibold text-white shrink-0">{title}</span>
-        {subtitle && <span className="text-xs text-slate-500 truncate">{subtitle}</span>}
+    <div className="flex flex-col h-full min-w-0 border-r border-app last:border-r-0">
+      <div className="flex items-center gap-2 px-4 py-3 border-b border-app bg-surface shrink-0">
+        <span className="text-sm font-semibold text-app shrink-0">{title}</span>
+        {subtitle && <span className="text-xs text-app-subtle truncate">{subtitle}</span>}
 
         <div className="flex-1" />
 
@@ -196,7 +196,7 @@ export function FileListPane({
         )}
       </div>
 
-      <div className="flex items-center gap-2 px-4 py-2 border-b border-white/5 shrink-0 bg-[#10131a]">
+      <div className="flex items-center gap-2 px-4 py-2 border-b border-app shrink-0 bg-surface-2">
         <input
           type="text"
           value={pathInput}
@@ -207,15 +207,15 @@ export function FileListPane({
           }}
           disabled={operating || !onPathSubmit}
           placeholder="输入路径后按 Enter"
-          className="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg bg-[#0f1117] border border-white/10 text-xs font-mono text-slate-300 placeholder:text-slate-600 focus:outline-none focus:border-emerald-500/50 disabled:opacity-50"
+          className="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg bg-app border border-app-strong text-xs font-mono text-app-secondary placeholder:text-app-faint focus:outline-none focus:border-emerald-500/50 disabled:opacity-50"
           spellCheck={false}
         />
       </div>
 
-      <div className="flex items-center gap-1 px-4 py-1.5 text-xs text-slate-500 border-b border-white/5 overflow-x-auto shrink-0">
+      <div className="flex items-center gap-1 px-4 py-1.5 text-xs text-app-subtle border-b border-app overflow-x-auto shrink-0">
         {segments.map((seg, i) => (
           <span key={seg.path} className="flex items-center gap-1 shrink-0">
-            {i > 0 && <span className="text-slate-700">›</span>}
+            {i > 0 && <span className="text-app-faint">›</span>}
             <button
               onClick={() => onNavigate({ name: seg.label, path: seg.path, isDirectory: true, size: 0 })}
               className="hover:text-emerald-400 truncate max-w-[100px]"
@@ -245,14 +245,14 @@ export function FileListPane({
         onDrop={handleDrop}
       >
         {loading ? (
-          <div className="flex items-center justify-center h-full text-slate-500 text-sm">加载中...</div>
+          <div className="flex items-center justify-center h-full text-app-subtle text-sm">加载中...</div>
         ) : entries.length === 0 ? (
-          <div className="flex items-center justify-center h-full text-slate-500 text-sm">
+          <div className="flex items-center justify-center h-full text-app-subtle text-sm">
             {onFileDrop ? '此目录为空，可将文件拖入此处' : '此目录为空'}
           </div>
         ) : (
           <table className="w-full text-sm">
-            <thead className="sticky top-0 bg-[#141720] text-slate-500 text-xs uppercase tracking-wider z-10">
+            <thead className="sticky top-0 bg-surface text-app-subtle text-xs uppercase tracking-wider z-10">
               <tr>
                 <th className="text-left px-4 py-2 font-medium">名称</th>
                 <th className="text-right px-4 py-2 font-medium w-24">大小</th>
@@ -268,7 +268,7 @@ export function FileListPane({
                   key={entry.path}
                   draggable={!entry.isDirectory}
                   onDragStart={handleDragStart(entry)}
-                  className={`border-t border-white/5 hover:bg-white/5 cursor-pointer transition-colors ${
+                  className={`border-t border-app hover:bg-app-hover cursor-pointer transition-colors ${
                     !entry.isDirectory ? 'cursor-grab active:cursor-grabbing' : ''
                   }`}
                   onClick={() => onNavigate(entry)}
@@ -280,13 +280,13 @@ export function FileListPane({
                   <td className="px-4 py-2">
                     <div className="flex items-center gap-2 min-w-0">
                       <span>{entry.isDirectory ? '📁' : '📄'}</span>
-                      <span className="text-slate-200 truncate">{entry.name}</span>
+                      <span className="text-app-secondary truncate">{entry.name}</span>
                     </div>
                   </td>
-                  <td className="px-4 py-2 text-right text-slate-500 font-mono text-xs">
+                  <td className="px-4 py-2 text-right text-app-subtle font-mono text-xs">
                     {entry.isDirectory ? '—' : formatFileSize(entry.size)}
                   </td>
-                  <td className="px-4 py-2 text-right text-slate-500 text-xs">{formatDate(entry.modifiedAt)}</td>
+                  <td className="px-4 py-2 text-right text-app-subtle text-xs">{formatDate(entry.modifiedAt)}</td>
                   {(onDownload || onDelete || onRename) && (
                     <td className="px-4 py-2 text-right" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-end gap-1">
@@ -304,7 +304,7 @@ export function FileListPane({
                           <button
                             onClick={() => onRename(entry)}
                             disabled={operating}
-                            className="p-1 rounded hover:bg-white/10 text-slate-400 text-xs"
+                            className="p-1 rounded hover:bg-app-hover-strong text-app-muted text-xs"
                           >
                             ✎
                           </button>

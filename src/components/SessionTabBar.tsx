@@ -25,10 +25,10 @@ export function SessionTabBar({
     <button
       key={panel}
       onClick={() => onBrowsePanelChange(panel)}
-      className={`flex items-center gap-2 px-4 py-2.5 text-sm border-r border-white/5 transition-colors shrink-0 ${
+      className={`flex items-center gap-2 px-4 py-2.5 text-sm border-r border-app transition-colors shrink-0 ${
         !showSession && browsePanel === panel
-          ? 'bg-[#0f1117] text-white'
-          : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
+          ? 'bg-app text-app'
+          : 'text-app-muted hover:text-app-secondary hover:bg-app-hover'
       }`}
     >
       {label}
@@ -36,11 +36,11 @@ export function SessionTabBar({
   )
 
   return (
-    <header className="shrink-0 bg-[#141720] border-b border-white/5 titlebar-safe drag-region">
+    <header className="shrink-0 bg-surface border-b border-app titlebar-safe drag-region">
       <div className="flex items-end overflow-x-auto no-drag">
-        <div className="flex items-center gap-2.5 px-4 py-2.5 border-r border-white/5 shrink-0">
+        <div className="flex items-center gap-2.5 px-4 py-2.5 border-r border-app shrink-0">
           <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-emerald-400 to-teal-600 flex items-center justify-center">
-            <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-3.5 h-3.5 text-app" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
           </div>
@@ -52,15 +52,15 @@ export function SessionTabBar({
         {navBtn('settings', '设置')}
 
         {sessions.length > 0 && (
-          <div className="flex items-end border-l border-white/5 ml-1">
+          <div className="flex items-end border-l border-app ml-1">
             {sessions.map((session) => (
               <button
                 key={session.id}
                 onClick={() => onSelectSession(session.id)}
-                className={`flex items-center gap-2 px-4 py-2.5 text-sm border-r border-white/5 transition-colors shrink-0 max-w-[200px] ${
+                className={`flex items-center gap-2 px-4 py-2.5 text-sm border-r border-app transition-colors shrink-0 max-w-[200px] ${
                   showSession && activeSessionId === session.id
-                    ? 'bg-[#0f1117] text-white'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
+                    ? 'bg-app text-app'
+                    : 'text-app-muted hover:text-app-secondary hover:bg-app-hover'
                 }`}
               >
                 <span
@@ -78,7 +78,7 @@ export function SessionTabBar({
                 />
                 <span className="truncate">{session.hostName}</span>
                 <span
-                  className="ml-auto p-0.5 rounded hover:bg-white/10 text-slate-500 hover:text-white shrink-0"
+                  className="ml-auto p-0.5 rounded hover:bg-app-hover-strong text-app-subtle hover:text-app shrink-0"
                   onClick={(e) => {
                     e.stopPropagation()
                     onCloseSession(session.id)

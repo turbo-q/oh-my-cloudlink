@@ -45,6 +45,7 @@ export interface ElectronAPI {
   localHome: () => Promise<string>
   localList: (dirPath: string) => Promise<RemoteFileEntry[]>
   getPathForFile: (file: File) => string
+  setNativeTheme: (source: 'system' | 'light' | 'dark') => Promise<boolean>
 }
 
 declare global {

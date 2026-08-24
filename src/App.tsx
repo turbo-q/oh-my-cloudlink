@@ -214,14 +214,14 @@ export default function App() {
 
   if (loading) {
     return (
-      <div className="h-screen flex items-center justify-center bg-[#0f1117] text-slate-400">
+      <div className="h-screen flex items-center justify-center bg-app text-app-muted">
         加载中...
       </div>
     )
   }
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden bg-[#0f1117]">
+    <div className="h-screen flex flex-col overflow-hidden bg-app">
       <SessionTabBar
         sessions={sessions}
         activeSessionId={activeSessionId}
