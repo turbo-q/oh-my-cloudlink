@@ -8,7 +8,7 @@ interface WelcomeScreenProps {
 
 export function WelcomeScreen({ selectedHost, onConnect, onAddHost }: WelcomeScreenProps) {
   return (
-    <div className="flex-1 flex items-center justify-center bg-[#0f1117]">
+    <div className="flex-1 flex items-center justify-center bg-[#0f1117] pt-4">
       <div className="text-center max-w-md px-6">
         <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-emerald-400/20 to-teal-600/20 flex items-center justify-center border border-emerald-500/20">
           <svg className="w-10 h-10 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">

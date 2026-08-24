@@ -191,9 +191,17 @@ export default function App() {
       />
 
       <main className="flex-1 flex flex-col min-w-0">
+        {/* macOS 标题栏安全区 + 拖拽 */}
+        {!hasActiveSessions && (
+          <div className="titlebar-safe drag-region shrink-0 bg-[#0f1117] flex items-end justify-center pb-2">
+            <span className="text-xs text-slate-600 no-drag select-none">云连 SSH</span>
+          </div>
+        )}
+
         {/* Tab bar */}
         {hasActiveSessions && (
-          <div className="flex items-center bg-[#141720] border-b border-white/5 overflow-x-auto shrink-0">
+          <div className="titlebar-safe drag-region flex items-end bg-[#141720] border-b border-white/5 overflow-x-auto shrink-0">
+            <div className="flex items-center no-drag">
             {sessions.map((session) => (
               <button
                 key={session.id}
@@ -232,6 +240,7 @@ export default function App() {
                 </span>
               </button>
             ))}
+            </div>
           </div>
         )}
 
