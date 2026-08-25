@@ -53,7 +53,7 @@ export function LocalFilePane({ sessionId, remoteConnected = false }: LocalFileP
         const localPath = joinPath(currentPath, item.name)
         await window.electronAPI.fileDownload(sessionId, item.path, localPath)
       }
-      setMessage(`已下载 ${items.length} 个文件到本机`)
+      setMessage(`已下载 ${items.length} 项到本机`)
       await loadDirectory(currentPath)
     } catch (err) {
       setMessage(`下载失败: ${(err as Error).message}`)

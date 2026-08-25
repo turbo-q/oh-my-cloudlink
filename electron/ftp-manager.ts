@@ -85,23 +85,57 @@ export class FtpManager {
 
   async download(sessionId: string, remotePath: string, localPath: string): Promise<void> {
     const session = this.requireSession(sessionId)
+    const remote = normalizeRemotePath(remotePath)
+
+    if (await this.isRemoteDirectory(session, remote)) {
+      fs.mkdirSync(localPath, { recursive: true })
+      await session.client.downloadToDir(localPath, remote)
+      return
+    }
+
     const dir = path.dirname(localPath)
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true })
     }
 
-    const remoteDir = parentRemotePath(remotePath)
-    const fileName = path.posix.basename(remotePath.replace(/\\/g, '/'))
+    const remoteDir = parentRemotePath(remote)
+    const fileName = path.posix.basename(remote.replace(/\\/g, '/'))
     await session.client.cd(remoteDir)
     await session.client.downloadTo(localPath, fileName)
   }
 
   async upload(sessionId: string, localPath: string, remotePath: string): Promise<void> {
     const session = this.requireSession(sessionId)
-    const remoteDir = parentRemotePath(remotePath)
-    const fileName = path.posix.basename(remotePath.replace(/\\/g, '/'))
+    const remote = normalizeRemotePath(remotePath)
+    const localStat = fs.statSync(localPath)
+
+    if (localStat.isDirectory()) {
+      await session.client.ensureDir(remote)
+      await session.client.uploadFromDir(localPath, remote)
+      return
+    }
+
+    const remoteDir = parentRemotePath(remote)
+    const fileName = path.posix.basename(remote.replace(/\\/g, '/'))
+    await session.client.ensureDir(remoteDir)
     await session.client.cd(remoteDir)
     await session.client.uploadFrom(localPath, fileName)
+  }
+
+  private async isRemoteDirectory(session: FtpSession, remotePath: string): Promise<boolean> {
+    const pwd = await session.client.pwd()
+    try {
+      await session.client.cd(remotePath)
+      return true
+    } catch {
+      return false
+    } finally {
+      try {
+        await session.client.cd(pwd)
+      } catch {
+        // ignore restore failure
+      }
+    }
   }
 
   async mkdir(sessionId: string, remotePath: string): Promise<void> {

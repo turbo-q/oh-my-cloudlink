@@ -5,6 +5,7 @@ import {
   buildSshConnectConfig,
   joinRemotePath,
   normalizeRemotePath,
+  parentRemotePath,
   sortFileEntries,
   type ConnectOptions,
   type RemoteFileEntry,
@@ -119,13 +120,25 @@ export class SftpManager {
 
   async download(sessionId: string, remotePath: string, localPath: string): Promise<void> {
     const session = this.requireSession(sessionId)
+    const remote = normalizeRemotePath(remotePath)
+
+    if (await this.isRemoteDirectory(session, remote)) {
+      fs.mkdirSync(localPath, { recursive: true })
+      const entries = await this.list(sessionId, remote)
+      for (const entry of entries) {
+        if (entry.name === '.' || entry.name === '..') continue
+        await this.download(sessionId, entry.path, path.join(localPath, entry.name))
+      }
+      return
+    }
+
     const dir = path.dirname(localPath)
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true })
     }
 
     return new Promise((resolve, reject) => {
-      session.sftp.fastGet(remotePath, localPath, (err) => {
+      session.sftp.fastGet(remote, localPath, (err) => {
         if (err) reject(err)
         else resolve()
       })
@@ -134,9 +147,30 @@ export class SftpManager {
 
   async upload(sessionId: string, localPath: string, remotePath: string): Promise<void> {
     const session = this.requireSession(sessionId)
+    const remote = normalizeRemotePath(remotePath)
+    const localStat = fs.statSync(localPath)
+
+    if (localStat.isDirectory()) {
+      await this.ensureRemoteDir(session, remote)
+      const entries = fs.readdirSync(localPath, { withFileTypes: true })
+      for (const entry of entries) {
+        if (entry.name === '.' || entry.name === '..') continue
+        await this.upload(
+          sessionId,
+          path.join(localPath, entry.name),
+          joinRemotePath(remote, entry.name),
+        )
+      }
+      return
+    }
+
+    const parent = parentRemotePath(remote)
+    if (parent && parent !== remote) {
+      await this.ensureRemoteDir(session, parent).catch(() => undefined)
+    }
 
     return new Promise((resolve, reject) => {
-      session.sftp.fastPut(localPath, remotePath, (err) => {
+      session.sftp.fastPut(localPath, remote, (err) => {
         if (err) reject(err)
         else resolve()
       })
@@ -145,13 +179,7 @@ export class SftpManager {
 
   async mkdir(sessionId: string, remotePath: string): Promise<void> {
     const session = this.requireSession(sessionId)
-
-    return new Promise((resolve, reject) => {
-      session.sftp.mkdir(remotePath, (err) => {
-        if (err) reject(err)
-        else resolve()
-      })
-    })
+    await this.ensureRemoteDir(session, normalizeRemotePath(remotePath))
   }
 
   async delete(sessionId: string, remotePath: string, isDirectory: boolean): Promise<void> {
@@ -189,6 +217,42 @@ export class SftpManager {
     const session = this.sessions.get(sessionId)
     if (!session) throw new Error('SFTP 会话不存在')
     return session
+  }
+
+  private isRemoteDirectory(session: SftpSession, remotePath: string): Promise<boolean> {
+    return new Promise((resolve, reject) => {
+      session.sftp.stat(remotePath, (err, stats) => {
+        if (err) reject(err)
+        else resolve(stats.isDirectory())
+      })
+    })
+  }
+
+  private ensureRemoteDir(session: SftpSession, remotePath: string): Promise<void> {
+    const target = normalizeRemotePath(remotePath)
+    if (!target || target === '/') return Promise.resolve()
+
+    return new Promise((resolve, reject) => {
+      session.sftp.stat(target, (statErr, stats) => {
+        if (!statErr) {
+          if (stats.isDirectory()) resolve()
+          else reject(new Error(`远程路径已存在且不是目录: ${target}`))
+          return
+        }
+
+        session.sftp.mkdir(target, (mkdirErr) => {
+          if (!mkdirErr) {
+            resolve()
+            return
+          }
+          // Concurrent create / already exists
+          session.sftp.stat(target, (againErr, againStats) => {
+            if (!againErr && againStats.isDirectory()) resolve()
+            else reject(mkdirErr)
+          })
+        })
+      })
+    })
   }
 
   private cleanup(sessionId: string): void {

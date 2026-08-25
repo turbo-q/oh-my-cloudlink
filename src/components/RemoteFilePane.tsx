@@ -95,6 +95,29 @@ export function RemoteFilePane({
   }
 
   const handleDownload = async (entry: RemoteFileEntry) => {
+    if (entry.isDirectory) {
+      const localDir = await window.electronAPI.openDirectoryDialog({
+        title: `选择保存文件夹「${entry.name}」的位置`,
+      })
+      if (!localDir) return
+
+      setOperating(true)
+      setMessage(null)
+      try {
+        await window.electronAPI.fileDownload(
+          sessionId,
+          entry.path,
+          joinPath(localDir, entry.name),
+        )
+        setMessage(`已下载文件夹 ${entry.name}`)
+      } catch (err) {
+        setMessage(`下载失败: ${(err as Error).message}`)
+      } finally {
+        setOperating(false)
+      }
+      return
+    }
+
     const localPath = await window.electronAPI.saveFileDialog({ title: '保存文件', defaultPath: entry.name })
     if (!localPath) return
 
@@ -170,7 +193,7 @@ export function RemoteFilePane({
         count++
       }
       if (count === 0) return
-      setMessage(`已上传 ${count} 个文件`)
+      setMessage(`已上传 ${count} 项`)
       await loadDirectory(currentPath)
     } catch (err) {
       setMessage(`上传失败: ${(err as Error).message}`)

@@ -8,6 +8,7 @@ export interface FileDragData {
   source: 'local' | 'remote'
   path: string
   name: string
+  isDirectory?: boolean
 }
 
 export interface FileListPaneProps {
@@ -79,7 +80,13 @@ function parseDropItems(e: DragEvent, variant: 'local' | 'remote'): FileDragData
         (file as File & { path?: string }).path ??
         (typeof window !== 'undefined' ? window.electronAPI?.getPathForFile(file) : '')
       if (filePath) {
-        items.push({ source: 'local', path: filePath, name: file.name })
+        items.push({
+          source: 'local',
+          path: filePath,
+          name: file.name,
+          // Electron 下目录也会出现在 files 里；由主进程按路径判断是否递归
+          isDirectory: file.size === 0 && file.type === '',
+        })
       }
     }
   }
@@ -125,8 +132,12 @@ export function FileListPane({
   }
 
   const handleDragStart = (entry: RemoteFileEntry) => (e: DragEvent) => {
-    if (entry.isDirectory) return
-    const payload: FileDragData = { source: variant, path: entry.path, name: entry.name }
+    const payload: FileDragData = {
+      source: variant,
+      path: entry.path,
+      name: entry.name,
+      isDirectory: entry.isDirectory,
+    }
     e.dataTransfer.setData(SFTP_FILE_DRAG_MIME, JSON.stringify(payload))
     e.dataTransfer.effectAllowed = 'copy'
   }
@@ -248,7 +259,7 @@ export function FileListPane({
           <div className="flex items-center justify-center h-full text-app-subtle text-sm">加载中...</div>
         ) : entries.length === 0 ? (
           <div className="flex items-center justify-center h-full text-app-subtle text-sm">
-            {onFileDrop ? '此目录为空，可将文件拖入此处' : '此目录为空'}
+            {onFileDrop ? '此目录为空，可将文件或文件夹拖入此处' : '此目录为空'}
           </div>
         ) : (
           <table className="w-full text-sm">
@@ -266,11 +277,9 @@ export function FileListPane({
               {entries.map((entry) => (
                 <tr
                   key={entry.path}
-                  draggable={!entry.isDirectory}
+                  draggable
                   onDragStart={handleDragStart(entry)}
-                  className={`border-t border-app hover:bg-app-hover cursor-pointer transition-colors ${
-                    !entry.isDirectory ? 'cursor-grab active:cursor-grabbing' : ''
-                  }`}
+                  className="border-t border-app hover:bg-app-hover cursor-pointer transition-colors cursor-grab active:cursor-grabbing"
                   onClick={() => onNavigate(entry)}
                   onDoubleClick={() => {
                     if (entry.isDirectory) onNavigate(entry)
@@ -290,12 +299,12 @@ export function FileListPane({
                   {(onDownload || onDelete || onRename) && (
                     <td className="px-4 py-2 text-right" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-end gap-1">
-                        {!entry.isDirectory && onDownload && (
+                        {onDownload && (
                           <button
                             onClick={() => onDownload(entry)}
                             disabled={operating}
                             className="p-1 rounded hover:bg-emerald-500/20 text-emerald-400 text-xs"
-                            title="下载"
+                            title={entry.isDirectory ? '下载文件夹' : '下载'}
                           >
                             ↓
                           </button>
