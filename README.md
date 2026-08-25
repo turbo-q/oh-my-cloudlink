@@ -8,7 +8,7 @@
 - **分组与标签** — 按环境/项目分组，支持标签搜索
 - **SSH 密钥** — 统一管理私钥，关联到主机
 - **终端连接** — 基于 xterm.js 的全功能 SSH 终端，支持多标签
-- **数据导入导出** — JSON 格式备份与恢复配置
+- **数据导入导出** — JSON 格式备份与恢复配置（底层持久化为 SQLite）
 - **协议预留** — 数据模型已预留 SFTP / FTP 扩展位，后续可接入文件传输
 
 ## 技术栈
@@ -21,7 +21,7 @@
 | SSH | ssh2 (Node.js) |
 | SFTP | ssh2 SFTP 子系统 |
 | FTP | basic-ftp |
-| 数据存储 | 本地 JSON 文件 (`userData/data.json`) |
+| 数据存储 | 本地 SQLite（`~/Library/Application Support/oh-my-cloudlink/cloudlink.db`） |
 
 ## 快速开始
 

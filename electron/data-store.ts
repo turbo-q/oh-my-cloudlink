@@ -2,6 +2,8 @@ import { app } from 'electron'
 import fs from 'fs'
 import path from 'path'
 import { randomUUID } from 'crypto'
+import { DatabaseSync } from 'node:sqlite'
+import { LEGACY_USER_DATA_NAMES } from './app-paths'
 
 export interface StoredHost {
   id: string
@@ -43,67 +45,294 @@ interface DataFile {
   keys: StoredKey[]
 }
 
-const DEFAULT_DATA: DataFile = {
-  hosts: [],
-  groups: [],
-  keys: [],
+interface HostRow {
+  id: string
+  name: string
+  hostname: string
+  port: number
+  username: string
+  protocol: string
+  auth_type: string
+  password: string | null
+  key_id: string | null
+  group_id: string | null
+  tags: string
+  notes: string | null
+  created_at: string
+  updated_at: string
+}
+
+interface GroupRow {
+  id: string
+  name: string
+  color: string
+  parent_id: string | null
+  created_at: string
+}
+
+interface KeyRow {
+  id: string
+  name: string
+  private_key: string
+  public_key: string | null
+  passphrase: string | null
+  created_at: string
 }
 
 export class DataStore {
-  private filePath: string
-  private data: DataFile
+  private db: DatabaseSync
+  private dbPath: string
 
   constructor() {
     const userData = app.getPath('userData')
-    this.filePath = path.join(userData, 'data.json')
-    this.data = this.load()
+    if (!fs.existsSync(userData)) {
+      fs.mkdirSync(userData, { recursive: true })
+    }
+
+    this.dbPath = path.join(userData, 'cloudlink.db')
+    this.db = new DatabaseSync(this.dbPath)
+    this.db.exec('PRAGMA journal_mode = WAL')
+    this.db.exec('PRAGMA foreign_keys = ON')
+    this.initSchema()
+    this.migrateFromJsonIfNeeded(userData)
   }
 
-  private load(): DataFile {
-    try {
-      if (fs.existsSync(this.filePath)) {
-        const raw = fs.readFileSync(this.filePath, 'utf-8')
+  private initSchema(): void {
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS groups (
+        id TEXT PRIMARY KEY NOT NULL,
+        name TEXT NOT NULL,
+        color TEXT NOT NULL,
+        parent_id TEXT,
+        created_at TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS keys (
+        id TEXT PRIMARY KEY NOT NULL,
+        name TEXT NOT NULL,
+        private_key TEXT NOT NULL,
+        public_key TEXT,
+        passphrase TEXT,
+        created_at TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS hosts (
+        id TEXT PRIMARY KEY NOT NULL,
+        name TEXT NOT NULL,
+        hostname TEXT NOT NULL,
+        port INTEGER NOT NULL,
+        username TEXT NOT NULL,
+        protocol TEXT NOT NULL,
+        auth_type TEXT NOT NULL,
+        password TEXT,
+        key_id TEXT,
+        group_id TEXT,
+        tags TEXT NOT NULL DEFAULT '[]',
+        notes TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_hosts_group_id ON hosts(group_id);
+      CREATE INDEX IF NOT EXISTS idx_hosts_name ON hosts(name);
+      CREATE INDEX IF NOT EXISTS idx_groups_name ON groups(name);
+    `)
+  }
+
+  /** Import legacy data.json once into SQLite (current + Chinese/legacy userData dirs). */
+  private migrateFromJsonIfNeeded(userData: string): void {
+    if (this.countRows('hosts') + this.countRows('groups') + this.countRows('keys') > 0) {
+      return
+    }
+
+    const candidates = [
+      path.join(userData, 'data.json'),
+      ...LEGACY_USER_DATA_NAMES.map((name) =>
+        path.join(app.getPath('appData'), name, 'data.json'),
+      ),
+    ]
+
+    for (const jsonPath of candidates) {
+      if (!fs.existsSync(jsonPath)) continue
+      try {
+        const raw = fs.readFileSync(jsonPath, 'utf-8')
         const parsed = JSON.parse(raw) as Partial<DataFile>
-        return {
+        const data: DataFile = {
           hosts: parsed.hosts ?? [],
           groups: parsed.groups ?? [],
           keys: parsed.keys ?? [],
         }
+        if (data.hosts.length + data.groups.length + data.keys.length === 0) continue
+
+        this.replaceAll(data)
+        const bak = `${jsonPath}.migrated.bak`
+        if (!fs.existsSync(bak)) {
+          fs.copyFileSync(jsonPath, bak)
+        }
+        console.log(`[data-store] migrated JSON → SQLite from ${jsonPath}`)
+        return
+      } catch (err) {
+        console.error(`[data-store] migrate failed for ${jsonPath}:`, err)
       }
-    } catch (err) {
-      console.error('加载数据失败，使用默认数据:', err)
     }
-    return structuredClone(DEFAULT_DATA)
   }
 
-  private save(): void {
-    const dir = path.dirname(this.filePath)
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true })
+  private countRows(table: 'hosts' | 'groups' | 'keys'): number {
+    const row = this.db.prepare(`SELECT COUNT(*) AS c FROM ${table}`).get() as
+      | { c: number }
+      | undefined
+    return Number(row?.c ?? 0)
+  }
+
+  private parseTags(raw: string): string[] {
+    try {
+      const parsed = JSON.parse(raw) as unknown
+      return Array.isArray(parsed) ? parsed.filter((t): t is string => typeof t === 'string') : []
+    } catch {
+      return []
     }
-    fs.writeFileSync(this.filePath, JSON.stringify(this.data, null, 2), 'utf-8')
+  }
+
+  private mapHost(row: HostRow): StoredHost {
+    return {
+      id: row.id,
+      name: row.name,
+      hostname: row.hostname,
+      port: row.port,
+      username: row.username,
+      protocol: row.protocol as StoredHost['protocol'],
+      authType: row.auth_type as StoredHost['authType'],
+      password: row.password ?? undefined,
+      keyId: row.key_id ?? undefined,
+      groupId: row.group_id ?? undefined,
+      tags: this.parseTags(row.tags),
+      notes: row.notes ?? undefined,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    }
+  }
+
+  private mapGroup(row: GroupRow): StoredGroup {
+    return {
+      id: row.id,
+      name: row.name,
+      color: row.color,
+      parentId: row.parent_id ?? undefined,
+      createdAt: row.created_at,
+    }
+  }
+
+  private mapKey(row: KeyRow): StoredKey {
+    return {
+      id: row.id,
+      name: row.name,
+      privateKey: row.private_key,
+      publicKey: row.public_key ?? undefined,
+      passphrase: row.passphrase ?? undefined,
+      createdAt: row.created_at,
+    }
+  }
+
+  private replaceAll(data: DataFile): void {
+    this.db.exec('BEGIN')
+    try {
+      this.db.exec('DELETE FROM hosts')
+      this.db.exec('DELETE FROM groups')
+      this.db.exec('DELETE FROM keys')
+
+      const insertGroup = this.db.prepare(
+        `INSERT INTO groups (id, name, color, parent_id, created_at) VALUES (?, ?, ?, ?, ?)`,
+      )
+      for (const g of data.groups) {
+        insertGroup.run(g.id, g.name, g.color, g.parentId ?? null, g.createdAt)
+      }
+
+      const insertKey = this.db.prepare(
+        `INSERT INTO keys (id, name, private_key, public_key, passphrase, created_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      )
+      for (const k of data.keys) {
+        insertKey.run(
+          k.id,
+          k.name,
+          k.privateKey,
+          k.publicKey ?? null,
+          k.passphrase ?? null,
+          k.createdAt,
+        )
+      }
+
+      const insertHost = this.db.prepare(
+        `INSERT INTO hosts (
+          id, name, hostname, port, username, protocol, auth_type,
+          password, key_id, group_id, tags, notes, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      for (const h of data.hosts) {
+        insertHost.run(
+          h.id,
+          h.name,
+          h.hostname,
+          h.port,
+          h.username,
+          h.protocol,
+          h.authType,
+          h.password ?? null,
+          h.keyId ?? null,
+          h.groupId ?? null,
+          JSON.stringify(h.tags ?? []),
+          h.notes ?? null,
+          h.createdAt,
+          h.updatedAt,
+        )
+      }
+
+      this.db.exec('COMMIT')
+    } catch (err) {
+      this.db.exec('ROLLBACK')
+      throw err
+    }
   }
 
   getHosts(): StoredHost[] {
-    return [...this.data.hosts]
+    const rows = this.db.prepare('SELECT * FROM hosts ORDER BY name COLLATE NOCASE').all() as unknown as HostRow[]
+    return rows.map((r) => this.mapHost(r))
   }
 
   saveHost(host: Omit<StoredHost, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }): StoredHost {
     const now = new Date().toISOString()
     if (host.id) {
-      const idx = this.data.hosts.findIndex((h) => h.id === host.id)
-      if (idx >= 0) {
-        const updated: StoredHost = {
-          ...this.data.hosts[idx],
-          ...host,
-          id: host.id,
-          updatedAt: now,
-        }
-        this.data.hosts[idx] = updated
-        this.save()
-        return updated
+      const existing = this.db.prepare('SELECT * FROM hosts WHERE id = ?').get(host.id) as unknown as
+        | HostRow
+        | undefined
+      if (existing) {
+        this.db
+          .prepare(
+            `UPDATE hosts SET
+              name = ?, hostname = ?, port = ?, username = ?, protocol = ?, auth_type = ?,
+              password = ?, key_id = ?, group_id = ?, tags = ?, notes = ?, updated_at = ?
+             WHERE id = ?`,
+          )
+          .run(
+            host.name,
+            host.hostname,
+            host.port,
+            host.username,
+            host.protocol,
+            host.authType,
+            host.password ?? null,
+            host.keyId ?? null,
+            host.groupId ?? null,
+            JSON.stringify(host.tags ?? []),
+            host.notes ?? null,
+            now,
+            host.id,
+          )
+        const updated = this.db.prepare('SELECT * FROM hosts WHERE id = ?').get(host.id) as unknown as HostRow
+        return this.mapHost(updated)
       }
     }
+
     const created: StoredHost = {
       ...host,
       id: randomUUID(),
@@ -111,107 +340,166 @@ export class DataStore {
       createdAt: now,
       updatedAt: now,
     }
-    this.data.hosts.push(created)
-    this.save()
+    this.db
+      .prepare(
+        `INSERT INTO hosts (
+          id, name, hostname, port, username, protocol, auth_type,
+          password, key_id, group_id, tags, notes, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        created.id,
+        created.name,
+        created.hostname,
+        created.port,
+        created.username,
+        created.protocol,
+        created.authType,
+        created.password ?? null,
+        created.keyId ?? null,
+        created.groupId ?? null,
+        JSON.stringify(created.tags),
+        created.notes ?? null,
+        created.createdAt,
+        created.updatedAt,
+      )
     return created
   }
 
   deleteHost(id: string): boolean {
-    const before = this.data.hosts.length
-    this.data.hosts = this.data.hosts.filter((h) => h.id !== id)
-    if (this.data.hosts.length !== before) {
-      this.save()
-      return true
-    }
-    return false
+    const result = this.db.prepare('DELETE FROM hosts WHERE id = ?').run(id)
+    return result.changes > 0
   }
 
   getGroups(): StoredGroup[] {
-    return [...this.data.groups]
+    const rows = this.db.prepare('SELECT * FROM groups ORDER BY name COLLATE NOCASE').all() as unknown as GroupRow[]
+    return rows.map((r) => this.mapGroup(r))
   }
 
   saveGroup(group: Omit<StoredGroup, 'id' | 'createdAt'> & { id?: string }): StoredGroup {
     const now = new Date().toISOString()
     if (group.id) {
-      const idx = this.data.groups.findIndex((g) => g.id === group.id)
-      if (idx >= 0) {
-        const updated: StoredGroup = { ...this.data.groups[idx], ...group, id: group.id }
-        this.data.groups[idx] = updated
-        this.save()
-        return updated
+      const existing = this.db.prepare('SELECT * FROM groups WHERE id = ?').get(group.id) as unknown as
+        | GroupRow
+        | undefined
+      if (existing) {
+        this.db
+          .prepare(
+            `UPDATE groups SET name = ?, color = ?, parent_id = ? WHERE id = ?`,
+          )
+          .run(group.name, group.color, group.parentId ?? null, group.id)
+        const updated = this.db.prepare('SELECT * FROM groups WHERE id = ?').get(group.id) as unknown as GroupRow
+        return this.mapGroup(updated)
       }
     }
+
     const created: StoredGroup = {
       ...group,
       id: randomUUID(),
       createdAt: now,
     }
-    this.data.groups.push(created)
-    this.save()
+    this.db
+      .prepare(
+        `INSERT INTO groups (id, name, color, parent_id, created_at) VALUES (?, ?, ?, ?, ?)`,
+      )
+      .run(created.id, created.name, created.color, created.parentId ?? null, created.createdAt)
     return created
   }
 
   deleteGroup(id: string): boolean {
-    const before = this.data.groups.length
-    this.data.groups = this.data.groups.filter((g) => g.id !== id)
-    this.data.hosts = this.data.hosts.map((h) =>
-      h.groupId === id ? { ...h, groupId: undefined, updatedAt: new Date().toISOString() } : h,
-    )
-    if (this.data.groups.length !== before) {
-      this.save()
-      return true
+    this.db.exec('BEGIN')
+    try {
+      const now = new Date().toISOString()
+      this.db
+        .prepare('UPDATE hosts SET group_id = NULL, updated_at = ? WHERE group_id = ?')
+        .run(now, id)
+      const result = this.db.prepare('DELETE FROM groups WHERE id = ?').run(id)
+      this.db.exec('COMMIT')
+      return result.changes > 0
+    } catch (err) {
+      this.db.exec('ROLLBACK')
+      throw err
     }
-    return false
   }
 
   getKeys(): StoredKey[] {
-    return [...this.data.keys]
+    const rows = this.db.prepare('SELECT * FROM keys ORDER BY name COLLATE NOCASE').all() as unknown as KeyRow[]
+    return rows.map((r) => this.mapKey(r))
   }
 
   saveKey(key: Omit<StoredKey, 'id' | 'createdAt'> & { id?: string }): StoredKey {
     const now = new Date().toISOString()
     if (key.id) {
-      const idx = this.data.keys.findIndex((k) => k.id === key.id)
-      if (idx >= 0) {
-        const updated: StoredKey = { ...this.data.keys[idx], ...key, id: key.id }
-        this.data.keys[idx] = updated
-        this.save()
-        return updated
+      const existing = this.db.prepare('SELECT * FROM keys WHERE id = ?').get(key.id) as unknown as
+        | KeyRow
+        | undefined
+      if (existing) {
+        this.db
+          .prepare(
+            `UPDATE keys SET name = ?, private_key = ?, public_key = ?, passphrase = ? WHERE id = ?`,
+          )
+          .run(
+            key.name,
+            key.privateKey,
+            key.publicKey ?? null,
+            key.passphrase ?? null,
+            key.id,
+          )
+        const updated = this.db.prepare('SELECT * FROM keys WHERE id = ?').get(key.id) as unknown as KeyRow
+        return this.mapKey(updated)
       }
     }
+
     const created: StoredKey = {
       ...key,
       id: randomUUID(),
       createdAt: now,
     }
-    this.data.keys.push(created)
-    this.save()
+    this.db
+      .prepare(
+        `INSERT INTO keys (id, name, private_key, public_key, passphrase, created_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        created.id,
+        created.name,
+        created.privateKey,
+        created.publicKey ?? null,
+        created.passphrase ?? null,
+        created.createdAt,
+      )
     return created
   }
 
   deleteKey(id: string): boolean {
-    const before = this.data.keys.length
-    this.data.keys = this.data.keys.filter((k) => k.id !== id)
-    this.data.hosts = this.data.hosts.map((h) =>
-      h.keyId === id ? { ...h, keyId: undefined, updatedAt: new Date().toISOString() } : h,
-    )
-    if (this.data.keys.length !== before) {
-      this.save()
-      return true
+    this.db.exec('BEGIN')
+    try {
+      const now = new Date().toISOString()
+      this.db
+        .prepare('UPDATE hosts SET key_id = NULL, updated_at = ? WHERE key_id = ?')
+        .run(now, id)
+      const result = this.db.prepare('DELETE FROM keys WHERE id = ?').run(id)
+      this.db.exec('COMMIT')
+      return result.changes > 0
+    } catch (err) {
+      this.db.exec('ROLLBACK')
+      throw err
     }
-    return false
   }
 
   exportData(): DataFile {
-    return structuredClone(this.data)
+    return {
+      hosts: this.getHosts(),
+      groups: this.getGroups(),
+      keys: this.getKeys(),
+    }
   }
 
   importData(data: DataFile): void {
-    this.data = {
+    this.replaceAll({
       hosts: data.hosts ?? [],
       groups: data.groups ?? [],
       keys: data.keys ?? [],
-    }
-    this.save()
+    })
   }
 }

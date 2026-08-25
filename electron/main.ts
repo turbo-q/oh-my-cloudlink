@@ -1,10 +1,14 @@
 import { app, BrowserWindow, ipcMain, dialog, nativeTheme, type IpcMainInvokeEvent } from 'electron'
 import path from 'path'
+import { ensureAppPaths } from './app-paths'
 import { DataStore } from './data-store'
 import { SshManager } from './ssh-manager'
 import { FileManager } from './file-manager'
 import { LocalFileManager } from './local-file-manager'
 import { discoverLocalKeys, readKeyFromFile } from './key-discovery'
+
+// Must run before DataStore reads userData (keep path ASCII-only)
+ensureAppPaths()
 
 const isDev = !app.isPackaged
 let mainWindow: BrowserWindow | null = null
@@ -196,6 +200,7 @@ function registerIpcHandlers(): void {
 registerIpcHandlers()
 
 app.whenReady().then(() => {
+  console.log('[main] userData:', app.getPath('userData'))
   createWindow()
 
   app.on('activate', () => {

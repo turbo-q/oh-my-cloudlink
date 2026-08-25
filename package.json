@@ -1,6 +1,6 @@
 {
   "name": "oh-my-cloudlink",
-  "productName": "云连 SSH",
+  "productName": "Oh My CloudLink",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -46,8 +46,9 @@
     "wait-on": "^9.1.0"
   },
   "build": {
-    "appId": "com.yunlian.ssh",
-    "productName": "云连 SSH",
+    "appId": "com.ohmycloudlink.ssh",
+    "productName": "Oh My CloudLink",
+    "executableName": "oh-my-cloudlink",
     "directories": {
       "output": "release"
     },
@@ -55,6 +56,9 @@
       "dist/**/*",
       "dist-electron/**/*"
     ],
+    "extraMetadata": {
+      "name": "oh-my-cloudlink"
+    },
     "mac": {
       "category": "public.app-category.developer-tools",
       "identity": null,
@@ -64,7 +68,7 @@
       ]
     },
     "dmg": {
-      "title": "安装 云连 SSH",
+      "title": "Install Oh My CloudLink",
       "iconSize": 100,
       "window": {
         "width": 600,
