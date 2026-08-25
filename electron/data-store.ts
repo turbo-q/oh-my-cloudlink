@@ -330,6 +330,8 @@ export class DataStore {
       throw err
     }
   }
+
+  getHosts(): StoredHost[] {
     const rows = this.db.prepare('SELECT * FROM hosts ORDER BY name COLLATE NOCASE').all() as unknown as HostRow[]
     return rows.map((r) => this.mapHost(r))
   }
