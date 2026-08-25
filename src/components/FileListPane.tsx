@@ -1,6 +1,6 @@
 import { useEffect, useState, type DragEvent } from 'react'
 import type { RemoteFileEntry } from '../types'
-import { formatFileSize, formatDate } from '../types'
+import { formatFileSize, formatDate, formatTransferSpeed } from '../types'
 import type { TransferProgress } from '../hooks/useTransferProgress'
 
 export const SFTP_FILE_DRAG_MIME = 'application/x-yunlian-sftp-file'
@@ -346,14 +346,16 @@ export function FileListPane({
 }
 
 function TransferStatusBar({ transfer }: { transfer: TransferProgress }) {
-  // current = 已完成数；进行中单项用不确定动画，避免 1/1 直接显示 100%
-  const indeterminate = transfer.status === 'running' && (transfer.total <= 1 || transfer.current >= transfer.total)
   const percent =
     transfer.status === 'success'
       ? 100
-      : transfer.total > 0
-        ? Math.min(99, Math.round((transfer.current / transfer.total) * 100))
-        : 0
+      : transfer.bytesTotal && transfer.bytesTotal > 0
+        ? Math.min(99, Math.round((transfer.bytesDone! / transfer.bytesTotal) * 100))
+        : transfer.total > 0
+          ? Math.min(99, Math.round((transfer.current / transfer.total) * 100))
+          : 0
+
+  const scanning = transfer.status === 'running' && transfer.total <= 1 && transfer.current === 0 && !transfer.bytesDone
 
   const tone =
     transfer.status === 'error'
@@ -368,11 +370,6 @@ function TransferStatusBar({ transfer }: { transfer: TransferProgress }) {
       : transfer.status === 'success'
         ? 'bg-emerald-400'
         : 'bg-blue-400'
-
-  const counter =
-    transfer.status === 'running' && transfer.total > 1
-      ? `${Math.min(transfer.current + 1, transfer.total)}/${transfer.total}`
-      : null
 
   return (
     <div className="shrink-0 border-t border-app bg-surface px-3 py-1.5">
@@ -392,16 +389,23 @@ function TransferStatusBar({ transfer }: { transfer: TransferProgress }) {
             <span className="text-app-subtle"> · {transfer.detail}</span>
           )}
         </div>
-        {counter && (
-          <span className="shrink-0 text-[11px] font-mono text-app-subtle">{counter}</span>
+        {transfer.status === 'running' && (
+          <span className="shrink-0 text-[11px] font-mono text-app-subtle tabular-nums">
+            {formatTransferSpeed(transfer.speedBps ?? 0)}
+          </span>
+        )}
+        {transfer.status === 'running' && transfer.total > 0 && (
+          <span className="shrink-0 text-[11px] font-mono text-app-subtle tabular-nums">
+            {transfer.current}/{transfer.total}
+          </span>
         )}
       </div>
       <div className="mt-1 h-0.5 rounded-full bg-app-hover overflow-hidden relative">
-        {indeterminate ? (
+        {scanning ? (
           <div className={`absolute inset-y-0 w-1/3 rounded-full ${barColor} opacity-80 transfer-indeterminate`} />
         ) : (
           <div
-            className={`h-full rounded-full transition-all duration-300 ${barColor}`}
+            className={`h-full rounded-full transition-all duration-200 ${barColor}`}
             style={{ width: `${percent}%` }}
           />
         )}

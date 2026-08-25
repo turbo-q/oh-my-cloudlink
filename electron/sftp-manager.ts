@@ -10,11 +10,23 @@ import {
   type ConnectOptions,
   type RemoteFileEntry,
 } from './auth-config'
+import {
+  countLocalTree,
+  type TransferProgressCallback,
+} from './transfer-progress'
 
 interface SftpSession {
   client: Client
   sftp: SFTPWrapper
   homePath: string
+}
+
+interface TransferState {
+  current: number
+  total: number
+  bytesDone: number
+  bytesTotal: number
+  onProgress?: TransferProgressCallback
 }
 
 export class SftpManager {
@@ -118,16 +130,116 @@ export class SftpManager {
     })
   }
 
-  async download(sessionId: string, remotePath: string, localPath: string): Promise<void> {
+  async download(
+    sessionId: string,
+    remotePath: string,
+    localPath: string,
+    onProgress?: TransferProgressCallback,
+  ): Promise<void> {
     const session = this.requireSession(sessionId)
+    const remote = normalizeRemotePath(remotePath)
+    const tree = await this.countRemoteTree(sessionId, remote)
+    const state: TransferState = {
+      current: 0,
+      total: Math.max(tree.files, 1),
+      bytesDone: 0,
+      bytesTotal: tree.bytes,
+      onProgress,
+    }
+    this.emitProgress(state, path.posix.basename(remote) || remote)
+    await this.downloadNode(session, remote, localPath, state)
+  }
+
+  async upload(
+    sessionId: string,
+    localPath: string,
+    remotePath: string,
+    onProgress?: TransferProgressCallback,
+  ): Promise<void> {
+    const session = this.requireSession(sessionId)
+    const remote = normalizeRemotePath(remotePath)
+    const tree = countLocalTree(localPath)
+    const state: TransferState = {
+      current: 0,
+      total: Math.max(tree.files, 1),
+      bytesDone: 0,
+      bytesTotal: tree.bytes,
+      onProgress,
+    }
+    this.emitProgress(state, path.basename(localPath))
+    await this.uploadNode(session, localPath, remote, state)
+  }
+
+  private emitProgress(state: TransferState, name: string): void {
+    state.onProgress?.({
+      current: state.current,
+      total: state.total,
+      name,
+      bytesDone: state.bytesDone,
+      bytesTotal: state.bytesTotal,
+    })
+  }
+
+  private async countRemoteTree(
+    sessionId: string,
+    remotePath: string,
+  ): Promise<{ files: number; bytes: number }> {
+    const session = this.requireSession(sessionId)
+    const remote = normalizeRemotePath(remotePath)
+
+    try {
+      const isDir = await this.isRemoteDirectory(session, remote)
+      if (!isDir) {
+        const size = await this.statSize(session, remote)
+        return { files: 1, bytes: size }
+      }
+    } catch {
+      return { files: 0, bytes: 0 }
+    }
+
+    let files = 0
+    let bytes = 0
+
+    const walk = async (dir: string) => {
+      const entries = await this.list(sessionId, dir)
+      for (const entry of entries) {
+        if (entry.name === '.' || entry.name === '..') continue
+        if (entry.isDirectory) {
+          await walk(entry.path)
+        } else {
+          files += 1
+          bytes += entry.size ?? 0
+        }
+      }
+    }
+
+    await walk(remote)
+    return { files, bytes }
+  }
+
+  private statSize(session: SftpSession, remotePath: string): Promise<number> {
+    return new Promise((resolve, reject) => {
+      session.sftp.stat(remotePath, (err, stats) => {
+        if (err) reject(err)
+        else resolve(stats.size ?? 0)
+      })
+    })
+  }
+
+  private async downloadNode(
+    session: SftpSession,
+    remotePath: string,
+    localPath: string,
+    state: TransferState,
+  ): Promise<void> {
     const remote = normalizeRemotePath(remotePath)
 
     if (await this.isRemoteDirectory(session, remote)) {
       fs.mkdirSync(localPath, { recursive: true })
-      const entries = await this.list(sessionId, remote)
+      const entries = await this.listFromSession(session, remote)
       for (const entry of entries) {
         if (entry.name === '.' || entry.name === '..') continue
-        await this.download(sessionId, entry.path, path.join(localPath, entry.name))
+        await this.downloadNode(session, entry.path, path.join(localPath, entry.name), state)
       }
       return
     }
@@ -137,16 +249,41 @@ export class SftpManager {
       fs.mkdirSync(dir, { recursive: true })
     }
 
-    return new Promise((resolve, reject) => {
-      session.sftp.fastGet(remote, localPath, (err) => {
-        if (err) reject(err)
-        else resolve()
-      })
+    const name = path.posix.basename(remote)
+    const fileStartBytes = state.bytesDone
+
+    await new Promise<void>((resolve, reject) => {
+      session.sftp.fastGet(
+        remote,
+        localPath,
+        {
+          step: (totalTransferred) => {
+            state.bytesDone = fileStartBytes + totalTransferred
+            this.emitProgress(state, name)
+          },
+        },
+        (err) => {
+          if (err) reject(err)
+          else resolve()
+        },
+      )
     })
+
+    try {
+      state.bytesDone = fileStartBytes + fs.statSync(localPath).size
+    } catch {
+      // keep step value
+    }
+    state.current += 1
+    this.emitProgress(state, name)
   }
 
-  async upload(sessionId: string, localPath: string, remotePath: string): Promise<void> {
-    const session = this.requireSession(sessionId)
+  private async uploadNode(
+    session: SftpSession,
+    localPath: string,
+    remotePath: string,
+    state: TransferState,
+  ): Promise<void> {
     const remote = normalizeRemotePath(remotePath)
     const localStat = fs.statSync(localPath)
 
@@ -155,10 +292,11 @@ export class SftpManager {
       const entries = fs.readdirSync(localPath, { withFileTypes: true })
       for (const entry of entries) {
         if (entry.name === '.' || entry.name === '..') continue
-        await this.upload(
-          sessionId,
+        await this.uploadNode(
+          session,
           path.join(localPath, entry.name),
           joinRemotePath(remote, entry.name),
+          state,
         )
       }
       return
@@ -169,10 +307,53 @@ export class SftpManager {
       await this.ensureRemoteDir(session, parent).catch(() => undefined)
     }
 
+    const name = path.basename(localPath)
+    const fileStartBytes = state.bytesDone
+
+    await new Promise<void>((resolve, reject) => {
+      session.sftp.fastPut(
+        localPath,
+        remote,
+        {
+          step: (totalTransferred) => {
+            state.bytesDone = fileStartBytes + totalTransferred
+            this.emitProgress(state, name)
+          },
+        },
+        (err) => {
+          if (err) reject(err)
+          else resolve()
+        },
+      )
+    })
+
+    state.bytesDone = fileStartBytes + localStat.size
+    state.current += 1
+    this.emitProgress(state, name)
+  }
+
+  private listFromSession(session: SftpSession, dirPath: string): Promise<RemoteFileEntry[]> {
+    const target = normalizeRemotePath(dirPath)
     return new Promise((resolve, reject) => {
-      session.sftp.fastPut(localPath, remote, (err) => {
-        if (err) reject(err)
-        else resolve()
+      session.sftp.readdir(target, (err, list) => {
+        if (err) {
+          reject(err)
+          return
+        }
+        const entries: RemoteFileEntry[] = list.map((item) => {
+          const isDirectory = item.attrs.isDirectory()
+          const modifiedAt = item.attrs.mtime
+            ? new Date(item.attrs.mtime * 1000).toISOString()
+            : undefined
+          return {
+            name: item.filename,
+            path: joinRemotePath(target, item.filename),
+            isDirectory,
+            size: item.attrs.size ?? 0,
+            modifiedAt,
+          }
+        })
+        resolve(sortFileEntries(entries))
       })
     })
   }

@@ -130,6 +130,18 @@ export function formatFileSize(bytes: number): string {
   return `${size.toFixed(i === 0 ? 0 : 1)} ${units[i]}`
 }
 
+export function formatTransferSpeed(bytesPerSec: number): string {
+  if (!Number.isFinite(bytesPerSec) || bytesPerSec <= 0) return '—'
+  const units = ['B/s', 'KB/s', 'MB/s', 'GB/s']
+  let n = bytesPerSec
+  let i = 0
+  while (n >= 1024 && i < units.length - 1) {
+    n /= 1024
+    i += 1
+  }
+  return `${n >= 10 || i === 0 ? n.toFixed(0) : n.toFixed(1)} ${units[i]}`
+}
+
 export function formatDate(iso?: string): string {
   if (!iso) return '—'
   try {

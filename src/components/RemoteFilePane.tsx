@@ -29,7 +29,7 @@ export function RemoteFilePane({
   const [loading, setLoading] = useState(true)
   const [operating, setOperating] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
-  const { transfer, start, tick, succeed, fail } = useTransferProgress()
+  const { transfer, start, tick, applyFileProgress, succeed, fail } = useTransferProgress()
 
   const loadDirectory = useCallback(
     async (path: string) => {
@@ -76,26 +76,44 @@ export function RemoteFilePane({
     if (entry.isDirectory) void loadDirectory(entry.path)
   }
 
+  const withFileProgress = async (label: string, run: () => Promise<void>, successLabel: string) => {
+    setOperating(true)
+    setMessage(null)
+    start(label, 1)
+    const unsub = window.electronAPI.onFileProgress((p) => {
+      if (p.sessionId !== sessionId) return
+      applyFileProgress(p, label)
+    })
+    try {
+      await run()
+      succeed(successLabel)
+    } catch (err) {
+      fail(`${label.replace(/中$/, '')}失败: ${(err as Error).message}`)
+      throw err
+    } finally {
+      unsub()
+      setOperating(false)
+    }
+  }
+
   const handleUpload = async () => {
     const files = await window.electronAPI.openFileDialog({ title: '选择要上传的文件', multi: true })
     if (!files?.length) return
 
-    setOperating(true)
-    setMessage(null)
-    start('上传中', files.length)
     try {
-      for (let i = 0; i < files.length; i++) {
-        const localPath = files[i]
-        const name = localPath.split(/[/\\]/).pop()!
-        tick(i, name)
-        await window.electronAPI.fileUpload(sessionId, localPath, joinPath(currentPath, name))
-      }
-      succeed(`已上传 ${files.length} 个文件`)
+      await withFileProgress(
+        '上传中',
+        async () => {
+          for (const localPath of files) {
+            const name = localPath.split(/[/\\]/).pop()!
+            await window.electronAPI.fileUpload(sessionId, localPath, joinPath(currentPath, name))
+          }
+        },
+        `已上传 ${files.length} 个文件`,
+      )
       await loadDirectory(currentPath)
-    } catch (err) {
-      fail(`上传失败: ${(err as Error).message}`)
-    } finally {
-      setOperating(false)
+    } catch {
+      // status already set
     }
   }
 
@@ -106,21 +124,20 @@ export function RemoteFilePane({
       })
       if (!localDir) return
 
-      setOperating(true)
-      setMessage(null)
-      start('下载文件夹', 1)
-      tick(0, entry.name)
       try {
-        await window.electronAPI.fileDownload(
-          sessionId,
-          entry.path,
-          joinPath(localDir, entry.name),
+        await withFileProgress(
+          '下载中',
+          async () => {
+            await window.electronAPI.fileDownload(
+              sessionId,
+              entry.path,
+              joinPath(localDir, entry.name),
+            )
+          },
+          `已下载文件夹 ${entry.name}`,
         )
-        succeed(`已下载文件夹 ${entry.name}`)
-      } catch (err) {
-        fail(`下载失败: ${(err as Error).message}`)
-      } finally {
-        setOperating(false)
+      } catch {
+        // status already set
       }
       return
     }
@@ -128,17 +145,16 @@ export function RemoteFilePane({
     const localPath = await window.electronAPI.saveFileDialog({ title: '保存文件', defaultPath: entry.name })
     if (!localPath) return
 
-    setOperating(true)
-    setMessage(null)
-    start('下载中', 1)
-    tick(0, entry.name)
     try {
-      await window.electronAPI.fileDownload(sessionId, entry.path, localPath)
-      succeed(`已下载 ${entry.name}`)
-    } catch (err) {
-      fail(`下载失败: ${(err as Error).message}`)
-    } finally {
-      setOperating(false)
+      await withFileProgress(
+        '下载中',
+        async () => {
+          await window.electronAPI.fileDownload(sessionId, entry.path, localPath)
+        },
+        `已下载 ${entry.name}`,
+      )
+    } catch {
+      // status already set
     }
   }
 
@@ -201,21 +217,19 @@ export function RemoteFilePane({
     const localItems = items.filter((item) => item.source === 'local')
     if (localItems.length === 0) return
 
-    setOperating(true)
-    setMessage(null)
-    start('上传中', localItems.length)
     try {
-      for (let i = 0; i < localItems.length; i++) {
-        const item = localItems[i]
-        tick(i, item.name)
-        await window.electronAPI.fileUpload(sessionId, item.path, joinPath(currentPath, item.name))
-      }
-      succeed(`已上传 ${localItems.length} 项`)
+      await withFileProgress(
+        '上传中',
+        async () => {
+          for (const item of localItems) {
+            await window.electronAPI.fileUpload(sessionId, item.path, joinPath(currentPath, item.name))
+          }
+        },
+        `已上传 ${localItems.length} 项`,
+      )
       await loadDirectory(currentPath)
-    } catch (err) {
-      fail(`上传失败: ${(err as Error).message}`)
-    } finally {
-      setOperating(false)
+    } catch {
+      // status already set
     }
   }
 

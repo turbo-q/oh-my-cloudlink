@@ -2,6 +2,7 @@ import type { StoredHost, StoredKey } from './data-store'
 import { FtpManager } from './ftp-manager'
 import { SftpManager } from './sftp-manager'
 import type { RemoteFileEntry } from './auth-config'
+import type { TransferProgressCallback } from './transfer-progress'
 
 interface FileSessionMeta {
   protocol: 'sftp' | 'ftp'
@@ -69,18 +70,28 @@ export class FileManager {
       : this.ftp.list(sessionId, dirPath)
   }
 
-  async download(sessionId: string, remotePath: string, localPath: string): Promise<void> {
+  async download(
+    sessionId: string,
+    remotePath: string,
+    localPath: string,
+    onProgress?: TransferProgressCallback,
+  ): Promise<void> {
     const info = this.requireMeta(sessionId)
     return info.protocol === 'sftp'
-      ? this.sftp.download(sessionId, remotePath, localPath)
-      : this.ftp.download(sessionId, remotePath, localPath)
+      ? this.sftp.download(sessionId, remotePath, localPath, onProgress)
+      : this.ftp.download(sessionId, remotePath, localPath, onProgress)
   }
 
-  async upload(sessionId: string, localPath: string, remotePath: string): Promise<void> {
+  async upload(
+    sessionId: string,
+    localPath: string,
+    remotePath: string,
+    onProgress?: TransferProgressCallback,
+  ): Promise<void> {
     const info = this.requireMeta(sessionId)
     return info.protocol === 'sftp'
-      ? this.sftp.upload(sessionId, localPath, remotePath)
-      : this.ftp.upload(sessionId, localPath, remotePath)
+      ? this.sftp.upload(sessionId, localPath, remotePath, onProgress)
+      : this.ftp.upload(sessionId, localPath, remotePath, onProgress)
   }
 
   async mkdir(sessionId: string, remotePath: string): Promise<void> {

@@ -41,6 +41,17 @@ export interface ElectronAPI {
   fileDelete: (sessionId: string, remotePath: string, isDirectory: boolean) => Promise<boolean>
   fileRename: (sessionId: string, oldPath: string, newPath: string) => Promise<boolean>
   fileHome: (sessionId: string) => Promise<string>
+  onFileProgress: (
+    callback: (progress: {
+      sessionId: string
+      op: 'upload' | 'download'
+      current: number
+      total: number
+      name: string
+      bytesDone: number
+      bytesTotal: number
+    }) => void,
+  ) => () => void
 
   localHome: () => Promise<string>
   localList: (dirPath: string) => Promise<RemoteFileEntry[]>

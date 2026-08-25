@@ -154,13 +154,27 @@ function registerIpcHandlers(): void {
     return fileManager.list(sessionId, dirPath)
   })
 
-  safeHandle('file:download', async (_e, sessionId: string, remotePath: string, localPath: string) => {
-    await fileManager.download(sessionId, remotePath, localPath)
+  safeHandle('file:download', async (e, sessionId: string, remotePath: string, localPath: string) => {
+    const win = BrowserWindow.fromWebContents(e.sender)
+    await fileManager.download(sessionId, remotePath, localPath, (progress) => {
+      win?.webContents.send('file:progress', {
+        sessionId,
+        op: 'download' as const,
+        ...progress,
+      })
+    })
     return true
   })
 
-  safeHandle('file:upload', async (_e, sessionId: string, localPath: string, remotePath: string) => {
-    await fileManager.upload(sessionId, localPath, remotePath)
+  safeHandle('file:upload', async (e, sessionId: string, localPath: string, remotePath: string) => {
+    const win = BrowserWindow.fromWebContents(e.sender)
+    await fileManager.upload(sessionId, localPath, remotePath, (progress) => {
+      win?.webContents.send('file:progress', {
+        sessionId,
+        op: 'upload' as const,
+        ...progress,
+      })
+    })
     return true
   })
 

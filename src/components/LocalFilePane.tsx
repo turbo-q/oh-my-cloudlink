@@ -15,7 +15,7 @@ export function LocalFilePane({ sessionId, remoteConnected = false }: LocalFileP
   const [loading, setLoading] = useState(true)
   const [operating, setOperating] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
-  const { transfer, start, tick, succeed, fail } = useTransferProgress()
+  const { transfer, start, applyFileProgress, succeed, fail } = useTransferProgress()
 
   const loadDirectory = useCallback(async (path?: string) => {
     setLoading(true)
@@ -52,11 +52,13 @@ export function LocalFilePane({ sessionId, remoteConnected = false }: LocalFileP
 
     setOperating(true)
     setMessage(null)
-    start('下载中', remoteItems.length)
+    start('下载中', 1)
+    const unsub = window.electronAPI.onFileProgress((p) => {
+      if (p.sessionId !== sessionId) return
+      applyFileProgress(p, '下载中')
+    })
     try {
-      for (let i = 0; i < remoteItems.length; i++) {
-        const item = remoteItems[i]
-        tick(i, item.name)
+      for (const item of remoteItems) {
         const localPath = joinPath(currentPath, item.name)
         await window.electronAPI.fileDownload(sessionId, item.path, localPath)
       }
@@ -65,6 +67,7 @@ export function LocalFilePane({ sessionId, remoteConnected = false }: LocalFileP
     } catch (err) {
       fail(`下载失败: ${(err as Error).message}`)
     } finally {
+      unsub()
       setOperating(false)
     }
   }

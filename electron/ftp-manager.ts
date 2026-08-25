@@ -9,10 +9,22 @@ import {
   type RemoteFileEntry,
 } from './auth-config'
 import type { StoredHost } from './data-store'
+import {
+  countLocalTree,
+  type TransferProgressCallback,
+} from './transfer-progress'
 
 interface FtpSession {
   client: ftp.Client
   homePath: string
+}
+
+interface TransferState {
+  current: number
+  total: number
+  bytesDone: number
+  bytesTotal: number
+  onProgress?: TransferProgressCallback
 }
 
 export class FtpManager {
@@ -83,13 +95,115 @@ export class FtpManager {
     return sortFileEntries(entries)
   }
 
-  async download(sessionId: string, remotePath: string, localPath: string): Promise<void> {
+  async download(
+    sessionId: string,
+    remotePath: string,
+    localPath: string,
+    onProgress?: TransferProgressCallback,
+  ): Promise<void> {
     const session = this.requireSession(sessionId)
+    const remote = normalizeRemotePath(remotePath)
+    const tree = await this.countRemoteTree(session, remote)
+    const state: TransferState = {
+      current: 0,
+      total: Math.max(tree.files, 1),
+      bytesDone: 0,
+      bytesTotal: tree.bytes,
+      onProgress,
+    }
+    this.emitProgress(state, path.posix.basename(remote) || remote)
+    await this.downloadNode(session, remote, localPath, state)
+  }
+
+  async upload(
+    sessionId: string,
+    localPath: string,
+    remotePath: string,
+    onProgress?: TransferProgressCallback,
+  ): Promise<void> {
+    const session = this.requireSession(sessionId)
+    const remote = normalizeRemotePath(remotePath)
+    const tree = countLocalTree(localPath)
+    const state: TransferState = {
+      current: 0,
+      total: Math.max(tree.files, 1),
+      bytesDone: 0,
+      bytesTotal: tree.bytes,
+      onProgress,
+    }
+    this.emitProgress(state, path.basename(localPath))
+    await this.uploadNode(session, localPath, remote, state)
+  }
+
+  private emitProgress(state: TransferState, name: string): void {
+    state.onProgress?.({
+      current: state.current,
+      total: state.total,
+      name,
+      bytesDone: state.bytesDone,
+      bytesTotal: state.bytesTotal,
+    })
+  }
+
+  private async countRemoteTree(
+    session: FtpSession,
+    remotePath: string,
+  ): Promise<{ files: number; bytes: number }> {
+    const remote = normalizeRemotePath(remotePath)
+    if (!(await this.isRemoteDirectory(session, remote))) {
+      try {
+        const list = await session.client.list(parentRemotePath(remote))
+        const name = path.posix.basename(remote)
+        const item = list.find((e) => e.name === name)
+        return { files: 1, bytes: item?.size ?? 0 }
+      } catch {
+        return { files: 1, bytes: 0 }
+      }
+    }
+
+    let files = 0
+    let bytes = 0
+
+    const walk = async (dir: string) => {
+      await session.client.cd(dir)
+      const list = await session.client.list()
+      for (const item of list) {
+        if (item.name === '.' || item.name === '..') continue
+        const full = joinRemotePath(dir, item.name)
+        if (item.isDirectory) {
+          await walk(full)
+        } else {
+          files += 1
+          bytes += item.size ?? 0
+        }
+      }
+    }
+
+    await walk(remote)
+    return { files, bytes }
+  }
+
+  private async downloadNode(
+    session: FtpSession,
+    remotePath: string,
+    localPath: string,
+    state: TransferState,
+  ): Promise<void> {
     const remote = normalizeRemotePath(remotePath)
 
     if (await this.isRemoteDirectory(session, remote)) {
       fs.mkdirSync(localPath, { recursive: true })
-      await session.client.downloadToDir(localPath, remote)
+      await session.client.cd(remote)
+      const list = await session.client.list()
+      for (const item of list) {
+        if (item.name === '.' || item.name === '..') continue
+        await this.downloadNode(
+          session,
+          joinRemotePath(remote, item.name),
+          path.join(localPath, item.name),
+          state,
+        )
+      }
       return
     }
 
@@ -98,28 +212,74 @@ export class FtpManager {
       fs.mkdirSync(dir, { recursive: true })
     }
 
-    const remoteDir = parentRemotePath(remote)
-    const fileName = path.posix.basename(remote.replace(/\\/g, '/'))
-    await session.client.cd(remoteDir)
-    await session.client.downloadTo(localPath, fileName)
+    const name = path.posix.basename(remote)
+    const fileStartBytes = state.bytesDone
+    session.client.trackProgress((info) => {
+      state.bytesDone = fileStartBytes + (info.bytesOverall || info.bytes || 0)
+      this.emitProgress(state, name)
+    })
+
+    try {
+      const remoteDir = parentRemotePath(remote)
+      await session.client.cd(remoteDir)
+      await session.client.downloadTo(localPath, name)
+    } finally {
+      session.client.trackProgress()
+    }
+
+    try {
+      state.bytesDone = fileStartBytes + fs.statSync(localPath).size
+    } catch {
+      // keep
+    }
+    state.current += 1
+    this.emitProgress(state, name)
   }
 
-  async upload(sessionId: string, localPath: string, remotePath: string): Promise<void> {
-    const session = this.requireSession(sessionId)
+  private async uploadNode(
+    session: FtpSession,
+    localPath: string,
+    remotePath: string,
+    state: TransferState,
+  ): Promise<void> {
     const remote = normalizeRemotePath(remotePath)
     const localStat = fs.statSync(localPath)
 
     if (localStat.isDirectory()) {
       await session.client.ensureDir(remote)
-      await session.client.uploadFromDir(localPath, remote)
+      const entries = fs.readdirSync(localPath, { withFileTypes: true })
+      for (const entry of entries) {
+        if (entry.name === '.' || entry.name === '..') continue
+        await this.uploadNode(
+          session,
+          path.join(localPath, entry.name),
+          joinRemotePath(remote, entry.name),
+          state,
+        )
+      }
       return
     }
 
     const remoteDir = parentRemotePath(remote)
-    const fileName = path.posix.basename(remote.replace(/\\/g, '/'))
+    const name = path.posix.basename(remote)
     await session.client.ensureDir(remoteDir)
     await session.client.cd(remoteDir)
-    await session.client.uploadFrom(localPath, fileName)
+
+    const fileStartBytes = state.bytesDone
+    session.client.trackProgress((info) => {
+      state.bytesDone = fileStartBytes + (info.bytesOverall || info.bytes || 0)
+      this.emitProgress(state, name)
+    })
+
+    try {
+      await session.client.uploadFrom(localPath, name)
+    } finally {
+      session.client.trackProgress()
+    }
+
+    state.bytesDone = fileStartBytes + localStat.size
+    state.current += 1
+    this.emitProgress(state, name)
   }
 
   private async isRemoteDirectory(session: FtpSession, remotePath: string): Promise<boolean> {

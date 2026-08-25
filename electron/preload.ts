@@ -76,6 +76,33 @@ const electronAPI = {
     ipcRenderer.invoke('file:rename', sessionId, oldPath, newPath),
   fileHome: (sessionId: string) => ipcRenderer.invoke('file:home', sessionId) as Promise<string>,
 
+  onFileProgress: (
+    callback: (progress: {
+      sessionId: string
+      op: 'upload' | 'download'
+      current: number
+      total: number
+      name: string
+      bytesDone: number
+      bytesTotal: number
+    }) => void,
+  ) => {
+    const handler = (
+      _: Electron.IpcRendererEvent,
+      progress: {
+        sessionId: string
+        op: 'upload' | 'download'
+        current: number
+        total: number
+        name: string
+        bytesDone: number
+        bytesTotal: number
+      },
+    ) => callback(progress)
+    ipcRenderer.on('file:progress', handler)
+    return () => ipcRenderer.removeListener('file:progress', handler)
+  },
+
   localHome: () => ipcRenderer.invoke('local:home') as Promise<string>,
   localList: (dirPath: string) => ipcRenderer.invoke('local:list', dirPath),
 
