@@ -68,15 +68,6 @@ export default function App() {
     }
 
     const sessionProtocol = mode === 'ssh' ? 'ssh' : getHostFileProtocol(host)
-    const existing = sessions.find(
-      (s) => s.hostId === host.id && s.protocol === sessionProtocol && s.status !== 'disconnected',
-    )
-    if (existing) {
-      setActiveSessionId(existing.id)
-      setShowSession(true)
-      return
-    }
-
     const sessionId = uuidv4()
     const session: AppSession = {
       id: sessionId,
@@ -91,7 +82,7 @@ export default function App() {
     setActiveSessionId(sessionId)
     setMountedSessions((prev) => new Set(prev).add(sessionId))
     setShowSession(true)
-  }, [sessions])
+  }, [])
 
   const handleConnectFromPanel = useCallback(
     (host: Host) => {

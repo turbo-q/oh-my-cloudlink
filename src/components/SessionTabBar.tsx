@@ -53,41 +53,53 @@ export function SessionTabBar({
 
         {sessions.length > 0 && (
           <div className="flex items-end border-l border-app ml-1">
-            {sessions.map((session) => (
-              <button
-                key={session.id}
-                onClick={() => onSelectSession(session.id)}
-                className={`flex items-center gap-2 px-4 py-2.5 text-sm border-r border-app transition-colors shrink-0 max-w-[200px] ${
-                  showSession && activeSessionId === session.id
-                    ? 'bg-app text-app'
-                    : 'text-app-muted hover:text-app-secondary hover:bg-app-hover'
-                }`}
-              >
-                <span
-                  className="w-1.5 h-1.5 rounded-full shrink-0"
-                  style={{
-                    background:
-                      session.status === 'connected'
-                        ? PROTOCOL_COLORS[session.protocol]
-                        : session.status === 'connecting'
-                          ? '#fbbf24'
-                          : session.status === 'error'
-                            ? '#ef4444'
-                            : '#64748b',
-                  }}
-                />
-                <span className="truncate">{session.hostName}</span>
-                <span
-                  className="ml-auto p-0.5 rounded hover:bg-app-hover-strong text-app-subtle hover:text-app shrink-0"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    onCloseSession(session.id)
-                  }}
+            {sessions.map((session) => {
+              const sameHostSessions = sessions.filter(
+                (s) => s.hostId === session.hostId && s.protocol === session.protocol,
+              )
+              const dupIndex =
+                sameHostSessions.length > 1
+                  ? sameHostSessions.findIndex((s) => s.id === session.id) + 1
+                  : 0
+              const label =
+                dupIndex > 0 ? `${session.hostName} #${dupIndex}` : session.hostName
+
+              return (
+                <button
+                  key={session.id}
+                  onClick={() => onSelectSession(session.id)}
+                  className={`flex items-center gap-2 px-4 py-2.5 text-sm border-r border-app transition-colors shrink-0 max-w-[200px] ${
+                    showSession && activeSessionId === session.id
+                      ? 'bg-app text-app'
+                      : 'text-app-muted hover:text-app-secondary hover:bg-app-hover'
+                  }`}
                 >
-                  ×
-                </span>
-              </button>
-            ))}
+                  <span
+                    className="w-1.5 h-1.5 rounded-full shrink-0"
+                    style={{
+                      background:
+                        session.status === 'connected'
+                          ? PROTOCOL_COLORS[session.protocol]
+                          : session.status === 'connecting'
+                            ? '#fbbf24'
+                            : session.status === 'error'
+                              ? '#ef4444'
+                              : '#64748b',
+                    }}
+                  />
+                  <span className="truncate">{label}</span>
+                  <span
+                    className="ml-auto p-0.5 rounded hover:bg-app-hover-strong text-app-subtle hover:text-app shrink-0"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onCloseSession(session.id)
+                    }}
+                  >
+                    ×
+                  </span>
+                </button>
+              )
+            })}
           </div>
         )}
       </div>
