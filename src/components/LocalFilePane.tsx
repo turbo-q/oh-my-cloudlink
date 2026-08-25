@@ -4,6 +4,7 @@ import { FileListPane, joinPath, parentPath, type FileDragData } from './FileLis
 import { assertElectronMethod } from '../utils/electronApi'
 import { useTransferProgress } from '../hooks/useTransferProgress'
 import { formatTransferError } from '../utils/transferError'
+import { getLastLocalPath, setLastLocalPath } from '../utils/localPathMemory'
 
 interface LocalFilePaneProps {
   sessionId?: string
@@ -11,7 +12,7 @@ interface LocalFilePaneProps {
 }
 
 export function LocalFilePane({ sessionId, remoteConnected = false }: LocalFilePaneProps) {
-  const [currentPath, setCurrentPath] = useState('')
+  const [currentPath, setCurrentPath] = useState(() => getLastLocalPath() ?? '')
   const [entries, setEntries] = useState<RemoteFileEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [operating, setOperating] = useState(false)
@@ -28,7 +29,26 @@ export function LocalFilePane({ sessionId, remoteConnected = false }: LocalFileP
       const list = await localList(target)
       setEntries(list)
       setCurrentPath(target)
+      setLastLocalPath(target)
     } catch (err) {
+      // Remembered path may no longer exist after remount — fall back to home once
+      const remembered = getLastLocalPath()
+      if (path && remembered && path === remembered) {
+        try {
+          const localHome = assertElectronMethod('localHome')
+          const localList = assertElectronMethod('localList')
+          const home = await localHome()
+          const list = await localList(home)
+          setEntries(list)
+          setCurrentPath(home)
+          setLastLocalPath(home)
+          setMessage(null)
+          return
+        } catch (homeErr) {
+          setMessage(`加载失败: ${(homeErr as Error).message}`)
+          return
+        }
+      }
       setMessage(`加载失败: ${(err as Error).message}`)
     } finally {
       setLoading(false)
@@ -36,7 +56,8 @@ export function LocalFilePane({ sessionId, remoteConnected = false }: LocalFileP
   }, [])
 
   useEffect(() => {
-    void loadDirectory()
+    const remembered = getLastLocalPath()
+    void loadDirectory(remembered ?? undefined)
   }, [loadDirectory])
 
   const navigateTo = (entry: RemoteFileEntry) => {
