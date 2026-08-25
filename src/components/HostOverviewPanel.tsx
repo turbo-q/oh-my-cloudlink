@@ -87,7 +87,7 @@ export function HostOverviewPanel({
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center max-w-md px-6">
             <h2 className="text-2xl font-bold text-app mb-2">
-              {isSftp ? '暂无可用主机' : '欢迎使用云连 SSH'}
+              {isSftp ? '暂无可用主机' : '欢迎使用 Oh My CloudLink'}
             </h2>
             <p className="text-app-muted mb-8">
               {isSftp ? '请先添加服务器配置' : '添加你的第一台服务器，开始安全连接'}

@@ -38,7 +38,7 @@ export function TerminalPanel({ sessionId, hostId, active, onStatusChange }: Ter
     terminalRef.current = term
     fitAddonRef.current = fitAddon
 
-    term.writeln('\x1b[38;2;16;185;129m云连 SSH\x1b[0m — 正在连接...\r\n')
+    term.writeln('\x1b[38;2;16;185;129mOh My CloudLink\x1b[0m — 正在连接...\r\n')
 
     onStatusChange(sessionId, 'connecting')
 

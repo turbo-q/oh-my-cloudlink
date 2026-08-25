@@ -94,7 +94,7 @@
         }
       ]
     },
-    "artifactName": "YunLian-SSH-${version}-${arch}.${ext}",
+    "artifactName": "OhMyCloudLink-${version}-${arch}.${ext}",
     "win": {
       "target": [
         "nsis"

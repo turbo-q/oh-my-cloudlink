@@ -8,15 +8,15 @@ cd "$ROOT"
 
 VERSION="${1:-$(node -p "require('./package.json').version")}"
 TAG="v${VERSION}"
-ZIP="release/YunLian-SSH-${VERSION}-arm64.zip"
-DMG="release/YunLian-SSH-${VERSION}-arm64.dmg"
+ZIP="release/OhMyCloudLink-${VERSION}-arm64.zip"
+DMG="release/OhMyCloudLink-${VERSION}-arm64.dmg"
 NOTES="$(mktemp)"
 
 cleanup() { rm -f "$NOTES"; }
 trap cleanup EXIT
 
 if [[ ! -f "$ZIP" ]]; then
-  echo "Missing $ZIP — run: npm run build && npx electron-builder --mac zip --publish never"
+  echo "Missing $ZIP — run: bun run package"
   exit 1
 fi
 
@@ -26,7 +26,7 @@ cat > "$NOTES" <<EOF
 类 Termius 的 SSH / SFTP 桌面客户端。
 
 ### 安装
-1. 下载 \`YunLian-SSH-${VERSION}-arm64.zip\`
+1. 下载 \`OhMyCloudLink-${VERSION}-arm64.zip\`
 2. 解压后将 \`oh-my-cloudlink.app\` 拖到「应用程序」
 3. 若提示无法打开：系统设置 → 隐私与安全性 → 仍要打开
 
@@ -39,7 +39,7 @@ cat > "$NOTES" <<EOF
 ### 产物
 | 文件 | 说明 |
 |------|------|
-| YunLian-SSH-${VERSION}-arm64.zip | macOS Apple Silicon 应用包 |
+| OhMyCloudLink-${VERSION}-arm64.zip | macOS Apple Silicon 应用包 |
 EOF
 
 ASSETS=("$ZIP")

@@ -24,7 +24,7 @@ function createWindow(): void {
     height: 820,
     minWidth: 900,
     minHeight: 600,
-    title: '云连 SSH',
+    title: 'Oh My CloudLink',
     backgroundColor: '#0f1117',
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
     webPreferences: {
