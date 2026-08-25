@@ -7,7 +7,6 @@ interface RemoteFilePaneProps {
   hostId: string
   protocol: 'sftp' | 'ftp'
   hostName?: string
-  active: boolean
   onStatusChange: (
     sessionId: string,
     status: 'connecting' | 'connected' | 'disconnected' | 'error',
@@ -21,7 +20,6 @@ export function RemoteFilePane({
   hostId,
   protocol,
   hostName,
-  active,
   onStatusChange,
   onDisconnect,
 }: RemoteFilePaneProps) {
@@ -49,28 +47,28 @@ export function RemoteFilePane({
   )
 
   useEffect(() => {
-    if (!active) return
-
+    let cancelled = false
     onStatusChange(sessionId, 'connecting')
 
     void window.electronAPI
       .fileConnect(sessionId, hostId, protocol)
       .then((homePath) => {
+        if (cancelled) return
         onStatusChange(sessionId, 'connected')
         return loadDirectory(homePath)
       })
       .catch((err: Error) => {
+        if (cancelled) return
         onStatusChange(sessionId, 'error', err.message)
         setMessage(`连接失败: ${err.message}`)
         setLoading(false)
       })
 
     return () => {
+      cancelled = true
       void window.electronAPI.fileDisconnect(sessionId)
     }
-  }, [sessionId, hostId, protocol, active, onStatusChange, loadDirectory])
-
-  if (!active) return null
+  }, [sessionId, hostId, protocol, onStatusChange, loadDirectory])
 
   const navigateTo = (entry: RemoteFileEntry) => {
     if (entry.isDirectory) void loadDirectory(entry.path)

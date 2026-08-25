@@ -276,8 +276,9 @@ export default function App() {
           <SettingsPanel onExport={handleExport} onImport={handleImport} />
         )}
 
-        {showSession && (
-          <div className="flex-1 relative min-h-0">
+        {/* Keep session panels mounted (CSS-hidden) so SSH/SFTP connections survive browse/tab switches */}
+        {mountedSessions.size > 0 && (
+          <div className={`flex-1 relative min-h-0 ${showSession ? '' : 'hidden'}`}>
             {Array.from(mountedSessions).map((sessionId) => {
               const session = sessions.find((s) => s.id === sessionId)
               if (!session) return null
@@ -290,7 +291,7 @@ export default function App() {
                     hostId={session.hostId}
                     hostName={session.hostName}
                     protocol={session.protocol as 'sftp' | 'ftp'}
-                    active={activeSessionId === sessionId}
+                    active={showSession && activeSessionId === sessionId}
                     hosts={hosts}
                     groups={groups}
                     onConnect={handleConnectFromPanel}
@@ -305,7 +306,7 @@ export default function App() {
                   key={sessionId}
                   sessionId={sessionId}
                   hostId={session.hostId}
-                  active={activeSessionId === sessionId}
+                  active={showSession && activeSessionId === sessionId}
                   onStatusChange={updateSessionStatus}
                 />
               )

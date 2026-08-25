@@ -34,10 +34,12 @@ export function SftpPanel({
 }: SftpPanelProps) {
   const connected = !!(sessionId && hostId && onStatusChange)
 
-  if (connected && !active) return null
-
   return (
-    <div className={`${connected ? 'absolute inset-0' : 'flex-1'} flex min-h-0 bg-app`}>
+    <div
+      className={`${connected ? 'absolute inset-0' : 'flex-1'} flex min-h-0 bg-app ${
+        connected && !active ? 'hidden' : ''
+      }`}
+    >
       <div className="flex-1 min-w-0">
         <LocalFilePane sessionId={connected ? sessionId! : undefined} remoteConnected={connected} />
       </div>
@@ -49,7 +51,6 @@ export function SftpPanel({
             hostId={hostId!}
             protocol={protocol}
             hostName={hostName}
-            active={active}
             onStatusChange={onStatusChange!}
             onDisconnect={onDisconnectSession}
           />
