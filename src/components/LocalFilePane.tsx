@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import type { RemoteFileEntry } from '../types'
 import { FileListPane, joinPath, parentPath, type FileDragData } from './FileListPane'
 import { assertElectronMethod } from '../utils/electronApi'
+import { useTransferProgress } from '../hooks/useTransferProgress'
 
 interface LocalFilePaneProps {
   sessionId?: string
@@ -14,6 +15,7 @@ export function LocalFilePane({ sessionId, remoteConnected = false }: LocalFileP
   const [loading, setLoading] = useState(true)
   const [operating, setOperating] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
+  const { transfer, start, tick, succeed, fail } = useTransferProgress()
 
   const loadDirectory = useCallback(async (path?: string) => {
     setLoading(true)
@@ -45,18 +47,23 @@ export function LocalFilePane({ sessionId, remoteConnected = false }: LocalFileP
   const handleDropFromRemote = async (items: FileDragData[]) => {
     if (!sessionId || !remoteConnected) return
 
+    const remoteItems = items.filter((item) => item.source === 'remote')
+    if (remoteItems.length === 0) return
+
     setOperating(true)
     setMessage(null)
+    start('下载中', remoteItems.length)
     try {
-      for (const item of items) {
-        if (item.source !== 'remote') continue
+      for (let i = 0; i < remoteItems.length; i++) {
+        const item = remoteItems[i]
+        tick(i + 1, item.name)
         const localPath = joinPath(currentPath, item.name)
         await window.electronAPI.fileDownload(sessionId, item.path, localPath)
       }
-      setMessage(`已下载 ${items.length} 项到本机`)
+      succeed(`已下载 ${remoteItems.length} 项到本机`)
       await loadDirectory(currentPath)
     } catch (err) {
-      setMessage(`下载失败: ${(err as Error).message}`)
+      fail(`下载失败: ${(err as Error).message}`)
     } finally {
       setOperating(false)
     }
@@ -71,6 +78,7 @@ export function LocalFilePane({ sessionId, remoteConnected = false }: LocalFileP
       loading={loading}
       operating={operating}
       message={message}
+      transfer={transfer}
       onNavigate={navigateTo}
       onGoUp={() => void loadDirectory(parentPath(currentPath))}
       onGoHome={() => void loadDirectory()}

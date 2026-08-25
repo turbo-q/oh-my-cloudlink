@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { RemoteFileEntry } from '../types'
 import { FileListPane, joinPath, parentPath, type FileDragData } from './FileListPane'
+import { useTransferProgress } from '../hooks/useTransferProgress'
 
 interface RemoteFilePaneProps {
   sessionId: string
@@ -28,6 +29,7 @@ export function RemoteFilePane({
   const [loading, setLoading] = useState(true)
   const [operating, setOperating] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
+  const { transfer, start, tick, succeed, fail } = useTransferProgress()
 
   const loadDirectory = useCallback(
     async (path: string) => {
@@ -80,15 +82,18 @@ export function RemoteFilePane({
 
     setOperating(true)
     setMessage(null)
+    start('上传中', files.length)
     try {
-      for (const localPath of files) {
+      for (let i = 0; i < files.length; i++) {
+        const localPath = files[i]
         const name = localPath.split(/[/\\]/).pop()!
+        tick(i + 1, name)
         await window.electronAPI.fileUpload(sessionId, localPath, joinPath(currentPath, name))
       }
-      setMessage(`已上传 ${files.length} 个文件`)
+      succeed(`已上传 ${files.length} 个文件`)
       await loadDirectory(currentPath)
     } catch (err) {
-      setMessage(`上传失败: ${(err as Error).message}`)
+      fail(`上传失败: ${(err as Error).message}`)
     } finally {
       setOperating(false)
     }
@@ -103,15 +108,17 @@ export function RemoteFilePane({
 
       setOperating(true)
       setMessage(null)
+      start('下载文件夹', 1)
+      tick(0, entry.name)
       try {
         await window.electronAPI.fileDownload(
           sessionId,
           entry.path,
           joinPath(localDir, entry.name),
         )
-        setMessage(`已下载文件夹 ${entry.name}`)
+        succeed(`已下载文件夹 ${entry.name}`)
       } catch (err) {
-        setMessage(`下载失败: ${(err as Error).message}`)
+        fail(`下载失败: ${(err as Error).message}`)
       } finally {
         setOperating(false)
       }
@@ -123,11 +130,13 @@ export function RemoteFilePane({
 
     setOperating(true)
     setMessage(null)
+    start('下载中', 1)
+    tick(0, entry.name)
     try {
       await window.electronAPI.fileDownload(sessionId, entry.path, localPath)
-      setMessage(`已下载 ${entry.name}`)
+      succeed(`已下载 ${entry.name}`)
     } catch (err) {
-      setMessage(`下载失败: ${(err as Error).message}`)
+      fail(`下载失败: ${(err as Error).message}`)
     } finally {
       setOperating(false)
     }
@@ -138,12 +147,14 @@ export function RemoteFilePane({
     if (!name?.trim()) return
 
     setOperating(true)
+    start('创建文件夹', 1)
+    tick(1, name.trim())
     try {
       await window.electronAPI.fileMkdir(sessionId, joinPath(currentPath, name.trim()))
-      setMessage(`已创建文件夹 ${name.trim()}`)
+      succeed(`已创建文件夹 ${name.trim()}`)
       await loadDirectory(currentPath)
     } catch (err) {
-      setMessage(`创建失败: ${(err as Error).message}`)
+      fail(`创建失败: ${(err as Error).message}`)
     } finally {
       setOperating(false)
     }
@@ -154,12 +165,14 @@ export function RemoteFilePane({
     if (!confirm(`确定删除${type}「${entry.name}」？`)) return
 
     setOperating(true)
+    start('删除中', 1)
+    tick(1, entry.name)
     try {
       await window.electronAPI.fileDelete(sessionId, entry.path, entry.isDirectory)
-      setMessage(`已删除 ${entry.name}`)
+      succeed(`已删除 ${entry.name}`)
       await loadDirectory(currentPath)
     } catch (err) {
-      setMessage(`删除失败: ${(err as Error).message}`)
+      fail(`删除失败: ${(err as Error).message}`)
     } finally {
       setOperating(false)
     }
@@ -170,33 +183,37 @@ export function RemoteFilePane({
     if (!newName?.trim() || newName.trim() === entry.name) return
 
     setOperating(true)
+    start('重命名', 1)
+    tick(1, newName.trim())
     try {
       const newPath = joinPath(parentPath(entry.path), newName.trim())
       await window.electronAPI.fileRename(sessionId, entry.path, newPath)
-      setMessage(`已重命名为 ${newName.trim()}`)
+      succeed(`已重命名为 ${newName.trim()}`)
       await loadDirectory(currentPath)
     } catch (err) {
-      setMessage(`重命名失败: ${(err as Error).message}`)
+      fail(`重命名失败: ${(err as Error).message}`)
     } finally {
       setOperating(false)
     }
   }
 
   const handleDropFromLocal = async (items: FileDragData[]) => {
+    const localItems = items.filter((item) => item.source === 'local')
+    if (localItems.length === 0) return
+
     setOperating(true)
     setMessage(null)
+    start('上传中', localItems.length)
     try {
-      let count = 0
-      for (const item of items) {
-        if (item.source !== 'local') continue
+      for (let i = 0; i < localItems.length; i++) {
+        const item = localItems[i]
+        tick(i + 1, item.name)
         await window.electronAPI.fileUpload(sessionId, item.path, joinPath(currentPath, item.name))
-        count++
       }
-      if (count === 0) return
-      setMessage(`已上传 ${count} 项`)
+      succeed(`已上传 ${localItems.length} 项`)
       await loadDirectory(currentPath)
     } catch (err) {
-      setMessage(`上传失败: ${(err as Error).message}`)
+      fail(`上传失败: ${(err as Error).message}`)
     } finally {
       setOperating(false)
     }
@@ -211,6 +228,7 @@ export function RemoteFilePane({
       entries={entries}
       loading={loading}
       message={message}
+      transfer={transfer}
       operating={operating}
       onNavigate={navigateTo}
       onGoUp={() => void loadDirectory(parentPath(currentPath))}

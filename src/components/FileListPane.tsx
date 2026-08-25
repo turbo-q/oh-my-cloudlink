@@ -1,6 +1,7 @@
 import { useEffect, useState, type DragEvent } from 'react'
 import type { RemoteFileEntry } from '../types'
 import { formatFileSize, formatDate } from '../types'
+import type { TransferProgress } from '../hooks/useTransferProgress'
 
 export const SFTP_FILE_DRAG_MIME = 'application/x-yunlian-sftp-file'
 
@@ -18,6 +19,7 @@ export interface FileListPaneProps {
   entries: RemoteFileEntry[]
   loading: boolean
   message?: string | null
+  transfer?: TransferProgress | null
   operating?: boolean
   subtitle?: string
   onNavigate: (entry: RemoteFileEntry) => void
@@ -101,6 +103,7 @@ export function FileListPane({
   entries,
   loading,
   message,
+  transfer = null,
   operating = false,
   subtitle,
   onNavigate,
@@ -237,9 +240,9 @@ export function FileListPane({
         ))}
       </div>
 
-      {message && (
+      {message && !transfer && (
         <div
-          className={`px-4 py-2 text-xs shrink-0 ${
+          className={`px-4 py-1.5 text-xs shrink-0 border-b border-app ${
             message.includes('失败') ? 'bg-red-500/10 text-red-400' : 'bg-emerald-500/10 text-emerald-400'
           }`}
         >
@@ -279,7 +282,7 @@ export function FileListPane({
                   key={entry.path}
                   draggable
                   onDragStart={handleDragStart(entry)}
-                  className="border-t border-app hover:bg-app-hover cursor-pointer transition-colors cursor-grab active:cursor-grabbing"
+                  className="border-t border-app hover:bg-app-hover transition-colors cursor-grab active:cursor-grabbing"
                   onClick={() => onNavigate(entry)}
                   onDoubleClick={() => {
                     if (entry.isDirectory) onNavigate(entry)
@@ -334,6 +337,68 @@ export function FileListPane({
               ))}
             </tbody>
           </table>
+        )}
+      </div>
+
+      {transfer && <TransferStatusBar transfer={transfer} />}
+    </div>
+  )
+}
+
+function TransferStatusBar({ transfer }: { transfer: TransferProgress }) {
+  const percent =
+    transfer.total > 0 ? Math.min(100, Math.round((transfer.current / transfer.total) * 100)) : 0
+  const indeterminate = transfer.status === 'running' && transfer.total <= 1 && transfer.current === 0
+
+  const tone =
+    transfer.status === 'error'
+      ? 'text-red-400'
+      : transfer.status === 'success'
+        ? 'text-emerald-400'
+        : 'text-app-secondary'
+
+  const barColor =
+    transfer.status === 'error'
+      ? 'bg-red-400'
+      : transfer.status === 'success'
+        ? 'bg-emerald-400'
+        : 'bg-blue-400'
+
+  return (
+    <div className="shrink-0 border-t border-app bg-surface px-3 py-1.5">
+      <div className="flex items-center gap-2 min-w-0">
+        <span className={`shrink-0 ${tone}`}>
+          {transfer.status === 'running' ? (
+            <span className="inline-block w-3 h-3 rounded-full border-2 border-blue-400/30 border-t-blue-400 animate-spin" />
+          ) : transfer.status === 'success' ? (
+            <span className="text-[11px]">✓</span>
+          ) : (
+            <span className="text-[11px]">✕</span>
+          )}
+        </span>
+        <div className={`flex-1 min-w-0 text-[11px] truncate ${tone}`}>
+          <span className="font-medium">{transfer.label}</span>
+          {transfer.detail && (
+            <span className="text-app-subtle"> · {transfer.detail}</span>
+          )}
+        </div>
+        {transfer.status === 'running' && transfer.total > 1 && (
+          <span className="shrink-0 text-[11px] font-mono text-app-subtle">
+            {transfer.current}/{transfer.total}
+          </span>
+        )}
+        {transfer.status === 'running' && transfer.total <= 1 && !indeterminate && (
+          <span className="shrink-0 text-[11px] font-mono text-app-subtle">{percent}%</span>
+        )}
+      </div>
+      <div className="mt-1 h-0.5 rounded-full bg-app-hover overflow-hidden">
+        {indeterminate ? (
+          <div className={`h-full w-1/3 rounded-full ${barColor} animate-pulse`} style={{ marginLeft: '20%' }} />
+        ) : (
+          <div
+            className={`h-full rounded-full transition-all duration-300 ${barColor}`}
+            style={{ width: `${transfer.status === 'success' ? 100 : percent}%` }}
+          />
         )}
       </div>
     </div>
