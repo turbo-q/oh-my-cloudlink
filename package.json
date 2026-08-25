@@ -61,7 +61,6 @@
     "extraMetadata": {
       "name": "oh-my-cloudlink"
     },
-    "electronDist": "node_modules/electron/dist",
     "electronDownload": {
       "mirror": "https://npmmirror.com/mirrors/electron/"
     },

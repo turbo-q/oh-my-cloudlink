@@ -247,6 +247,7 @@ app.on('window-all-closed', () => {
 })
 
 app.on('before-quit', () => {
+  dataStore.close()
   sshManager.disconnectAll()
   fileManager.disconnectAll()
 })

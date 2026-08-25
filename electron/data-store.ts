@@ -82,6 +82,7 @@ interface KeyRow {
 export class DataStore {
   private db: DatabaseSync
   private dbPath: string
+  private backupPath: string
 
   constructor() {
     const userData = app.getPath('userData')
@@ -90,11 +91,29 @@ export class DataStore {
     }
 
     this.dbPath = path.join(userData, 'cloudlink.db')
+    this.backupPath = path.join(userData, 'data.backup.json')
     this.db = new DatabaseSync(this.dbPath)
     this.db.exec('PRAGMA journal_mode = WAL')
+    this.db.exec('PRAGMA synchronous = NORMAL')
     this.db.exec('PRAGMA foreign_keys = ON')
     this.initSchema()
     this.migrateFromJsonIfNeeded(userData)
+    this.writeBackupIfNeeded()
+  }
+
+  /** Flush WAL and close DB — call on app quit to avoid empty DB after crash. */
+  close(): void {
+    try {
+      this.writeBackupIfNeeded()
+      this.db.exec('PRAGMA wal_checkpoint(TRUNCATE)')
+    } catch (err) {
+      console.error('[data-store] checkpoint failed:', err)
+    }
+    try {
+      this.db.close()
+    } catch (err) {
+      console.error('[data-store] close failed:', err)
+    }
   }
 
   private initSchema(): void {
@@ -139,17 +158,24 @@ export class DataStore {
     `)
   }
 
-  /** Import legacy data.json once into SQLite (current + Chinese/legacy userData dirs). */
+  /** Import legacy / backup JSON once into SQLite when DB is empty. */
   private migrateFromJsonIfNeeded(userData: string): void {
     if (this.countRows('hosts') + this.countRows('groups') + this.countRows('keys') > 0) {
       return
     }
 
     const candidates = [
+      path.join(userData, 'data.backup.json'),
       path.join(userData, 'data.json'),
-      ...LEGACY_USER_DATA_NAMES.map((name) =>
-        path.join(app.getPath('appData'), name, 'data.json'),
-      ),
+      path.join(userData, 'data.json.migrated.bak'),
+      ...LEGACY_USER_DATA_NAMES.flatMap((name) => {
+        const dir = path.join(app.getPath('appData'), name)
+        return [
+          path.join(dir, 'data.backup.json'),
+          path.join(dir, 'data.json'),
+          path.join(dir, 'data.json.migrated.bak'),
+        ]
+      }),
     ]
 
     for (const jsonPath of candidates) {
@@ -166,7 +192,7 @@ export class DataStore {
 
         this.replaceAll(data)
         const bak = `${jsonPath}.migrated.bak`
-        if (!fs.existsSync(bak)) {
+        if (!jsonPath.endsWith('.bak') && !fs.existsSync(bak)) {
           fs.copyFileSync(jsonPath, bak)
         }
         console.log(`[data-store] migrated JSON → SQLite from ${jsonPath}`)
@@ -174,6 +200,16 @@ export class DataStore {
       } catch (err) {
         console.error(`[data-store] migrate failed for ${jsonPath}:`, err)
       }
+    }
+  }
+
+  private writeBackupIfNeeded(): void {
+    try {
+      const data = this.exportData()
+      if (data.hosts.length + data.groups.length + data.keys.length === 0) return
+      fs.writeFileSync(this.backupPath, JSON.stringify(data, null, 2), 'utf-8')
+    } catch (err) {
+      console.error('[data-store] backup failed:', err)
     }
   }
 
@@ -288,13 +324,12 @@ export class DataStore {
       }
 
       this.db.exec('COMMIT')
+      this.writeBackupIfNeeded()
     } catch (err) {
       this.db.exec('ROLLBACK')
       throw err
     }
   }
-
-  getHosts(): StoredHost[] {
     const rows = this.db.prepare('SELECT * FROM hosts ORDER BY name COLLATE NOCASE').all() as unknown as HostRow[]
     return rows.map((r) => this.mapHost(r))
   }
@@ -329,6 +364,7 @@ export class DataStore {
             host.id,
           )
         const updated = this.db.prepare('SELECT * FROM hosts WHERE id = ?').get(host.id) as unknown as HostRow
+        this.writeBackupIfNeeded()
         return this.mapHost(updated)
       }
     }
@@ -363,11 +399,13 @@ export class DataStore {
         created.createdAt,
         created.updatedAt,
       )
+    this.writeBackupIfNeeded()
     return created
   }
 
   deleteHost(id: string): boolean {
     const result = this.db.prepare('DELETE FROM hosts WHERE id = ?').run(id)
+    if (result.changes > 0) this.writeBackupIfNeeded()
     return result.changes > 0
   }
 
@@ -389,6 +427,7 @@ export class DataStore {
           )
           .run(group.name, group.color, group.parentId ?? null, group.id)
         const updated = this.db.prepare('SELECT * FROM groups WHERE id = ?').get(group.id) as unknown as GroupRow
+        this.writeBackupIfNeeded()
         return this.mapGroup(updated)
       }
     }
@@ -403,6 +442,7 @@ export class DataStore {
         `INSERT INTO groups (id, name, color, parent_id, created_at) VALUES (?, ?, ?, ?, ?)`,
       )
       .run(created.id, created.name, created.color, created.parentId ?? null, created.createdAt)
+    this.writeBackupIfNeeded()
     return created
   }
 
@@ -415,6 +455,7 @@ export class DataStore {
         .run(now, id)
       const result = this.db.prepare('DELETE FROM groups WHERE id = ?').run(id)
       this.db.exec('COMMIT')
+      if (result.changes > 0) this.writeBackupIfNeeded()
       return result.changes > 0
     } catch (err) {
       this.db.exec('ROLLBACK')
@@ -446,6 +487,7 @@ export class DataStore {
             key.id,
           )
         const updated = this.db.prepare('SELECT * FROM keys WHERE id = ?').get(key.id) as unknown as KeyRow
+        this.writeBackupIfNeeded()
         return this.mapKey(updated)
       }
     }
@@ -468,6 +510,7 @@ export class DataStore {
         created.passphrase ?? null,
         created.createdAt,
       )
+    this.writeBackupIfNeeded()
     return created
   }
 
@@ -480,6 +523,7 @@ export class DataStore {
         .run(now, id)
       const result = this.db.prepare('DELETE FROM keys WHERE id = ?').run(id)
       this.db.exec('COMMIT')
+      if (result.changes > 0) this.writeBackupIfNeeded()
       return result.changes > 0
     } catch (err) {
       this.db.exec('ROLLBACK')
