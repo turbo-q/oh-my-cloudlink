@@ -156,26 +156,40 @@ function registerIpcHandlers(): void {
 
   safeHandle('file:download', async (e, sessionId: string, remotePath: string, localPath: string) => {
     const win = BrowserWindow.fromWebContents(e.sender)
-    await fileManager.download(sessionId, remotePath, localPath, (progress) => {
-      win?.webContents.send('file:progress', {
-        sessionId,
-        op: 'download' as const,
-        ...progress,
+    try {
+      await fileManager.download(sessionId, remotePath, localPath, (progress) => {
+        win?.webContents.send('file:progress', {
+          sessionId,
+          op: 'download' as const,
+          ...progress,
+        })
       })
-    })
-    return true
+      return true
+    } catch (err) {
+      const error = err as NodeJS.ErrnoException
+      const wrapped = new Error(error?.message || String(err))
+      ;(wrapped as NodeJS.ErrnoException).code = error?.code
+      throw wrapped
+    }
   })
 
   safeHandle('file:upload', async (e, sessionId: string, localPath: string, remotePath: string) => {
     const win = BrowserWindow.fromWebContents(e.sender)
-    await fileManager.upload(sessionId, localPath, remotePath, (progress) => {
-      win?.webContents.send('file:progress', {
-        sessionId,
-        op: 'upload' as const,
-        ...progress,
+    try {
+      await fileManager.upload(sessionId, localPath, remotePath, (progress) => {
+        win?.webContents.send('file:progress', {
+          sessionId,
+          op: 'upload' as const,
+          ...progress,
+        })
       })
-    })
-    return true
+      return true
+    } catch (err) {
+      const error = err as NodeJS.ErrnoException
+      const wrapped = new Error(error?.message || String(err))
+      ;(wrapped as NodeJS.ErrnoException).code = error?.code
+      throw wrapped
+    }
   })
 
   safeHandle('file:mkdir', async (_e, sessionId: string, remotePath: string) => {

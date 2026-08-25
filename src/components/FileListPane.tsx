@@ -383,10 +383,20 @@ function TransferStatusBar({ transfer }: { transfer: TransferProgress }) {
             <span className="text-[11px]">✕</span>
           )}
         </span>
-        <div className={`flex-1 min-w-0 text-[11px] truncate ${tone}`}>
-          <span className="font-medium">{transfer.label}</span>
-          {transfer.detail && (
-            <span className="text-app-subtle"> · {transfer.detail}</span>
+        <div className={`flex-1 min-w-0 text-[11px] ${tone}`}>
+          <div className={transfer.status === 'error' ? 'leading-snug break-all' : 'truncate'}>
+            <span className="font-medium">{transfer.label}</span>
+            {transfer.detail && (
+              <span className={transfer.status === 'error' ? 'text-red-400/80' : 'text-app-subtle'}>
+                {transfer.status === 'error' ? '：' : ' · '}
+                {transfer.detail}
+              </span>
+            )}
+          </div>
+          {transfer.status === 'error' && transfer.total > 0 && (
+            <div className="text-[10px] text-red-400/70 mt-0.5 tabular-nums">
+              已完成 {transfer.current}/{transfer.total} 个文件
+            </div>
           )}
         </div>
         {transfer.status === 'running' && (

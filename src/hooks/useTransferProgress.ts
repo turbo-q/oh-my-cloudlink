@@ -29,10 +29,13 @@ const SPEED_SAMPLE_MS = 800
 const UI_THROTTLE_MS = 150
 /** 指数滑动平均系数（越小越稳） */
 const SPEED_EMA_ALPHA = 0.25
+const SUCCESS_HIDE_MS = 2800
+const ERROR_HIDE_MS = 10000
 
-export function useTransferProgress(autoHideMs = 2800) {
+export function useTransferProgress() {
   const [transfer, setTransfer] = useState<TransferProgress | null>(null)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const activeRef = useRef(false)
   const speedRef = useRef<{
     sampleBytes: number
     sampleAt: number
@@ -50,13 +53,17 @@ export function useTransferProgress(autoHideMs = 2800) {
     }
   }, [])
 
-  const clearLater = useCallback(() => {
+  const clearLater = useCallback((ms: number) => {
     if (timerRef.current) clearTimeout(timerRef.current)
-    timerRef.current = setTimeout(() => setTransfer(null), autoHideMs)
-  }, [autoHideMs])
+    timerRef.current = setTimeout(() => setTransfer(null), ms)
+  }, [])
 
   const flushPending = useCallback(() => {
     flushTimerRef.current = null
+    if (!activeRef.current) {
+      pendingRef.current = null
+      return
+    }
     if (pendingRef.current) {
       setTransfer(pendingRef.current)
       pendingRef.current = null
@@ -66,6 +73,7 @@ export function useTransferProgress(autoHideMs = 2800) {
 
   const publish = useCallback(
     (next: TransferProgress, force: boolean) => {
+      if (!activeRef.current) return
       const now = Date.now()
       if (force || now - lastUiAtRef.current >= UI_THROTTLE_MS) {
         if (flushTimerRef.current) {
@@ -94,6 +102,7 @@ export function useTransferProgress(autoHideMs = 2800) {
     speedRef.current = null
     lastUiAtRef.current = 0
     lastFileCurrentRef.current = -1
+    activeRef.current = true
     setTransfer({
       status: 'running',
       label,
@@ -106,6 +115,7 @@ export function useTransferProgress(autoHideMs = 2800) {
   }, [])
 
   const tick = useCallback((current: number, detail?: string) => {
+    if (!activeRef.current) return
     setTransfer((prev) =>
       prev
         ? {
@@ -120,6 +130,8 @@ export function useTransferProgress(autoHideMs = 2800) {
 
   const applyFileProgress = useCallback(
     (event: FileProgressEvent, label?: string) => {
+      if (!activeRef.current) return
+
       const now = Date.now()
       let speedBps = speedRef.current?.displayedBps ?? 0
 
@@ -166,6 +178,7 @@ export function useTransferProgress(autoHideMs = 2800) {
 
   const succeed = useCallback(
     (label: string) => {
+      activeRef.current = false
       if (flushTimerRef.current) clearTimeout(flushTimerRef.current)
       pendingRef.current = null
       speedRef.current = null
@@ -178,13 +191,14 @@ export function useTransferProgress(autoHideMs = 2800) {
         bytesTotal: prev?.bytesTotal,
         speedBps: 0,
       }))
-      clearLater()
+      clearLater(SUCCESS_HIDE_MS)
     },
     [clearLater],
   )
 
   const fail = useCallback(
-    (label: string) => {
+    (label: string, detail?: string) => {
+      activeRef.current = false
       if (flushTimerRef.current) clearTimeout(flushTimerRef.current)
       pendingRef.current = null
       speedRef.current = null
@@ -193,12 +207,12 @@ export function useTransferProgress(autoHideMs = 2800) {
         label,
         current: prev?.current ?? 0,
         total: prev?.total ?? 1,
-        detail: undefined,
+        detail,
         bytesDone: prev?.bytesDone,
         bytesTotal: prev?.bytesTotal,
         speedBps: 0,
       }))
-      clearLater()
+      clearLater(ERROR_HIDE_MS)
     },
     [clearLater],
   )

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import type { RemoteFileEntry } from '../types'
 import { FileListPane, joinPath, parentPath, type FileDragData } from './FileListPane'
 import { useTransferProgress } from '../hooks/useTransferProgress'
+import { formatTransferError } from '../utils/transferError'
 
 interface RemoteFilePaneProps {
   sessionId: string
@@ -88,7 +89,7 @@ export function RemoteFilePane({
       await run()
       succeed(successLabel)
     } catch (err) {
-      fail(`${label.replace(/中$/, '')}失败: ${(err as Error).message}`)
+      fail(`${label.replace(/中$/, '')}失败`, formatTransferError(err))
       throw err
     } finally {
       unsub()
@@ -170,7 +171,7 @@ export function RemoteFilePane({
       succeed(`已创建文件夹 ${name.trim()}`)
       await loadDirectory(currentPath)
     } catch (err) {
-      fail(`创建失败: ${(err as Error).message}`)
+      fail('创建失败', formatTransferError(err))
     } finally {
       setOperating(false)
     }
@@ -188,7 +189,7 @@ export function RemoteFilePane({
       succeed(`已删除 ${entry.name}`)
       await loadDirectory(currentPath)
     } catch (err) {
-      fail(`删除失败: ${(err as Error).message}`)
+      fail('删除失败', formatTransferError(err))
     } finally {
       setOperating(false)
     }
@@ -207,7 +208,7 @@ export function RemoteFilePane({
       succeed(`已重命名为 ${newName.trim()}`)
       await loadDirectory(currentPath)
     } catch (err) {
-      fail(`重命名失败: ${(err as Error).message}`)
+      fail('重命名失败', formatTransferError(err))
     } finally {
       setOperating(false)
     }

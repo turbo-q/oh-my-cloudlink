@@ -3,6 +3,7 @@ import type { RemoteFileEntry } from '../types'
 import { FileListPane, joinPath, parentPath, type FileDragData } from './FileListPane'
 import { assertElectronMethod } from '../utils/electronApi'
 import { useTransferProgress } from '../hooks/useTransferProgress'
+import { formatTransferError } from '../utils/transferError'
 
 interface LocalFilePaneProps {
   sessionId?: string
@@ -65,7 +66,7 @@ export function LocalFilePane({ sessionId, remoteConnected = false }: LocalFileP
       succeed(`已下载 ${remoteItems.length} 项到本机`)
       await loadDirectory(currentPath)
     } catch (err) {
-      fail(`下载失败: ${(err as Error).message}`)
+      fail('下载失败', formatTransferError(err))
     } finally {
       unsub()
       setOperating(false)
