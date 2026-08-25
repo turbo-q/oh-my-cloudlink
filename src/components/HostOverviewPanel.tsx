@@ -185,7 +185,7 @@ export function HostOverviewPanel({
                           : 'border-app-strong bg-surface hover:border-app-emphasis'
                       }`}
                     >
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-3 pr-14">
                         <div
                           className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0"
                           style={{ background: `${group.color}25` }}
@@ -195,13 +195,13 @@ export function HostOverviewPanel({
                           </svg>
                         </div>
                         <div className="flex-1 min-w-0">
-                          <h4 className="font-semibold text-app truncate">{group.name}</h4>
+                          <h4 className="font-semibold text-app truncate" title={group.name}>{group.name}</h4>
                           <p className="text-xs text-app-subtle mt-1">
                             {count} Host{count !== 1 ? 's' : ''}
                           </p>
                         </div>
                       </div>
-                      <div className="absolute top-3 right-3 hidden group-hover/card:flex gap-1">
+                      <div className="absolute top-3 right-3 opacity-0 group-hover/card:opacity-100 flex gap-1 bg-surface/90 backdrop-blur-sm rounded-lg pl-1">
                         <button
                           onClick={(e) => {
                             e.stopPropagation()
@@ -309,9 +309,7 @@ function HostCard({
   onEdit: () => void
   onDelete: () => void
 }) {
-  const subtitle = [host.protocol === 'ftp' ? 'ftp' : 'ssh', group?.name, ...host.tags]
-    .filter(Boolean)
-    .join(', ')
+  const subtitle = [group?.name, ...host.tags].filter(Boolean).join(', ')
 
   return (
     <div
@@ -323,7 +321,7 @@ function HostCard({
           : 'border-app-strong bg-surface hover:border-app-emphasis hover:shadow-md'
       }`}
     >
-      <div className="flex items-start gap-3">
+      <div className="flex items-start gap-3 pr-14">
         <div
           className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 text-lg font-bold"
           style={{
@@ -334,13 +332,13 @@ function HostCard({
           {host.name.charAt(0).toUpperCase()}
         </div>
         <div className="flex-1 min-w-0 pt-0.5">
-          <h3 className="font-semibold text-app truncate leading-tight">{host.name}</h3>
-          <p className="text-xs text-app-subtle mt-1.5 truncate">
+          <h3 className="font-semibold text-app truncate leading-tight" title={host.name}>{host.name}</h3>
+          <p className="text-xs text-app-subtle mt-1.5 truncate" title={subtitle || `${host.username}@${host.hostname}`}>
             {subtitle || `${host.username}@${host.hostname}`}
           </p>
         </div>
       </div>
-      <div className="absolute top-3 right-3 hidden group-hover:flex gap-1">
+      <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 flex gap-1 bg-surface/90 backdrop-blur-sm rounded-lg pl-1">
         <button
           onClick={(e) => {
             e.stopPropagation()

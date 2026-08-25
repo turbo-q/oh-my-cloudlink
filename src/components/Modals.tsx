@@ -1,7 +1,53 @@
 import { useEffect, useState } from 'react'
 import type { Host, Group, SSHKey, AuthType, DiscoveredKey } from '../types'
-import { DEFAULT_FTP_PORT, DEFAULT_SSH_PORT, GROUP_COLORS } from '../types'
+import { GROUP_COLORS } from '../types'
 import { GroupCombobox } from './GroupCombobox'
+
+function PasswordInput({
+  value,
+  onChange,
+  placeholder,
+  required,
+}: {
+  value: string
+  onChange: (value: string) => void
+  placeholder?: string
+  required?: boolean
+}) {
+  const [visible, setVisible] = useState(false)
+
+  return (
+    <div className="relative">
+      <input
+        type={visible ? 'text' : 'password'}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="input-field pr-10"
+        placeholder={placeholder}
+        required={required}
+        autoComplete="off"
+      />
+      <button
+        type="button"
+        onClick={() => setVisible((v) => !v)}
+        className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-md text-app-muted hover:text-app hover:bg-app-hover"
+        aria-label={visible ? '隐藏密码' : '显示密码'}
+        title={visible ? '隐藏密码' : '显示密码'}
+      >
+        {visible ? (
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+          </svg>
+        ) : (
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+          </svg>
+        )}
+      </button>
+    </div>
+  )
+}
 
 interface HostFormModalProps {
   open: boolean
@@ -18,7 +64,6 @@ const emptyForm = {
   hostname: '',
   port: 22,
   username: 'root',
-  isFtpServer: false,
   authType: 'password' as AuthType,
   password: '',
   keyId: '',
@@ -38,7 +83,6 @@ export function HostFormModal({ open, host, groups, keys, onSave, onCreateGroup,
         hostname: host.hostname,
         port: host.port,
         username: host.username,
-        isFtpServer: host.protocol === 'ftp',
         authType: host.authType,
         password: host.password ?? '',
         keyId: host.keyId ?? '',
@@ -63,7 +107,7 @@ export function HostFormModal({ open, host, groups, keys, onSave, onCreateGroup,
         hostname: form.hostname.trim(),
         port: form.port,
         username: form.username.trim(),
-        protocol: form.isFtpServer ? 'ftp' : 'ssh',
+        protocol: 'ssh',
         authType: form.authType,
         password: form.authType === 'password' ? form.password : undefined,
         keyId: form.authType === 'key' ? form.keyId || undefined : undefined,
@@ -79,8 +123,6 @@ export function HostFormModal({ open, host, groups, keys, onSave, onCreateGroup,
       setSaving(false)
     }
   }
-
-  const isFtp = form.isFtpServer
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--app-overlay)] backdrop-blur-sm">
@@ -144,35 +186,6 @@ export function HostFormModal({ open, host, groups, keys, onSave, onCreateGroup,
             />
           </div>
 
-          <label className="flex items-start gap-3 cursor-pointer rounded-lg border border-app bg-app-card px-3 py-3">
-            <input
-              type="checkbox"
-              checked={form.isFtpServer}
-              onChange={(e) => {
-                const isFtpServer = e.target.checked
-                setForm({
-                  ...form,
-                  isFtpServer,
-                  port: isFtpServer ? DEFAULT_FTP_PORT : DEFAULT_SSH_PORT,
-                  authType: isFtpServer ? 'password' : form.authType,
-                })
-              }}
-              className="mt-0.5 rounded border-app-emphasis bg-app-hover text-emerald-500 focus:ring-emerald-500/30"
-            />
-            <span>
-              <span className="block text-sm text-app-secondary">这是 FTP 服务器</span>
-              <span className="block text-xs text-app-subtle mt-0.5">
-                普通 SSH 主机无需勾选，SFTP 传输在顶部「SFTP」菜单中直接使用
-              </span>
-            </span>
-          </label>
-
-          {isFtp && (
-            <div className="text-xs text-amber-400/80 bg-amber-400/10 rounded-lg px-3 py-2">
-              FTP 仅支持密码认证，文件传输不加密（建议优先使用 SFTP）
-            </div>
-          )}
-
           <div>
             <label className="block text-sm text-app-muted mb-1">认证方式</label>
             <div className="flex gap-2">
@@ -180,9 +193,8 @@ export function HostFormModal({ open, host, groups, keys, onSave, onCreateGroup,
                 <button
                   key={type}
                   type="button"
-                  disabled={isFtp && type === 'key'}
                   onClick={() => setForm({ ...form, authType: type })}
-                  className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-30 disabled:cursor-not-allowed ${
+                  className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
                     form.authType === type
                       ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
                       : 'bg-app-hover text-app-muted border border-transparent hover:bg-app-hover-strong'
@@ -197,11 +209,9 @@ export function HostFormModal({ open, host, groups, keys, onSave, onCreateGroup,
           {form.authType === 'password' ? (
             <div>
               <label className="block text-sm text-app-muted mb-1">密码</label>
-              <input
-                type="password"
+              <PasswordInput
                 value={form.password}
-                onChange={(e) => setForm({ ...form, password: e.target.value })}
-                className="input-field"
+                onChange={(password) => setForm({ ...form, password })}
                 placeholder="••••••••"
               />
             </div>
@@ -463,12 +473,7 @@ export function KeyFormModal({ open, keyItem, onSave, onClose }: KeyFormModalPro
           </div>
           <div>
             <label className="block text-sm text-app-muted mb-1">密钥口令（可选）</label>
-            <input
-              type="password"
-              value={passphrase}
-              onChange={(e) => setPassphrase(e.target.value)}
-              className="input-field"
-            />
+            <PasswordInput value={passphrase} onChange={setPassphrase} />
           </div>
           <div className="flex gap-3">
             <button type="button" onClick={onClose} className="btn-secondary flex-1">

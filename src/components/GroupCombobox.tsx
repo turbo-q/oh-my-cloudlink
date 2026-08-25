@@ -11,40 +11,49 @@ interface GroupComboboxProps {
 export function GroupCombobox({ groupId, groups, onChange, onCreateGroup }: GroupComboboxProps) {
   const [input, setInput] = useState('')
   const [open, setOpen] = useState(false)
+  const [filtering, setFiltering] = useState(false)
   const [creating, setCreating] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const group = groups.find((g) => g.id === groupId)
     setInput(group?.name ?? '')
+    setFiltering(false)
   }, [groupId, groups])
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
         setOpen(false)
+        // 关闭时若未选中有效分组，恢复为当前 groupId 对应名称
+        const group = groups.find((g) => g.id === groupId)
+        setInput(group?.name ?? '')
+        setFiltering(false)
       }
     }
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [])
+  }, [groupId, groups])
 
   const trimmed = input.trim()
   const exactMatch = groups.find((g) => g.name === trimmed)
-  const filtered = trimmed
+  // 编辑时输入框已填当前分组名；聚焦展开应展示全部，仅在用户主动输入后才过滤
+  const filtered = filtering && trimmed
     ? groups.filter((g) => g.name.toLowerCase().includes(trimmed.toLowerCase()))
     : groups
-  const showCreate = trimmed.length > 0 && !exactMatch
+  const showCreate = filtering && trimmed.length > 0 && !exactMatch
 
   const selectGroup = (id: string, name: string) => {
     onChange(id)
     setInput(name)
+    setFiltering(false)
     setOpen(false)
   }
 
   const clearGroup = () => {
     onChange('')
     setInput('')
+    setFiltering(false)
     setOpen(false)
   }
 
@@ -65,10 +74,14 @@ export function GroupCombobox({ groupId, groups, onChange, onCreateGroup }: Grou
         value={input}
         onChange={(e) => {
           setInput(e.target.value)
+          setFiltering(true)
           setOpen(true)
           if (!e.target.value.trim()) onChange('')
         }}
-        onFocus={() => setOpen(true)}
+        onFocus={() => {
+          setOpen(true)
+          setFiltering(false)
+        }}
         onKeyDown={(e) => {
           if (e.key === 'Enter' && showCreate) {
             e.preventDefault()
@@ -80,9 +93,9 @@ export function GroupCombobox({ groupId, groups, onChange, onCreateGroup }: Grou
         placeholder={groups.length === 0 ? '输入分组名，回车创建' : '选择或输入新分组'}
       />
 
-      {open && (filtered.length > 0 || showCreate || !trimmed) && (
+      {open && (filtered.length > 0 || showCreate || !trimmed || !filtering) && (
         <div className="absolute z-10 mt-1 w-full max-h-48 overflow-y-auto rounded-lg border border-app-strong bg-elevated shadow-xl py-1">
-          {!trimmed && (
+          {(!filtering || !trimmed) && (
             <button
               type="button"
               onClick={clearGroup}
