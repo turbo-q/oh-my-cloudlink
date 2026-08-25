@@ -11,6 +11,8 @@ export type TransferProgress = {
   bytesDone?: number
   bytesTotal?: number
   speedBps?: number
+  /** estimated seconds remaining */
+  etaSeconds?: number
 }
 
 export type FileProgressEvent = {
@@ -29,6 +31,7 @@ const SPEED_SAMPLE_MS = 800
 const UI_THROTTLE_MS = 150
 /** 指数滑动平均系数（越小越稳） */
 const SPEED_EMA_ALPHA = 0.25
+const ETA_EMA_ALPHA = 0.3
 const SUCCESS_HIDE_MS = 2800
 const ERROR_HIDE_MS = 10000
 
@@ -40,6 +43,7 @@ export function useTransferProgress() {
     sampleBytes: number
     sampleAt: number
     displayedBps: number
+    displayedEta: number | null
   } | null>(null)
   const lastUiAtRef = useRef(0)
   const lastFileCurrentRef = useRef(-1)
@@ -111,6 +115,7 @@ export function useTransferProgress() {
       bytesDone: 0,
       bytesTotal: 0,
       speedBps: 0,
+      etaSeconds: undefined,
     })
   }, [])
 
@@ -134,12 +139,14 @@ export function useTransferProgress() {
 
       const now = Date.now()
       let speedBps = speedRef.current?.displayedBps ?? 0
+      let etaSeconds = speedRef.current?.displayedEta ?? undefined
 
       if (!speedRef.current) {
         speedRef.current = {
           sampleBytes: event.bytesDone,
           sampleAt: now,
           displayedBps: 0,
+          displayedEta: null,
         }
       } else if (now - speedRef.current.sampleAt >= SPEED_SAMPLE_MS) {
         const dt = (now - speedRef.current.sampleAt) / 1000
@@ -149,13 +156,31 @@ export function useTransferProgress() {
           speedRef.current.displayedBps <= 0
             ? instant
             : speedRef.current.displayedBps * (1 - SPEED_EMA_ALPHA) + instant * SPEED_EMA_ALPHA
+
+        const remainBytes = Math.max(0, event.bytesTotal - event.bytesDone)
+        let instantEta: number | null = null
+        if (speedBps > 0 && event.bytesTotal > 0 && remainBytes > 0) {
+          instantEta = remainBytes / speedBps
+        } else if (remainBytes <= 0 && event.bytesTotal > 0) {
+          instantEta = 0
+        }
+
+        if (instantEta != null) {
+          etaSeconds =
+            speedRef.current.displayedEta == null
+              ? instantEta
+              : speedRef.current.displayedEta * (1 - ETA_EMA_ALPHA) + instantEta * ETA_EMA_ALPHA
+        }
+
         speedRef.current = {
           sampleBytes: event.bytesDone,
           sampleAt: now,
           displayedBps: speedBps,
+          displayedEta: etaSeconds ?? null,
         }
       } else {
         speedBps = speedRef.current.displayedBps
+        etaSeconds = speedRef.current.displayedEta ?? undefined
       }
 
       const next: TransferProgress = {
@@ -167,6 +192,7 @@ export function useTransferProgress() {
         bytesDone: event.bytesDone,
         bytesTotal: event.bytesTotal,
         speedBps,
+        etaSeconds,
       }
 
       const fileAdvanced = event.current !== lastFileCurrentRef.current

@@ -142,6 +142,20 @@ export function formatTransferSpeed(bytesPerSec: number): string {
   return `${n >= 10 || i === 0 ? n.toFixed(0) : n.toFixed(1)} ${units[i]}`
 }
 
+/** Format remaining seconds for transfer ETA display */
+export function formatEta(seconds: number | undefined | null): string {
+  if (seconds == null || !Number.isFinite(seconds) || seconds < 0) return '计算中…'
+  if (seconds < 1) return '即将完成'
+  const s = Math.round(seconds)
+  if (s < 60) return `约 ${s} 秒`
+  const m = Math.floor(s / 60)
+  const rem = s % 60
+  if (m < 60) return rem > 0 ? `约 ${m} 分 ${rem} 秒` : `约 ${m} 分钟`
+  const h = Math.floor(m / 60)
+  const remM = m % 60
+  return remM > 0 ? `约 ${h} 小时 ${remM} 分` : `约 ${h} 小时`
+}
+
 export function formatDate(iso?: string): string {
   if (!iso) return '—'
   try {
