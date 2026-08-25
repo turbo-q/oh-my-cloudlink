@@ -53,8 +53,10 @@
       "output": "release"
     },
     "files": [
+      "main.cjs",
       "dist/**/*",
-      "dist-electron/**/*"
+      "dist-electron/**/*",
+      "package.json"
     ],
     "extraMetadata": {
       "name": "oh-my-cloudlink"
