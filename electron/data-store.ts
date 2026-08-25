@@ -39,11 +39,23 @@ export interface StoredKey {
   createdAt: string
 }
 
-interface DataFile {
+export interface DataFile {
   hosts: StoredHost[]
   groups: StoredGroup[]
   keys: StoredKey[]
 }
+
+export interface BackupInfo {
+  fileName: string
+  filePath: string
+  mtime: number
+  size: number
+  hosts: number
+  groups: number
+  keys: number
+}
+
+const MAX_BACKUPS = 5
 
 interface HostRow {
   id: string
@@ -82,7 +94,9 @@ interface KeyRow {
 export class DataStore {
   private db: DatabaseSync
   private dbPath: string
-  private backupPath: string
+  private userData: string
+  private backupsDir: string
+  private legacyBackupPath: string
 
   constructor() {
     const userData = app.getPath('userData')
@@ -90,21 +104,43 @@ export class DataStore {
       fs.mkdirSync(userData, { recursive: true })
     }
 
+    this.userData = userData
     this.dbPath = path.join(userData, 'cloudlink.db')
-    this.backupPath = path.join(userData, 'data.backup.json')
+    this.backupsDir = path.join(userData, 'backups')
+    this.legacyBackupPath = path.join(userData, 'data.backup.json')
+    if (!fs.existsSync(this.backupsDir)) {
+      fs.mkdirSync(this.backupsDir, { recursive: true })
+    }
+
     this.db = new DatabaseSync(this.dbPath)
     this.db.exec('PRAGMA journal_mode = WAL')
     this.db.exec('PRAGMA synchronous = NORMAL')
     this.db.exec('PRAGMA foreign_keys = ON')
     this.initSchema()
     this.migrateFromJsonIfNeeded(userData)
-    this.writeBackupIfNeeded()
+    this.seedLegacyBackupIntoTimed()
+    this.createTimedBackup({ force: true })
+  }
+
+  /** One-time: promote old data.backup.json into backups/ if folder is empty. */
+  private seedLegacyBackupIntoTimed(): void {
+    try {
+      if (this.listBackupFiles().length > 0) return
+      if (!fs.existsSync(this.legacyBackupPath)) return
+      const data = this.readDataFile(this.legacyBackupPath)
+      if (!data || data.hosts.length + data.groups.length + data.keys.length === 0) return
+      const fileName = this.formatBackupFileName()
+      const filePath = path.join(this.backupsDir, fileName)
+      fs.copyFileSync(this.legacyBackupPath, filePath)
+    } catch (err) {
+      console.error('[data-store] seed legacy backup failed:', err)
+    }
   }
 
   /** Flush WAL and close DB — call on app quit to avoid empty DB after crash. */
   close(): void {
     try {
-      this.writeBackupIfNeeded()
+      this.createTimedBackup({ force: true })
       this.db.exec('PRAGMA wal_checkpoint(TRUNCATE)')
     } catch (err) {
       console.error('[data-store] checkpoint failed:', err)
@@ -164,7 +200,12 @@ export class DataStore {
       return
     }
 
+    const timedBackups = this.listBackupFiles()
+      .sort((a, b) => b.mtimeMs - a.mtimeMs)
+      .map((f) => f.filePath)
+
     const candidates = [
+      ...timedBackups,
       path.join(userData, 'data.backup.json'),
       path.join(userData, 'data.json'),
       path.join(userData, 'data.json.migrated.bak'),
@@ -181,16 +222,11 @@ export class DataStore {
     for (const jsonPath of candidates) {
       if (!fs.existsSync(jsonPath)) continue
       try {
-        const raw = fs.readFileSync(jsonPath, 'utf-8')
-        const parsed = JSON.parse(raw) as Partial<DataFile>
-        const data: DataFile = {
-          hosts: parsed.hosts ?? [],
-          groups: parsed.groups ?? [],
-          keys: parsed.keys ?? [],
-        }
+        const data = this.readDataFile(jsonPath)
+        if (!data) continue
         if (data.hosts.length + data.groups.length + data.keys.length === 0) continue
 
-        this.replaceAll(data)
+        this.replaceAll(data, { skipBackup: true })
         const bak = `${jsonPath}.migrated.bak`
         if (!jsonPath.endsWith('.bak') && !fs.existsSync(bak)) {
           fs.copyFileSync(jsonPath, bak)
@@ -203,14 +239,142 @@ export class DataStore {
     }
   }
 
-  private writeBackupIfNeeded(): void {
+  private listBackupFiles(): { fileName: string; filePath: string; mtimeMs: number; size: number }[] {
+    if (!fs.existsSync(this.backupsDir)) return []
+    return fs
+      .readdirSync(this.backupsDir)
+      .filter((name) => /^backup-.*\.json$/i.test(name))
+      .map((fileName) => {
+        const filePath = path.join(this.backupsDir, fileName)
+        const stat = fs.statSync(filePath)
+        return { fileName, filePath, mtimeMs: stat.mtimeMs, size: stat.size }
+      })
+  }
+
+  private readDataFile(jsonPath: string): DataFile | null {
+    const raw = fs.readFileSync(jsonPath, 'utf-8')
+    const parsed = JSON.parse(raw) as Partial<DataFile>
+    if (!parsed || typeof parsed !== 'object') return null
+    return {
+      hosts: Array.isArray(parsed.hosts) ? parsed.hosts : [],
+      groups: Array.isArray(parsed.groups) ? parsed.groups : [],
+      keys: Array.isArray(parsed.keys) ? parsed.keys : [],
+    }
+  }
+
+  private formatBackupFileName(date = new Date()): string {
+    const p = (n: number, w = 2) => String(n).padStart(w, '0')
+    return (
+      `backup-${date.getFullYear()}${p(date.getMonth() + 1)}${p(date.getDate())}` +
+      `-${p(date.getHours())}${p(date.getMinutes())}${p(date.getSeconds())}` +
+      `-${p(date.getMilliseconds(), 3)}.json`
+    )
+  }
+
+  private pruneBackups(): void {
+    const files = this.listBackupFiles().sort((a, b) => b.mtimeMs - a.mtimeMs)
+    for (const old of files.slice(MAX_BACKUPS)) {
+      try {
+        fs.unlinkSync(old.filePath)
+      } catch (err) {
+        console.error('[data-store] prune backup failed:', err)
+      }
+    }
+  }
+
+  private lastAutoBackupAt = 0
+
+  /** Create a timestamped backup under userData/backups (keeps newest 5). */
+  createTimedBackup(options?: { force?: boolean }): BackupInfo | null {
     try {
+      const force = options?.force === true
+      const now = Date.now()
+      // Auto snapshots: at most once per 90s so the 5 slots cover a longer window
+      if (!force && now - this.lastAutoBackupAt < 90_000) {
+        return null
+      }
+
       const data = this.exportData()
-      if (data.hosts.length + data.groups.length + data.keys.length === 0) return
-      fs.writeFileSync(this.backupPath, JSON.stringify(data, null, 2), 'utf-8')
+      if (data.hosts.length + data.groups.length + data.keys.length === 0) return null
+
+      if (!fs.existsSync(this.backupsDir)) {
+        fs.mkdirSync(this.backupsDir, { recursive: true })
+      }
+
+      const fileName = this.formatBackupFileName()
+      const filePath = path.join(this.backupsDir, fileName)
+      const payload = JSON.stringify(data, null, 2)
+      fs.writeFileSync(filePath, payload, 'utf-8')
+      // Keep legacy single-file copy for older recovery paths
+      fs.writeFileSync(this.legacyBackupPath, payload, 'utf-8')
+      this.pruneBackups()
+      this.lastAutoBackupAt = now
+
+      const stat = fs.statSync(filePath)
+      return {
+        fileName,
+        filePath,
+        mtime: stat.mtimeMs,
+        size: stat.size,
+        hosts: data.hosts.length,
+        groups: data.groups.length,
+        keys: data.keys.length,
+      }
     } catch (err) {
       console.error('[data-store] backup failed:', err)
+      return null
     }
+  }
+
+  listBackups(): BackupInfo[] {
+    return this.listBackupFiles()
+      .sort((a, b) => b.mtimeMs - a.mtimeMs)
+      .map((f) => {
+        let hosts = 0
+        let groups = 0
+        let keys = 0
+        try {
+          const data = this.readDataFile(f.filePath)
+          if (data) {
+            hosts = data.hosts.length
+            groups = data.groups.length
+            keys = data.keys.length
+          }
+        } catch {
+          /* ignore broken backup preview */
+        }
+        return {
+          fileName: f.fileName,
+          filePath: f.filePath,
+          mtime: f.mtimeMs,
+          size: f.size,
+          hosts,
+          groups,
+          keys,
+        }
+      })
+  }
+
+  restoreBackupFile(fileName: string): DataFile {
+    const safeName = path.basename(fileName)
+    if (safeName !== fileName || !/^backup-.*\.json$/i.test(safeName)) {
+      throw new Error('无效的备份文件名')
+    }
+    const filePath = path.join(this.backupsDir, safeName)
+    if (!fs.existsSync(filePath)) {
+      throw new Error('备份文件不存在')
+    }
+    return this.restoreFromAbsolutePath(filePath)
+  }
+
+  restoreFromAbsolutePath(filePath: string): DataFile {
+    const data = this.readDataFile(filePath)
+    if (!data) throw new Error('备份文件格式不正确')
+    if (data.hosts.length + data.groups.length + data.keys.length === 0) {
+      throw new Error('备份文件为空')
+    }
+    this.replaceAll(data)
+    return data
   }
 
   private countRows(table: 'hosts' | 'groups' | 'keys'): number {
@@ -269,7 +433,7 @@ export class DataStore {
     }
   }
 
-  private replaceAll(data: DataFile): void {
+  private replaceAll(data: DataFile, options?: { skipBackup?: boolean }): void {
     this.db.exec('BEGIN')
     try {
       this.db.exec('DELETE FROM hosts')
@@ -324,7 +488,7 @@ export class DataStore {
       }
 
       this.db.exec('COMMIT')
-      this.writeBackupIfNeeded()
+      if (!options?.skipBackup) this.createTimedBackup({ force: true })
     } catch (err) {
       this.db.exec('ROLLBACK')
       throw err
@@ -366,7 +530,7 @@ export class DataStore {
             host.id,
           )
         const updated = this.db.prepare('SELECT * FROM hosts WHERE id = ?').get(host.id) as unknown as HostRow
-        this.writeBackupIfNeeded()
+        this.createTimedBackup()
         return this.mapHost(updated)
       }
     }
@@ -401,13 +565,13 @@ export class DataStore {
         created.createdAt,
         created.updatedAt,
       )
-    this.writeBackupIfNeeded()
+    this.createTimedBackup()
     return created
   }
 
   deleteHost(id: string): boolean {
     const result = this.db.prepare('DELETE FROM hosts WHERE id = ?').run(id)
-    if (result.changes > 0) this.writeBackupIfNeeded()
+    if (result.changes > 0) this.createTimedBackup()
     return result.changes > 0
   }
 
@@ -429,7 +593,7 @@ export class DataStore {
           )
           .run(group.name, group.color, group.parentId ?? null, group.id)
         const updated = this.db.prepare('SELECT * FROM groups WHERE id = ?').get(group.id) as unknown as GroupRow
-        this.writeBackupIfNeeded()
+        this.createTimedBackup()
         return this.mapGroup(updated)
       }
     }
@@ -444,7 +608,7 @@ export class DataStore {
         `INSERT INTO groups (id, name, color, parent_id, created_at) VALUES (?, ?, ?, ?, ?)`,
       )
       .run(created.id, created.name, created.color, created.parentId ?? null, created.createdAt)
-    this.writeBackupIfNeeded()
+    this.createTimedBackup()
     return created
   }
 
@@ -457,7 +621,7 @@ export class DataStore {
         .run(now, id)
       const result = this.db.prepare('DELETE FROM groups WHERE id = ?').run(id)
       this.db.exec('COMMIT')
-      if (result.changes > 0) this.writeBackupIfNeeded()
+      if (result.changes > 0) this.createTimedBackup()
       return result.changes > 0
     } catch (err) {
       this.db.exec('ROLLBACK')
@@ -489,7 +653,7 @@ export class DataStore {
             key.id,
           )
         const updated = this.db.prepare('SELECT * FROM keys WHERE id = ?').get(key.id) as unknown as KeyRow
-        this.writeBackupIfNeeded()
+        this.createTimedBackup()
         return this.mapKey(updated)
       }
     }
@@ -512,7 +676,7 @@ export class DataStore {
         created.passphrase ?? null,
         created.createdAt,
       )
-    this.writeBackupIfNeeded()
+    this.createTimedBackup()
     return created
   }
 
@@ -525,7 +689,7 @@ export class DataStore {
         .run(now, id)
       const result = this.db.prepare('DELETE FROM keys WHERE id = ?').run(id)
       this.db.exec('COMMIT')
-      if (result.changes > 0) this.writeBackupIfNeeded()
+      if (result.changes > 0) this.createTimedBackup()
       return result.changes > 0
     } catch (err) {
       this.db.exec('ROLLBACK')

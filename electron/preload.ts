@@ -19,9 +19,13 @@ const electronAPI = {
   discoverLocalKeys: () => ipcRenderer.invoke('keys:discover'),
   readKeyFile: (filePath: string) => ipcRenderer.invoke('keys:readFile', filePath),
 
-  // 数据导入导出
+  // 数据导入导出 / 备份恢复
   exportData: () => ipcRenderer.invoke('data:export'),
   importData: (data: unknown) => ipcRenderer.invoke('data:import', data),
+  listBackups: () => ipcRenderer.invoke('data:listBackups'),
+  createBackup: () => ipcRenderer.invoke('data:createBackup'),
+  restoreBackup: (fileName: string) => ipcRenderer.invoke('data:restoreBackup', fileName),
+  restoreBackupFromFile: () => ipcRenderer.invoke('data:restoreBackupFromFile'),
 
   // 系统对话框
   openFileDialog: (options?: { title?: string; multi?: boolean }) =>

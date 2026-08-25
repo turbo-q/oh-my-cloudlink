@@ -15,6 +15,28 @@ export interface ElectronAPI {
 
   exportData: () => Promise<{ hosts: Host[]; groups: Group[]; keys: SSHKey[] }>
   importData: (data: unknown) => Promise<boolean>
+  listBackups: () => Promise<
+    {
+      fileName: string
+      filePath: string
+      mtime: number
+      size: number
+      hosts: number
+      groups: number
+      keys: number
+    }[]
+  >
+  createBackup: () => Promise<{
+    fileName: string
+    filePath: string
+    mtime: number
+    size: number
+    hosts: number
+    groups: number
+    keys: number
+  }>
+  restoreBackup: (fileName: string) => Promise<boolean>
+  restoreBackupFromFile: () => Promise<boolean>
 
   openFileDialog: (options?: {
     title?: string

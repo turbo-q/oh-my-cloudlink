@@ -26,6 +26,7 @@ export default function App() {
     groups,
     keys,
     loading,
+    refresh,
     saveHost,
     deleteHost,
     saveGroup,
@@ -264,7 +265,7 @@ export default function App() {
         )}
 
         {!showSession && browsePanel === 'settings' && (
-          <SettingsPanel onExport={handleExport} onImport={handleImport} />
+          <SettingsPanel onExport={handleExport} onImport={handleImport} onDataRestored={refresh} />
         )}
 
         {/* Keep session panels mounted (CSS-hidden) so SSH/SFTP connections survive browse/tab switches */}

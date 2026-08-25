@@ -75,10 +75,31 @@ function registerIpcHandlers(): void {
   safeHandle('keys:discover', () => discoverLocalKeys())
   safeHandle('keys:readFile', (_e, filePath: string) => readKeyFromFile(filePath))
 
-  // 导入导出
+  // 导入导出 / 备份
   safeHandle('data:export', () => dataStore.exportData())
   safeHandle('data:import', (_e, data) => {
     dataStore.importData(data)
+    return true
+  })
+  safeHandle('data:listBackups', () => dataStore.listBackups())
+  safeHandle('data:createBackup', () => {
+    const info = dataStore.createTimedBackup({ force: true })
+    if (!info) throw new Error('当前没有可备份的数据')
+    return info
+  })
+  safeHandle('data:restoreBackup', (_e, fileName: string) => {
+    dataStore.restoreBackupFile(fileName)
+    return true
+  })
+  safeHandle('data:restoreBackupFromFile', async () => {
+    if (!mainWindow) return false
+    const result = await dialog.showOpenDialog(mainWindow, {
+      title: '选择备份文件',
+      properties: ['openFile'],
+      filters: [{ name: 'JSON 备份', extensions: ['json'] }],
+    })
+    if (result.canceled || !result.filePaths[0]) return false
+    dataStore.restoreFromAbsolutePath(result.filePaths[0])
     return true
   })
 
