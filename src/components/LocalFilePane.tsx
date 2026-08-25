@@ -56,7 +56,7 @@ export function LocalFilePane({ sessionId, remoteConnected = false }: LocalFileP
     try {
       for (let i = 0; i < remoteItems.length; i++) {
         const item = remoteItems[i]
-        tick(i + 1, item.name)
+        tick(i, item.name)
         const localPath = joinPath(currentPath, item.name)
         await window.electronAPI.fileDownload(sessionId, item.path, localPath)
       }

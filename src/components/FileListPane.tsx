@@ -346,9 +346,14 @@ export function FileListPane({
 }
 
 function TransferStatusBar({ transfer }: { transfer: TransferProgress }) {
+  // current = 已完成数；进行中单项用不确定动画，避免 1/1 直接显示 100%
+  const indeterminate = transfer.status === 'running' && (transfer.total <= 1 || transfer.current >= transfer.total)
   const percent =
-    transfer.total > 0 ? Math.min(100, Math.round((transfer.current / transfer.total) * 100)) : 0
-  const indeterminate = transfer.status === 'running' && transfer.total <= 1 && transfer.current === 0
+    transfer.status === 'success'
+      ? 100
+      : transfer.total > 0
+        ? Math.min(99, Math.round((transfer.current / transfer.total) * 100))
+        : 0
 
   const tone =
     transfer.status === 'error'
@@ -363,6 +368,11 @@ function TransferStatusBar({ transfer }: { transfer: TransferProgress }) {
       : transfer.status === 'success'
         ? 'bg-emerald-400'
         : 'bg-blue-400'
+
+  const counter =
+    transfer.status === 'running' && transfer.total > 1
+      ? `${Math.min(transfer.current + 1, transfer.total)}/${transfer.total}`
+      : null
 
   return (
     <div className="shrink-0 border-t border-app bg-surface px-3 py-1.5">
@@ -382,22 +392,17 @@ function TransferStatusBar({ transfer }: { transfer: TransferProgress }) {
             <span className="text-app-subtle"> · {transfer.detail}</span>
           )}
         </div>
-        {transfer.status === 'running' && transfer.total > 1 && (
-          <span className="shrink-0 text-[11px] font-mono text-app-subtle">
-            {transfer.current}/{transfer.total}
-          </span>
-        )}
-        {transfer.status === 'running' && transfer.total <= 1 && !indeterminate && (
-          <span className="shrink-0 text-[11px] font-mono text-app-subtle">{percent}%</span>
+        {counter && (
+          <span className="shrink-0 text-[11px] font-mono text-app-subtle">{counter}</span>
         )}
       </div>
-      <div className="mt-1 h-0.5 rounded-full bg-app-hover overflow-hidden">
+      <div className="mt-1 h-0.5 rounded-full bg-app-hover overflow-hidden relative">
         {indeterminate ? (
-          <div className={`h-full w-1/3 rounded-full ${barColor} animate-pulse`} style={{ marginLeft: '20%' }} />
+          <div className={`absolute inset-y-0 w-1/3 rounded-full ${barColor} opacity-80 transfer-indeterminate`} />
         ) : (
           <div
             className={`h-full rounded-full transition-all duration-300 ${barColor}`}
-            style={{ width: `${transfer.status === 'success' ? 100 : percent}%` }}
+            style={{ width: `${percent}%` }}
           />
         )}
       </div>

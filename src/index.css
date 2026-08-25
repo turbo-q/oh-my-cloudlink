@@ -178,3 +178,12 @@ body {
 .no-drag {
   -webkit-app-region: no-drag;
 }
+
+@keyframes transfer-indeterminate {
+  0% { left: -33%; }
+  100% { left: 100%; }
+}
+
+.transfer-indeterminate {
+  animation: transfer-indeterminate 1.2s ease-in-out infinite;
+}

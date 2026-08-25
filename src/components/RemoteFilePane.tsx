@@ -87,7 +87,7 @@ export function RemoteFilePane({
       for (let i = 0; i < files.length; i++) {
         const localPath = files[i]
         const name = localPath.split(/[/\\]/).pop()!
-        tick(i + 1, name)
+        tick(i, name)
         await window.electronAPI.fileUpload(sessionId, localPath, joinPath(currentPath, name))
       }
       succeed(`已上传 ${files.length} 个文件`)
@@ -148,7 +148,7 @@ export function RemoteFilePane({
 
     setOperating(true)
     start('创建文件夹', 1)
-    tick(1, name.trim())
+    tick(0, name.trim())
     try {
       await window.electronAPI.fileMkdir(sessionId, joinPath(currentPath, name.trim()))
       succeed(`已创建文件夹 ${name.trim()}`)
@@ -166,7 +166,7 @@ export function RemoteFilePane({
 
     setOperating(true)
     start('删除中', 1)
-    tick(1, entry.name)
+    tick(0, entry.name)
     try {
       await window.electronAPI.fileDelete(sessionId, entry.path, entry.isDirectory)
       succeed(`已删除 ${entry.name}`)
@@ -184,7 +184,7 @@ export function RemoteFilePane({
 
     setOperating(true)
     start('重命名', 1)
-    tick(1, newName.trim())
+    tick(0, newName.trim())
     try {
       const newPath = joinPath(parentPath(entry.path), newName.trim())
       await window.electronAPI.fileRename(sessionId, entry.path, newPath)
@@ -207,7 +207,7 @@ export function RemoteFilePane({
     try {
       for (let i = 0; i < localItems.length; i++) {
         const item = localItems[i]
-        tick(i + 1, item.name)
+        tick(i, item.name)
         await window.electronAPI.fileUpload(sessionId, item.path, joinPath(currentPath, item.name))
       }
       succeed(`已上传 ${localItems.length} 项`)
