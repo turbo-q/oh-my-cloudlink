@@ -363,6 +363,7 @@ app.whenReady().then(() => {
 })
 
 app.on('window-all-closed', () => {
+  sessionLogStore.finalizeOrphanSessions()
   portForwardManager.stopAll()
   sshManager.disconnectAll()
   fileManager.disconnectAll()
@@ -372,6 +373,7 @@ app.on('window-all-closed', () => {
 })
 
 app.on('before-quit', () => {
+  sessionLogStore.finalizeOrphanSessions()
   dataStore.close()
   sessionLogStore.close()
   portForwardManager.stopAll()

@@ -54,6 +54,26 @@ export class SessionLogStore {
     } catch {
       this.manifest = []
     }
+    // Previous run may have been force-killed while status was still "connected"
+    this.finalizeOrphanSessions()
+  }
+
+  /**
+   * Mark sessions that never got a clean endSession (force quit / crash)
+   * as disconnected so history doesn't stay stuck on「进行中」.
+   */
+  finalizeOrphanSessions(): void {
+    const now = new Date().toISOString()
+    let changed = false
+    for (const meta of this.manifest) {
+      if (meta.status === 'connecting' || meta.status === 'connected') {
+        meta.status = 'disconnected'
+        meta.endedAt = meta.endedAt ?? now
+        this.closeStream(meta.id)
+        changed = true
+      }
+    }
+    if (changed) this.saveManifest()
   }
 
   private saveManifest(): void {
@@ -204,7 +224,8 @@ export class SessionLogStore {
   }
 
   close(): void {
-    for (const sessionId of this.writeStreams.keys()) {
+    this.finalizeOrphanSessions()
+    for (const sessionId of [...this.writeStreams.keys()]) {
       this.closeStream(sessionId)
     }
   }
