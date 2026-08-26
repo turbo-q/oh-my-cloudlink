@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useI18n } from '../i18n/I18nProvider'
-import type { Host, PortForward, PortForwardRuntime } from '../types'
+import type { Host, PortForward, PortForwardRuntime, PortForwardType } from '../types'
 import { isSshHost } from '../types'
 
 interface PortForwardsPanelProps {
@@ -49,6 +49,36 @@ function statusColor(status: PortForwardRuntime['status'] | undefined): string {
       return 'bg-red-400'
     default:
       return 'bg-app-faint'
+  }
+}
+
+function forwardTypeLabel(type: PortForwardType, t: (key: string) => string): string {
+  if (type === 'local') return t('forwards.typeLocal')
+  if (type === 'remote') return t('forwards.typeRemote')
+  return t('forwards.typeDynamic')
+}
+
+function forwardTypeBadgeClass(type: PortForwardType): string {
+  switch (type) {
+    case 'local':
+      return 'bg-sky-500/15 text-sky-300 border-sky-500/35'
+    case 'remote':
+      return 'bg-violet-500/15 text-violet-300 border-violet-500/35'
+    case 'dynamic':
+      return 'bg-amber-500/15 text-amber-300 border-amber-500/35'
+  }
+}
+
+function statusBadgeClass(status: PortForwardRuntime['status'] | undefined): string {
+  switch (status) {
+    case 'running':
+      return 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+    case 'starting':
+      return 'bg-amber-500/15 text-amber-400 border-amber-500/30'
+    case 'error':
+      return 'bg-red-500/15 text-red-400 border-red-500/30'
+    default:
+      return 'bg-app-hover text-app-subtle border-app-strong'
   }
 }
 
@@ -180,17 +210,19 @@ export function PortForwardsPanel({
                   className="rounded-xl border border-app-strong bg-app-card px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-4"
                 >
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
+                    <div className="flex items-center flex-wrap gap-2 mb-1">
                       <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${statusColor(status)}`} />
                       <span className="text-sm font-medium text-app truncate">{f.name}</span>
-                      <span className="text-xs text-app-faint shrink-0">
-                        {f.type === 'local'
-                          ? t('forwards.typeLocal')
-                          : f.type === 'remote'
-                            ? t('forwards.typeRemote')
-                            : t('forwards.typeDynamic')}
+                      <span
+                        className={`text-[10px] font-semibold tracking-wide px-2 py-0.5 rounded-md border shrink-0 ${forwardTypeBadgeClass(f.type)}`}
+                      >
+                        {forwardTypeLabel(f.type, t)}
                       </span>
-                      <span className="text-xs text-app-subtle shrink-0">{statusLabel(status, t)}</span>
+                      <span
+                        className={`text-[10px] font-medium px-2 py-0.5 rounded-md border shrink-0 ${statusBadgeClass(status)}`}
+                      >
+                        {statusLabel(status, t)}
+                      </span>
                     </div>
                     <p className="text-xs text-app-muted truncate">
                       {hostName(f.hostId)} · {describeRule(f, rt?.boundPort)}
