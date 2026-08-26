@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import { useI18n } from '../i18n/I18nProvider'
 
 interface TerminalSearchBarProps {
   open: boolean

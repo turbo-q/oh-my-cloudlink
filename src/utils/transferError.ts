@@ -1,5 +1,5 @@
-/** Normalize IPC / Node transfer errors into short Chinese messages for the status bar. */
-export function formatTransferError(err: unknown): string {
+/** Normalize IPC / Node transfer errors into localized short messages. */
+export function formatTransferError(err: unknown, t: (key: string) => string): string {
   const code =
     err && typeof err === 'object' && 'code' in err
       ? String((err as { code?: unknown }).code ?? '')
@@ -14,33 +14,32 @@ export function formatTransferError(err: unknown): string {
     raw = String(err)
   }
 
-  // Electron invoke wrapper: Error invoking remote method 'file:download': ...
   raw = raw
     .replace(/^Error invoking remote method '[^']+':\s*/i, '')
     .replace(/^Error:\s*/i, '')
     .trim()
 
   if (code === 'ENOSPC' || /ENOSPC|no space left on device/i.test(raw)) {
-    return '磁盘空间不足，无法继续写入'
+    return t('files.errNoSpace')
   }
   if (code === 'EACCES' || code === 'EPERM' || /EACCES|EPERM|permission denied/i.test(raw)) {
-    return '没有文件读写权限'
+    return t('files.errPermission')
   }
   if (code === 'ENOENT' || /ENOENT|no such file/i.test(raw)) {
-    return '文件或目录不存在'
+    return t('files.errNotFound')
   }
   if (code === 'ENOTDIR' || /ENOTDIR/i.test(raw)) {
-    return '路径不是有效目录'
+    return t('files.errNotDir')
   }
   if (code === 'EEXIST' || /EEXIST|already exists/i.test(raw)) {
-    return '目标已存在'
+    return t('files.errExists')
   }
   if (/ECONNRESET|ECONNREFUSED|ETIMEDOUT|socket hang up|handshake/i.test(raw)) {
-    return '网络连接中断或超时'
+    return t('files.errNetwork')
   }
   if (/No such file|Failure/i.test(raw) && /sftp|ssh/i.test(raw)) {
-    return '远程文件操作失败'
+    return t('files.errRemoteOp')
   }
 
-  return raw || '未知错误'
+  return raw || t('files.errUnknown')
 }

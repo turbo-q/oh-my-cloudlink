@@ -9,19 +9,24 @@ import type {
   PortForwardType,
   Snippet,
 } from '../types'
-import { GROUP_COLORS, PORT_FORWARD_TYPE_LABELS, isSshHost } from '../types'
+import { GROUP_COLORS, isSshHost } from '../types'
 import { GroupCombobox } from './GroupCombobox'
+import { useI18n } from '../i18n/I18nProvider'
 
 function PasswordInput({
   value,
   onChange,
   placeholder,
   required,
+  showLabel,
+  hideLabel,
 }: {
   value: string
   onChange: (value: string) => void
   placeholder?: string
   required?: boolean
+  showLabel: string
+  hideLabel: string
 }) {
   const [visible, setVisible] = useState(false)
 
@@ -40,8 +45,8 @@ function PasswordInput({
         type="button"
         onClick={() => setVisible((v) => !v)}
         className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-md text-app-muted hover:text-app hover:bg-app-hover"
-        aria-label={visible ? '隐藏密码' : '显示密码'}
-        title={visible ? '隐藏密码' : '显示密码'}
+        aria-label={visible ? hideLabel : showLabel}
+        title={visible ? hideLabel : showLabel}
       >
         {visible ? (
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -82,6 +87,7 @@ const emptyForm = {
 }
 
 export function HostFormModal({ open, host, groups, keys, onSave, onCreateGroup, onClose }: HostFormModalProps) {
+  const { t } = useI18n()
   const [form, setForm] = useState(emptyForm)
   const [saving, setSaving] = useState(false)
 
@@ -138,7 +144,7 @@ export function HostFormModal({ open, host, groups, keys, onSave, onCreateGroup,
       <div className="bg-elevated border border-app-strong rounded-xl shadow-2xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between px-6 py-4 border-b border-app-strong">
           <h2 className="text-lg font-semibold text-app">
-            {host ? '编辑主机' : '添加主机'}
+            {host ? t('modal.hostEdit') : t('modal.hostAdd')}
           </h2>
           <button onClick={onClose} className="text-app-muted hover:text-app p-1">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -149,19 +155,19 @@ export function HostFormModal({ open, host, groups, keys, onSave, onCreateGroup,
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           <div>
-            <label className="block text-sm text-app-muted mb-1">名称</label>
+            <label className="block text-sm text-app-muted mb-1">{t('common.name')}</label>
             <input
               required
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
               className="input-field"
-              placeholder="生产服务器"
+              placeholder={t('modal.placeholderHostName')}
             />
           </div>
 
           <div className="grid grid-cols-3 gap-3">
             <div className="col-span-2">
-              <label className="block text-sm text-app-muted mb-1">主机地址</label>
+              <label className="block text-sm text-app-muted mb-1">{t('modal.labelHostname')}</label>
               <input
                 required
                 value={form.hostname}
@@ -171,7 +177,7 @@ export function HostFormModal({ open, host, groups, keys, onSave, onCreateGroup,
               />
             </div>
             <div>
-              <label className="block text-sm text-app-muted mb-1">端口</label>
+              <label className="block text-sm text-app-muted mb-1">{t('modal.labelPort')}</label>
               <input
                 type="number"
                 required
@@ -185,7 +191,7 @@ export function HostFormModal({ open, host, groups, keys, onSave, onCreateGroup,
           </div>
 
           <div>
-            <label className="block text-sm text-app-muted mb-1">用户名</label>
+            <label className="block text-sm text-app-muted mb-1">{t('modal.labelUsername')}</label>
             <input
               required
               value={form.username}
@@ -196,7 +202,7 @@ export function HostFormModal({ open, host, groups, keys, onSave, onCreateGroup,
           </div>
 
           <div>
-            <label className="block text-sm text-app-muted mb-1">认证方式</label>
+            <label className="block text-sm text-app-muted mb-1">{t('modal.labelAuth')}</label>
             <div className="flex gap-2">
               {(['password', 'key'] as AuthType[]).map((type) => (
                 <button
@@ -209,7 +215,7 @@ export function HostFormModal({ open, host, groups, keys, onSave, onCreateGroup,
                       : 'bg-app-hover text-app-muted border border-transparent hover:bg-app-hover-strong'
                   }`}
                 >
-                  {type === 'password' ? '密码' : 'SSH 密钥'}
+                  {type === 'password' ? t('modal.authPassword') : t('modal.authKey')}
                 </button>
               ))}
             </div>
@@ -217,23 +223,25 @@ export function HostFormModal({ open, host, groups, keys, onSave, onCreateGroup,
 
           {form.authType === 'password' ? (
             <div>
-              <label className="block text-sm text-app-muted mb-1">密码</label>
+              <label className="block text-sm text-app-muted mb-1">{t('modal.labelPassword')}</label>
               <PasswordInput
                 value={form.password}
                 onChange={(password) => setForm({ ...form, password })}
                 placeholder="••••••••"
+                showLabel={t('modal.showPassword')}
+                hideLabel={t('modal.hidePassword')}
               />
             </div>
           ) : (
             <div>
-              <label className="block text-sm text-app-muted mb-1">选择密钥</label>
+              <label className="block text-sm text-app-muted mb-1">{t('modal.labelSelectKey')}</label>
               <select
                 value={form.keyId}
                 onChange={(e) => setForm({ ...form, keyId: e.target.value })}
                 className="input-field"
                 required
               >
-                <option value="">请选择密钥</option>
+                <option value="">{t('modal.selectKeyPlaceholder')}</option>
                 {keys.map((k) => (
                   <option key={k.id} value={k.id}>
                     {k.name}
@@ -241,13 +249,13 @@ export function HostFormModal({ open, host, groups, keys, onSave, onCreateGroup,
                 ))}
               </select>
               {keys.length === 0 && (
-                <p className="text-xs text-app-subtle mt-1">请先在「密钥管理」中添加 SSH 密钥</p>
+                <p className="text-xs text-app-subtle mt-1">{t('modal.noKeysHint')}</p>
               )}
             </div>
           )}
 
           <div>
-            <label className="block text-sm text-app-muted mb-1">分组</label>
+            <label className="block text-sm text-app-muted mb-1">{t('modal.labelGroup')}</label>
             <GroupCombobox
               groupId={form.groupId}
               groups={groups}
@@ -257,31 +265,31 @@ export function HostFormModal({ open, host, groups, keys, onSave, onCreateGroup,
           </div>
 
           <div>
-            <label className="block text-sm text-app-muted mb-1">标签（逗号分隔）</label>
+            <label className="block text-sm text-app-muted mb-1">{t('modal.labelTags')}</label>
             <input
               value={form.tags}
               onChange={(e) => setForm({ ...form, tags: e.target.value })}
               className="input-field"
-              placeholder="生产, web, nginx"
+              placeholder={t('modal.placeholderTags')}
             />
           </div>
 
           <div>
-            <label className="block text-sm text-app-muted mb-1">备注</label>
+            <label className="block text-sm text-app-muted mb-1">{t('modal.labelNotes')}</label>
             <textarea
               value={form.notes}
               onChange={(e) => setForm({ ...form, notes: e.target.value })}
               className="input-field resize-none h-20"
-              placeholder="可选备注信息..."
+              placeholder={t('modal.placeholderNotes')}
             />
           </div>
 
           <div className="flex gap-3 pt-2">
             <button type="button" onClick={onClose} className="btn-secondary flex-1">
-              取消
+              {t('modal.cancel')}
             </button>
             <button type="submit" disabled={saving} className="btn-primary flex-1">
-              {saving ? '保存中...' : '保存'}
+              {saving ? t('modal.saving') : t('modal.save')}
             </button>
           </div>
         </form>
@@ -298,6 +306,7 @@ interface GroupFormModalProps {
 }
 
 export function GroupFormModal({ open, group, onSave, onClose }: GroupFormModalProps) {
+  const { t } = useI18n()
   const [name, setName] = useState('')
   const [color, setColor] = useState(GROUP_COLORS[0])
   const [saving, setSaving] = useState(false)
@@ -329,21 +338,21 @@ export function GroupFormModal({ open, group, onSave, onClose }: GroupFormModalP
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--app-overlay)] backdrop-blur-sm">
       <div className="bg-elevated border border-app-strong rounded-xl shadow-2xl w-full max-w-sm mx-4">
         <div className="px-6 py-4 border-b border-app-strong">
-          <h2 className="text-lg font-semibold text-app">{group ? '编辑分组' : '新建分组'}</h2>
+          <h2 className="text-lg font-semibold text-app">{group ? t('modal.groupEdit') : t('modal.groupNew')}</h2>
         </div>
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           <div>
-            <label className="block text-sm text-app-muted mb-1">分组名称</label>
+            <label className="block text-sm text-app-muted mb-1">{t('modal.labelGroupName')}</label>
             <input
               required
               value={name}
               onChange={(e) => setName(e.target.value)}
               className="input-field"
-              placeholder="生产环境"
+              placeholder={t('modal.placeholderGroupName')}
             />
           </div>
           <div>
-            <label className="block text-sm text-app-muted mb-2">颜色</label>
+            <label className="block text-sm text-app-muted mb-2">{t('modal.labelColor')}</label>
             <div className="flex flex-wrap gap-2">
               {GROUP_COLORS.map((c) => (
                 <button
@@ -360,10 +369,10 @@ export function GroupFormModal({ open, group, onSave, onClose }: GroupFormModalP
           </div>
           <div className="flex gap-3">
             <button type="button" onClick={onClose} className="btn-secondary flex-1">
-              取消
+              {t('modal.cancel')}
             </button>
             <button type="submit" disabled={saving} className="btn-primary flex-1">
-              {saving ? '保存中...' : '保存'}
+              {saving ? t('modal.saving') : t('modal.save')}
             </button>
           </div>
         </form>
@@ -380,6 +389,7 @@ interface KeyFormModalProps {
 }
 
 export function KeyFormModal({ open, keyItem, onSave, onClose }: KeyFormModalProps) {
+  const { t } = useI18n()
   const [name, setName] = useState('')
   const [privateKey, setPrivateKey] = useState('')
   const [publicKey, setPublicKey] = useState('')
@@ -402,8 +412,11 @@ export function KeyFormModal({ open, keyItem, onSave, onClose }: KeyFormModalPro
 
   const handleImportFromFile = async () => {
     const files = await window.electronAPI.openFileDialog({
-      title: '选择 SSH 私钥文件',
-      filters: [{ name: 'SSH 密钥', extensions: ['pem', 'key'] }, { name: '所有文件', extensions: ['*'] }],
+      title: t('modal.dialogSelectKey'),
+      filters: [
+        { name: t('modal.filterSshKey'), extensions: ['pem', 'key'] },
+        { name: t('modal.filterAllFiles'), extensions: ['*'] },
+      ],
     })
     if (!files?.[0]) return
     try {
@@ -412,7 +425,7 @@ export function KeyFormModal({ open, keyItem, onSave, onClose }: KeyFormModalPro
       setPrivateKey(key.privateKey)
       setPublicKey(key.publicKey ?? '')
     } catch (err) {
-      alert(`读取失败: ${(err as Error).message}`)
+      alert(t('modal.readFail', { message: (err as Error).message }))
     }
   }
 
@@ -439,7 +452,7 @@ export function KeyFormModal({ open, keyItem, onSave, onClose }: KeyFormModalPro
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--app-overlay)] backdrop-blur-sm">
       <div className="bg-elevated border border-app-strong rounded-xl shadow-2xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
         <div className="px-6 py-4 border-b border-app-strong">
-          <h2 className="text-lg font-semibold text-app">{keyItem ? '编辑密钥' : '添加 SSH 密钥'}</h2>
+          <h2 className="text-lg font-semibold text-app">{keyItem ? t('modal.keyEdit') : t('modal.keyNew')}</h2>
         </div>
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           {!keyItem && (
@@ -448,21 +461,21 @@ export function KeyFormModal({ open, keyItem, onSave, onClose }: KeyFormModalPro
               onClick={() => void handleImportFromFile()}
               className="btn-secondary w-full text-sm"
             >
-              从文件导入私钥
+              {t('modal.importFromFile')}
             </button>
           )}
           <div>
-            <label className="block text-sm text-app-muted mb-1">密钥名称</label>
+            <label className="block text-sm text-app-muted mb-1">{t('modal.labelKeyName')}</label>
             <input
               required
               value={name}
               onChange={(e) => setName(e.target.value)}
               className="input-field"
-              placeholder="我的 RSA 密钥"
+              placeholder={t('modal.placeholderKeyName')}
             />
           </div>
           <div>
-            <label className="block text-sm text-app-muted mb-1">私钥内容</label>
+            <label className="block text-sm text-app-muted mb-1">{t('modal.labelPrivateKey')}</label>
             <textarea
               required
               value={privateKey}
@@ -472,7 +485,7 @@ export function KeyFormModal({ open, keyItem, onSave, onClose }: KeyFormModalPro
             />
           </div>
           <div>
-            <label className="block text-sm text-app-muted mb-1">公钥（可选）</label>
+            <label className="block text-sm text-app-muted mb-1">{t('modal.labelPublicKey')}</label>
             <textarea
               value={publicKey}
               onChange={(e) => setPublicKey(e.target.value)}
@@ -481,15 +494,20 @@ export function KeyFormModal({ open, keyItem, onSave, onClose }: KeyFormModalPro
             />
           </div>
           <div>
-            <label className="block text-sm text-app-muted mb-1">密钥口令（可选）</label>
-            <PasswordInput value={passphrase} onChange={setPassphrase} />
+            <label className="block text-sm text-app-muted mb-1">{t('modal.labelPassphrase')}</label>
+            <PasswordInput
+              value={passphrase}
+              onChange={setPassphrase}
+              showLabel={t('modal.showPassword')}
+              hideLabel={t('modal.hidePassword')}
+            />
           </div>
           <div className="flex gap-3">
             <button type="button" onClick={onClose} className="btn-secondary flex-1">
-              取消
+              {t('modal.cancel')}
             </button>
             <button type="submit" disabled={saving} className="btn-primary flex-1">
-              {saving ? '保存中...' : '保存'}
+              {saving ? t('modal.saving') : t('modal.save')}
             </button>
           </div>
         </form>
@@ -506,6 +524,7 @@ interface DiscoverKeysModalProps {
 }
 
 export function DiscoverKeysModal({ open, existingKeys, onImport, onClose }: DiscoverKeysModalProps) {
+  const { t } = useI18n()
   const [discovered, setDiscovered] = useState<DiscoveredKey[]>([])
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(false)
@@ -548,7 +567,7 @@ export function DiscoverKeysModal({ open, existingKeys, onImport, onClose }: Dis
   const handleImport = async () => {
     const toImport = discovered.filter((k) => selected.has(k.filePath) && !isImported(k))
     if (toImport.length === 0) {
-      alert('请选择尚未导入的密钥')
+      alert(t('modal.selectKeysAlert'))
       return
     }
 
@@ -565,15 +584,15 @@ export function DiscoverKeysModal({ open, existingKeys, onImport, onClose }: Dis
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--app-overlay)] backdrop-blur-sm">
       <div className="bg-elevated border border-app-strong rounded-xl shadow-2xl w-full max-w-lg mx-4 max-h-[85vh] flex flex-col">
         <div className="px-6 py-4 border-b border-app-strong shrink-0">
-          <h2 className="text-lg font-semibold text-app">发现本机 SSH 密钥</h2>
-          <p className="text-xs text-app-subtle mt-1">扫描 ~/.ssh 目录及 config 中的 IdentityFile</p>
+          <h2 className="text-lg font-semibold text-app">{t('modal.discoverTitle')}</h2>
+          <p className="text-xs text-app-subtle mt-1">{t('modal.discoverHint')}</p>
         </div>
 
         <div className="flex-1 overflow-y-auto p-4">
-          {loading && <p className="text-center text-app-subtle py-8">正在扫描...</p>}
+          {loading && <p className="text-center text-app-subtle py-8">{t('modal.scanning')}</p>}
           {error && <p className="text-center text-red-400 py-8">{error}</p>}
           {!loading && !error && discovered.length === 0 && (
-            <p className="text-center text-app-subtle py-8">未在 ~/.ssh 中发现私钥文件</p>
+            <p className="text-center text-app-subtle py-8">{t('modal.noKeysFound')}</p>
           )}
           {!loading && discovered.length > 0 && (
             <div className="space-y-2">
@@ -600,12 +619,12 @@ export function DiscoverKeysModal({ open, existingKeys, onImport, onClose }: Dis
                         <span className="text-sm font-medium text-app">{key.name}</span>
                         {imported && (
                           <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-700 text-app-muted">
-                            已导入
+                            {t('modal.imported')}
                           </span>
                         )}
                         {key.publicKey && (
                           <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400">
-                            含公钥
+                            {t('modal.hasPublicKey')}
                           </span>
                         )}
                       </div>
@@ -620,7 +639,7 @@ export function DiscoverKeysModal({ open, existingKeys, onImport, onClose }: Dis
 
         <div className="px-6 py-4 border-t border-app-strong flex gap-3 shrink-0">
           <button type="button" onClick={onClose} className="btn-secondary flex-1">
-            取消
+            {t('modal.cancel')}
           </button>
           <button
             type="button"
@@ -628,7 +647,7 @@ export function DiscoverKeysModal({ open, existingKeys, onImport, onClose }: Dis
             onClick={() => void handleImport()}
             className="btn-primary flex-1"
           >
-            {importing ? '导入中...' : `导入选中 (${selected.size})`}
+            {importing ? t('modal.importing') : t('modal.importSelected', { n: selected.size })}
           </button>
         </div>
       </div>
@@ -661,6 +680,7 @@ export function PortForwardFormModal({
   onSave,
   onClose,
 }: PortForwardFormModalProps) {
+  const { t } = useI18n()
   const sshHosts = hosts.filter(isSshHost)
   const [name, setName] = useState('')
   const [hostId, setHostId] = useState('')
@@ -699,10 +719,16 @@ export function PortForwardFormModal({
 
   if (!open) return null
 
+  const forwardTypeLabel = (forwardType: PortForwardType) => {
+    if (forwardType === 'local') return t('forwards.typeLocal')
+    if (forwardType === 'remote') return t('forwards.typeRemote')
+    return t('forwards.typeDynamic')
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!hostId) {
-      alert('请选择主机')
+      alert(t('modal.selectHostAlert'))
       return
     }
     setSaving(true)
@@ -710,7 +736,7 @@ export function PortForwardFormModal({
       await onSave({
         id: forward?.id,
         hostId,
-        name: name.trim() || PORT_FORWARD_TYPE_LABELS[type],
+        name: name.trim() || forwardTypeLabel(type),
         type,
         localHost: localHost.trim() || '127.0.0.1',
         localPort: Number(localPort) || 0,
@@ -729,21 +755,21 @@ export function PortForwardFormModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--app-overlay)] backdrop-blur-sm">
       <div className="bg-elevated border border-app-strong rounded-xl shadow-2xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
         <div className="px-6 py-4 border-b border-app-strong">
-          <h2 className="text-lg font-semibold text-app">{forward ? '编辑转发规则' : '新建端口转发'}</h2>
+          <h2 className="text-lg font-semibold text-app">{forward ? t('modal.forwardEdit') : t('modal.forwardNew')}</h2>
         </div>
         <form onSubmit={(e) => void handleSubmit(e)} className="p-6 space-y-4">
           <div>
-            <label className="block text-sm text-app-muted mb-1">名称</label>
+            <label className="block text-sm text-app-muted mb-1">{t('common.name')}</label>
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
               className="input-field"
-              placeholder="例如：MySQL / SOCKS 代理"
+              placeholder={t('modal.placeholderForwardName')}
             />
           </div>
 
           <div>
-            <label className="block text-sm text-app-muted mb-1">关联主机</label>
+            <label className="block text-sm text-app-muted mb-1">{t('modal.labelLinkedHost')}</label>
             <select
               required
               value={hostId}
@@ -759,20 +785,20 @@ export function PortForwardFormModal({
           </div>
 
           <div>
-            <label className="block text-sm text-app-muted mb-2">转发类型</label>
+            <label className="block text-sm text-app-muted mb-2">{t('modal.labelForwardType')}</label>
             <div className="flex flex-wrap gap-2">
-              {(['local', 'remote', 'dynamic'] as PortForwardType[]).map((t) => (
+              {(['local', 'remote', 'dynamic'] as PortForwardType[]).map((forwardType) => (
                 <button
-                  key={t}
+                  key={forwardType}
                   type="button"
-                  onClick={() => setType(t)}
+                  onClick={() => setType(forwardType)}
                   className={`px-3 py-1.5 rounded-lg text-xs border transition-colors ${
-                    type === t
+                    type === forwardType
                       ? 'border-emerald-500/50 bg-emerald-500/15 text-emerald-300'
                       : 'border-app bg-app-hover text-app-muted hover:text-app'
                   }`}
                 >
-                  {PORT_FORWARD_TYPE_LABELS[t]}
+                  {forwardTypeLabel(forwardType)}
                 </button>
               ))}
             </div>
@@ -780,14 +806,14 @@ export function PortForwardFormModal({
 
           {type === 'local' && (
             <>
-              <p className="text-xs text-app-faint">本机访问本地端口 → 经 SSH 转到远端目标</p>
+              <p className="text-xs text-app-faint">{t('modal.localHint')}</p>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm text-app-muted mb-1">本机地址</label>
+                  <label className="block text-sm text-app-muted mb-1">{t('modal.labelLocalHost')}</label>
                   <input value={localHost} onChange={(e) => setLocalHost(e.target.value)} className="input-field" />
                 </div>
                 <div>
-                  <label className="block text-sm text-app-muted mb-1">本机端口</label>
+                  <label className="block text-sm text-app-muted mb-1">{t('modal.labelLocalPort')}</label>
                   <input
                     type="number"
                     min={0}
@@ -796,12 +822,12 @@ export function PortForwardFormModal({
                     onChange={(e) => setLocalPort(Number(e.target.value))}
                     className="input-field"
                   />
-                  <p className="text-[10px] text-app-faint mt-1">填 0 由系统分配</p>
+                  <p className="text-[10px] text-app-faint mt-1">{t('modal.portAutoHint')}</p>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm text-app-muted mb-1">远端目标主机</label>
+                  <label className="block text-sm text-app-muted mb-1">{t('modal.labelRemoteTargetHost')}</label>
                   <input
                     required
                     value={remoteHost}
@@ -811,7 +837,7 @@ export function PortForwardFormModal({
                   />
                 </div>
                 <div>
-                  <label className="block text-sm text-app-muted mb-1">远端目标端口</label>
+                  <label className="block text-sm text-app-muted mb-1">{t('modal.labelRemoteTargetPort')}</label>
                   <input
                     type="number"
                     required
@@ -828,19 +854,19 @@ export function PortForwardFormModal({
 
           {type === 'remote' && (
             <>
-              <p className="text-xs text-app-faint">远端机器访问远端端口 → 转到本机服务</p>
+              <p className="text-xs text-app-faint">{t('modal.remoteHint')}</p>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm text-app-muted mb-1">远端监听地址</label>
+                  <label className="block text-sm text-app-muted mb-1">{t('modal.labelRemoteListenHost')}</label>
                   <input
                     value={remoteHost}
                     onChange={(e) => setRemoteHost(e.target.value)}
                     className="input-field"
-                    placeholder="127.0.0.1 或 0.0.0.0"
+                    placeholder={t('modal.placeholderRemoteListen')}
                   />
                 </div>
                 <div>
-                  <label className="block text-sm text-app-muted mb-1">远端监听端口</label>
+                  <label className="block text-sm text-app-muted mb-1">{t('modal.labelRemoteListenPort')}</label>
                   <input
                     type="number"
                     required
@@ -854,11 +880,11 @@ export function PortForwardFormModal({
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm text-app-muted mb-1">本机目标地址</label>
+                  <label className="block text-sm text-app-muted mb-1">{t('modal.labelLocalTargetHost')}</label>
                   <input value={localHost} onChange={(e) => setLocalHost(e.target.value)} className="input-field" />
                 </div>
                 <div>
-                  <label className="block text-sm text-app-muted mb-1">本机目标端口</label>
+                  <label className="block text-sm text-app-muted mb-1">{t('modal.labelLocalTargetPort')}</label>
                   <input
                     type="number"
                     required
@@ -875,14 +901,14 @@ export function PortForwardFormModal({
 
           {type === 'dynamic' && (
             <>
-              <p className="text-xs text-app-faint">在本机开启 SOCKS5 代理，流量经 SSH 出口</p>
+              <p className="text-xs text-app-faint">{t('modal.dynamicHint')}</p>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm text-app-muted mb-1">监听地址</label>
+                  <label className="block text-sm text-app-muted mb-1">{t('modal.labelListenHost')}</label>
                   <input value={localHost} onChange={(e) => setLocalHost(e.target.value)} className="input-field" />
                 </div>
                 <div>
-                  <label className="block text-sm text-app-muted mb-1">监听端口</label>
+                  <label className="block text-sm text-app-muted mb-1">{t('modal.labelListenPort')}</label>
                   <input
                     type="number"
                     min={0}
@@ -891,7 +917,7 @@ export function PortForwardFormModal({
                     onChange={(e) => setLocalPort(Number(e.target.value))}
                     className="input-field"
                   />
-                  <p className="text-[10px] text-app-faint mt-1">常用 1080；填 0 由系统分配</p>
+                  <p className="text-[10px] text-app-faint mt-1">{t('modal.dynamicPortHint')}</p>
                 </div>
               </div>
             </>
@@ -899,10 +925,10 @@ export function PortForwardFormModal({
 
           <div className="flex gap-3 pt-2">
             <button type="button" onClick={onClose} className="btn-secondary flex-1">
-              取消
+              {t('modal.cancel')}
             </button>
             <button type="submit" disabled={saving || sshHosts.length === 0} className="btn-primary flex-1">
-              {saving ? '保存中...' : '保存'}
+              {saving ? t('modal.saving') : t('modal.save')}
             </button>
           </div>
         </form>
@@ -928,6 +954,7 @@ export function SnippetFormModal({
   onSave,
   onClose,
 }: SnippetFormModalProps) {
+  const { t } = useI18n()
   const [name, setName] = useState('')
   const [command, setCommand] = useState('')
   const [scopeAll, setScopeAll] = useState(true)
@@ -967,11 +994,11 @@ export function SnippetFormModal({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!command.trim()) {
-      alert('请填写命令内容')
+      alert(t('modal.commandRequired'))
       return
     }
     if (!scopeAll && selectedHostIds.length === 0) {
-      alert('请至少选择一台主机，或改为「全部主机可用」')
+      alert(t('modal.scopeRequired'))
       return
     }
     setSaving(true)
@@ -998,21 +1025,21 @@ export function SnippetFormModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--app-overlay)] backdrop-blur-sm">
       <div className="bg-elevated border border-app-strong rounded-xl shadow-2xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
         <div className="px-6 py-4 border-b border-app-strong">
-          <h2 className="text-lg font-semibold text-app">{snippet ? '编辑命令片段' : '新建命令片段'}</h2>
+          <h2 className="text-lg font-semibold text-app">{snippet ? t('modal.snippetEdit') : t('modal.snippetNew')}</h2>
         </div>
         <form onSubmit={(e) => void handleSubmit(e)} className="p-6 space-y-4">
           <div>
-            <label className="block text-sm text-app-muted mb-1">名称</label>
+            <label className="block text-sm text-app-muted mb-1">{t('common.name')}</label>
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
               className="input-field"
-              placeholder="例如：查看 Docker / Nginx 日志"
+              placeholder={t('modal.placeholderSnippetName')}
             />
           </div>
 
           <div>
-            <label className="block text-sm text-app-muted mb-1">命令内容</label>
+            <label className="block text-sm text-app-muted mb-1">{t('modal.labelCommand')}</label>
             <textarea
               required
               value={command}
@@ -1020,16 +1047,12 @@ export function SnippetFormModal({
               className="input-field font-mono text-xs h-36"
               placeholder={'cd /var/log\ntail -f nginx/error.log'}
             />
-            <p className="text-[10px] text-app-faint mt-1">
-              可用 {'{{hostname}}'} / {'{{hostName}}'} / {'{{username}}'} 占位符
-            </p>
+            <p className="text-[10px] text-app-faint mt-1">{t('modal.placeholdersHint')}</p>
           </div>
 
           <div>
-            <label className="block text-sm text-app-muted mb-2">作用范围</label>
-            <p className="text-[11px] text-app-faint mb-2">
-              只决定「在哪些主机的终端选择器里能看到这条」；插入时仍只写入你指定的那一个 SSH 标签。
-            </p>
+            <label className="block text-sm text-app-muted mb-2">{t('modal.labelScope')}</label>
+            <p className="text-[11px] text-app-faint mb-2">{t('modal.scopeHelp')}</p>
             <div className="space-y-2">
               <label className="flex items-center gap-2 text-sm text-app cursor-pointer">
                 <input
@@ -1040,7 +1063,7 @@ export function SnippetFormModal({
                     setSelectedHostIds([])
                   }}
                 />
-                全部主机可用
+                {t('modal.scopeAllHosts')}
               </label>
               <label className="flex items-center gap-2 text-sm text-app cursor-pointer">
                 <input
@@ -1048,13 +1071,13 @@ export function SnippetFormModal({
                   checked={!scopeAll}
                   onChange={() => setScopeAll(false)}
                 />
-                仅以下主机（可多选）
+                {t('modal.scopeSelectedHosts')}
               </label>
             </div>
             {!scopeAll && (
               <div className="mt-2 max-h-40 overflow-y-auto rounded-lg border border-app p-2 space-y-1">
                 {hosts.length === 0 ? (
-                  <p className="text-xs text-app-subtle px-1 py-2">暂无主机</p>
+                  <p className="text-xs text-app-subtle px-1 py-2">{t('modal.noHosts')}</p>
                 ) : (
                   hosts.map((h) => (
                     <label
@@ -1080,21 +1103,21 @@ export function SnippetFormModal({
           </div>
 
           <div>
-            <label className="block text-sm text-app-muted mb-1">标签（逗号分隔，可选）</label>
+            <label className="block text-sm text-app-muted mb-1">{t('modal.labelTagsOptional')}</label>
             <input
               value={tags}
               onChange={(e) => setTags(e.target.value)}
               className="input-field"
-              placeholder="docker, 日志"
+              placeholder={t('modal.placeholderSnippetTags')}
             />
           </div>
 
           <div className="flex gap-3 pt-2">
             <button type="button" onClick={onClose} className="btn-secondary flex-1">
-              取消
+              {t('modal.cancel')}
             </button>
             <button type="submit" disabled={saving} className="btn-primary flex-1">
-              {saving ? '保存中...' : '保存'}
+              {saving ? t('modal.saving') : t('modal.save')}
             </button>
           </div>
         </form>

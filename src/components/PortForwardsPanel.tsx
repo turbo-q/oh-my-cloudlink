@@ -66,8 +66,8 @@ export function PortForwardsPanel({
   const sshHosts = useMemo(() => hosts.filter(isSshHost), [hosts])
   const hostName = useMemo(() => {
     const map = new Map(hosts.map((h) => [h.id, h.name]))
-    return (id: string) => map.get(id) ?? '未知主机'
-  }, [hosts])
+    return (id: string) => map.get(id) ?? t('common.unknownHost')
+  }, [hosts, t])
 
   useEffect(() => {
     void window.electronAPI.forwardList().then((list) => {
@@ -116,7 +116,7 @@ export function PortForwardsPanel({
   }
 
   const handleStopAll = async () => {
-    if (!confirm('停止全部正在运行的端口转发？')) return
+    if (!confirm(t('forwards.stopAllConfirm'))) return
     await window.electronAPI.forwardStopAll()
     setRuntime({})
   }
@@ -143,7 +143,7 @@ export function PortForwardsPanel({
             onClick={onAdd}
             className="btn-primary text-sm px-4 py-2"
             disabled={sshHosts.length === 0}
-            title={sshHosts.length === 0 ? '请先添加 SSH 主机' : undefined}
+            title={sshHosts.length === 0 ? t('forwards.needSsh') : undefined}
           >
             {t('forwards.newRule')}
           </button>
@@ -163,7 +163,7 @@ export function PortForwardsPanel({
               {t('forwards.emptyHint')}
             </p>
             <button onClick={onAdd} className="btn-primary text-sm px-4 py-2">
-              + 新建规则
+              {t('forwards.newRule')}
             </button>
           </div>
         ) : (
@@ -194,7 +194,7 @@ export function PortForwardsPanel({
                     </div>
                     <p className="text-xs text-app-muted truncate">
                       {hostName(f.hostId)} · {describeRule(f, rt?.boundPort)}
-                      {rt && rt.connections > 0 ? ` · ${rt.connections} 连接` : ''}
+                      {rt && rt.connections > 0 ? t('forwards.connections', { n: rt.connections }) : ''}
                     </p>
                     {status === 'error' && rt?.error && (
                       <p className="text-xs text-red-400 mt-1 truncate">{rt.error}</p>
@@ -223,7 +223,7 @@ export function PortForwardsPanel({
                       className="text-xs text-app-muted hover:text-app px-2 py-1.5"
                       onClick={() => onEdit(f)}
                       disabled={running}
-                      title={running ? '请先停止后再编辑' : '编辑'}
+                      title={running ? t('forwards.editDisabled') : t('common.edit')}
                     >
                       {t('common.edit')}
                     </button>
@@ -241,19 +241,10 @@ export function PortForwardsPanel({
         )}
 
         <div className="mt-10 max-w-4xl rounded-xl border border-app-strong bg-app-card/60 p-5 text-sm text-app-subtle space-y-2">
-          <p className="text-app-muted font-medium">说明</p>
-          <p>
-            <span className="text-app-secondary">本地转发</span>
-            ：访问本机端口，流量经 SSH 转到远端服务（如访问服务器上的数据库）。
-          </p>
-          <p>
-            <span className="text-app-secondary">远程转发</span>
-            ：远端机器访问你指定的远端端口时，流量转到本机服务（需服务器允许 GatewayPorts）。
-          </p>
-          <p>
-            <span className="text-app-secondary">动态 SOCKS5</span>
-            ：本机开一个 SOCKS5 代理，浏览器/工具走代理即可访问远端网络。
-          </p>
+          <p className="text-app-muted font-medium">{t('forwards.helpTitle')}</p>
+          <p>{t('forwards.helpLocal')}</p>
+          <p>{t('forwards.helpRemote')}</p>
+          <p>{t('forwards.helpDynamic')}</p>
         </div>
       </div>
     </div>

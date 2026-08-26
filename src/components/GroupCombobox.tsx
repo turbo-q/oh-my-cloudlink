@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Group } from '../types'
+import { useI18n } from '../i18n/I18nProvider'
 
 interface GroupComboboxProps {
   groupId: string
@@ -9,6 +10,7 @@ interface GroupComboboxProps {
 }
 
 export function GroupCombobox({ groupId, groups, onChange, onCreateGroup }: GroupComboboxProps) {
+  const { t } = useI18n()
   const [input, setInput] = useState('')
   const [open, setOpen] = useState(false)
   const [filtering, setFiltering] = useState(false)
@@ -25,7 +27,6 @@ export function GroupCombobox({ groupId, groups, onChange, onCreateGroup }: Grou
     const handleClickOutside = (e: MouseEvent) => {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
         setOpen(false)
-        // 关闭时若未选中有效分组，恢复为当前 groupId 对应名称
         const group = groups.find((g) => g.id === groupId)
         setInput(group?.name ?? '')
         setFiltering(false)
@@ -37,7 +38,6 @@ export function GroupCombobox({ groupId, groups, onChange, onCreateGroup }: Grou
 
   const trimmed = input.trim()
   const exactMatch = groups.find((g) => g.name === trimmed)
-  // 编辑时输入框已填当前分组名；聚焦展开应展示全部，仅在用户主动输入后才过滤
   const filtered = filtering && trimmed
     ? groups.filter((g) => g.name.toLowerCase().includes(trimmed.toLowerCase()))
     : groups
@@ -90,7 +90,7 @@ export function GroupCombobox({ groupId, groups, onChange, onCreateGroup }: Grou
           if (e.key === 'Escape') setOpen(false)
         }}
         className="input-field"
-        placeholder={groups.length === 0 ? '输入分组名，回车创建' : '选择或输入新分组'}
+        placeholder={groups.length === 0 ? t('group.placeholderEmpty') : t('group.placeholderSelect')}
       />
 
       {open && (filtered.length > 0 || showCreate || !trimmed || !filtering) && (
@@ -101,7 +101,7 @@ export function GroupCombobox({ groupId, groups, onChange, onCreateGroup }: Grou
               onClick={clearGroup}
               className="w-full px-3 py-2 text-left text-sm text-app-muted hover:bg-app-hover"
             >
-              无分组
+              {t('group.none')}
             </button>
           )}
           {filtered.map((g) => (
@@ -122,7 +122,7 @@ export function GroupCombobox({ groupId, groups, onChange, onCreateGroup }: Grou
               onClick={() => void handleCreate()}
               className="w-full px-3 py-2 text-left text-sm text-emerald-400 hover:bg-emerald-500/10 border-t border-app"
             >
-              {creating ? '创建中...' : `创建分组「${trimmed}」`}
+              {creating ? t('group.creating') : t('group.createNamed', { name: trimmed })}
             </button>
           )}
         </div>

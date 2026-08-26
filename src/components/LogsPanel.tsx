@@ -71,9 +71,9 @@ export function LogsPanel() {
       })
     } catch (err) {
       console.error(err)
-      setMessage('读取日志列表失败')
+      setMessage(t('logs.listFail'))
     }
-  }, [])
+  }, [t])
 
   useEffect(() => {
     void refresh()
@@ -96,10 +96,10 @@ export function LogsPanel() {
     try {
       await window.electronAPI.logsDelete(id)
       if (selectedId === id) setSelectedId(null)
-      setMessage('已删除')
+      setMessage(t('logs.deleted'))
       await refresh()
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : '删除失败')
+      setMessage(err instanceof Error ? err.message : t('logs.deleteFail'))
     } finally {
       setBusy(false)
     }
@@ -111,10 +111,10 @@ export function LogsPanel() {
     try {
       await window.electronAPI.logsClear()
       setSelectedId(null)
-      setMessage('已清空')
+      setMessage(t('logs.cleared'))
       await refresh()
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : '清空失败')
+      setMessage(err instanceof Error ? err.message : t('logs.clearFail'))
     } finally {
       setBusy(false)
     }
@@ -130,7 +130,7 @@ export function LogsPanel() {
       <div className="flex-1 flex min-h-0">
         <aside className="w-80 shrink-0 border-r border-app flex flex-col min-h-0">
           <div className="shrink-0 flex items-center justify-between gap-2 px-4 py-3 border-b border-app">
-            <span className="text-sm text-app-muted">最近 {logs.length} 条</span>
+            <span className="text-sm text-app-muted">{t('logs.recentCount', { n: logs.length })}</span>
             <div className="flex gap-2">
               <button
                 type="button"
@@ -138,7 +138,7 @@ export function LogsPanel() {
                 onClick={() => void refresh()}
                 className="text-xs text-app-subtle hover:text-app disabled:opacity-50"
               >
-                刷新
+                {t('common.refresh')}
               </button>
               <button
                 type="button"
@@ -153,7 +153,7 @@ export function LogsPanel() {
 
           <div className="flex-1 overflow-y-auto">
             {logs.length === 0 ? (
-              <p className="px-4 py-8 text-sm text-app-subtle">暂无连接日志。连接 SSH 主机后会自动记录。</p>
+              <p className="px-4 py-8 text-sm text-app-subtle">{t('logs.emptyList')}</p>
             ) : (
               <ul className="divide-y divide-app">
                 {logs.map((log) => (
@@ -205,7 +205,7 @@ export function LogsPanel() {
                   onClick={() => void handleDelete(selected.id)}
                   className="text-xs text-app-subtle hover:text-red-400 disabled:opacity-50"
                 >
-                  删除此日志
+                  {t('logs.deleteThis')}
                 </button>
               </div>
               <div className="flex-1 min-h-0">
@@ -219,7 +219,7 @@ export function LogsPanel() {
             </>
           ) : (
             <div className="flex-1 flex items-center justify-center text-app-subtle text-sm">
-              选择左侧一条连接记录查看日志
+              {t('logs.viewerEmpty')}
             </div>
           )}
         </div>

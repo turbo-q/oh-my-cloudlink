@@ -90,12 +90,12 @@ export function SnippetsPanel({
 
   const canInsertTo = (snippet: Snippet): { ok: boolean; reason?: string } => {
     if (!targetSession) {
-      return { ok: false, reason: '请先打开一个 SSH 终端标签' }
+      return { ok: false, reason: t('snippets.needSession') }
     }
     if (!snippetAppliesToHost(snippet, targetSession.hostId)) {
       return {
         ok: false,
-        reason: `该片段不适用于「${targetSession.hostName}」，请换目标终端或改作用范围`,
+        reason: t('snippets.scopeMismatch', { host: targetSession.hostName }),
       }
     }
     return { ok: true }
@@ -104,7 +104,7 @@ export function SnippetsPanel({
   const handleInsert = async (snippet: Snippet, run: boolean) => {
     const check = canInsertTo(snippet)
     if (!check.ok || !targetSession) {
-      alert(check.reason ?? '无法插入')
+      alert(check.reason ?? t('snippets.insertFail'))
       return
     }
     setBusyId(snippet.id)
@@ -175,8 +175,8 @@ export function SnippetsPanel({
               {connectedSessions.map((s) => (
                 <option key={s.id} value={s.id}>
                   {sessionLabel(s, sshSessions)}
-                  {s.status === 'connecting' ? '（连接中）' : ''}
-                  {s.id === activeSessionId ? ' · 当前标签' : ''}
+                  {s.status === 'connecting' ? t('snippets.connecting') : ''}
+                  {s.id === activeSessionId ? t('snippets.currentTab') : ''}
                 </option>
               ))}
             </select>
@@ -187,16 +187,14 @@ export function SnippetsPanel({
       <div className="flex-1 overflow-y-auto p-8">
         {snippets.length === 0 ? (
           <div className="text-center py-16 text-app-subtle">
-            <p className="mb-2">暂无命令片段</p>
-            <p className="text-sm text-app-faint mb-6">
-              例如把 `docker ps`、`tail -f /var/log/...` 存起来，连上服务器后一键插入
-            </p>
+            <p className="mb-2">{t('snippets.empty')}</p>
+            <p className="text-sm text-app-faint mb-6">{t('snippets.emptyHint')}</p>
             <button onClick={onAdd} className="btn-primary text-sm px-4 py-2">
-              + 新建片段
+              {t('snippets.new')}
             </button>
           </div>
         ) : visible.length === 0 ? (
-          <div className="text-center py-16 text-app-subtle">没有匹配的片段</div>
+          <div className="text-center py-16 text-app-subtle">{t('snippets.noMatch')}</div>
         ) : (
           <div className="space-y-3 max-w-4xl">
             {visible.map((s) => {
@@ -218,12 +216,12 @@ export function SnippetsPanel({
                             more: (names, n) => t('snippets.scopeMore', { names, n }),
                           })}
                         </span>
-                        {s.tags.map((t) => (
+                        {s.tags.map((tag) => (
                           <span
-                            key={t}
+                            key={tag}
                             className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400/90"
                           >
-                            {t}
+                            {tag}
                           </span>
                         ))}
                       </div>
@@ -236,13 +234,13 @@ export function SnippetsPanel({
                         className="text-xs text-app-muted hover:text-app px-2 py-1.5"
                         onClick={() => onEdit(s)}
                       >
-                        编辑
+                        {t('common.edit')}
                       </button>
                       <button
                         className="text-xs text-red-400/70 hover:text-red-400 px-2 py-1.5"
                         onClick={() => onDelete(s)}
                       >
-                        删除
+                        {t('common.delete')}
                       </button>
                     </div>
                   </div>
@@ -250,22 +248,26 @@ export function SnippetsPanel({
                     <button
                       className="btn-secondary text-xs px-3 py-1.5"
                       disabled={disabled}
-                      title={check.ok ? `插入到「${sessionLabel(targetSession!, sshSessions)}」` : check.reason}
+                      title={
+                        check.ok
+                          ? t('snippets.insertTo', { name: sessionLabel(targetSession!, sshSessions) })
+                          : check.reason
+                      }
                       onClick={() => void handleInsert(s, false)}
                     >
-                      插入到目标终端
+                      {t('snippets.insert')}
                     </button>
                     <button
                       className="btn-primary text-xs px-3 py-1.5"
                       disabled={disabled}
                       title={
                         check.ok
-                          ? `插入并执行到「${sessionLabel(targetSession!, sshSessions)}」`
+                          ? t('snippets.insertRunTo', { name: sessionLabel(targetSession!, sshSessions) })
                           : check.reason
                       }
                       onClick={() => void handleInsert(s, true)}
                     >
-                      插入并执行
+                      {t('snippets.insertRun')}
                     </button>
                     {!check.ok && (
                       <span className="text-[11px] text-app-faint">{check.reason}</span>
@@ -278,16 +280,10 @@ export function SnippetsPanel({
         )}
 
         <div className="mt-10 max-w-4xl rounded-xl border border-app-strong bg-app-card/60 p-5 text-sm text-app-subtle space-y-2">
-          <p className="text-app-muted font-medium">怎么理解「作用范围」和「插入」</p>
-          <p>
-            <span className="text-app-secondary">作用范围</span>
-            ：过滤列表 / 终端 ⌘⇧S 选择器里谁能看到这条（全部主机，或勾选的多台）。
-          </p>
-          <p>
-            <span className="text-app-secondary">插入 / 插入并执行</span>
-            ：只写入上方「插入目标终端」选中的那一个 SSH 标签，不会批量发到所有主机。
-          </p>
-          <p>终端内快捷键：⌘⇧S / Ctrl+Shift+S；Enter 插入，⌘/Ctrl+Enter 插入并执行（目标就是当前这个终端）。</p>
+          <p className="text-app-muted font-medium">{t('snippets.helpTitle')}</p>
+          <p>{t('snippets.helpScope')}</p>
+          <p>{t('snippets.helpInsert')}</p>
+          <p>{t('snippets.helpShortcut')}</p>
         </div>
       </div>
     </div>

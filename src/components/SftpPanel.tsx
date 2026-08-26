@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { Host, Group } from '../types'
+import { useI18n } from '../i18n/I18nProvider'
 import { LocalFilePane } from './LocalFilePane'
 import { RemoteFilePane } from './RemoteFilePane'
 
@@ -71,13 +72,14 @@ function HostSelectPane({
   groups: Group[]
   onConnect: (host: Host) => void
 }) {
+  const { t } = useI18n()
   const [showPicker, setShowPicker] = useState(false)
 
   if (!showPicker) {
     return (
       <div className="flex flex-col h-full border-l border-app bg-app">
         <div className="px-4 py-3 border-b border-app bg-surface">
-          <span className="text-sm font-semibold text-app">Remote</span>
+          <span className="text-sm font-semibold text-app">{t('sftp.remote')}</span>
         </div>
         <div className="flex-1 flex flex-col items-center justify-center px-8 text-center">
           <div className="w-16 h-16 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center mb-5">
@@ -85,15 +87,13 @@ function HostSelectPane({
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
             </svg>
           </div>
-          <h3 className="text-lg font-semibold text-app mb-2">Connect to host</h3>
-          <p className="text-sm text-app-subtle mb-6 max-w-xs leading-relaxed">
-            连接已保存的主机，即可通过 SFTP 管理远程文件
-          </p>
+          <h3 className="text-lg font-semibold text-app mb-2">{t('sftp.connectTitle')}</h3>
+          <p className="text-sm text-app-subtle mb-6 max-w-xs leading-relaxed">{t('sftp.emptyHint')}</p>
           <button
             onClick={() => setShowPicker(true)}
             className="px-6 py-2.5 rounded-xl bg-surface border border-app-strong text-sm font-medium text-app hover:bg-app-hover transition-colors"
           >
-            Select host
+            {t('sftp.selectHostBtn')}
           </button>
         </div>
       </div>
@@ -103,16 +103,16 @@ function HostSelectPane({
   return (
     <div className="flex flex-col h-full border-l border-app bg-app">
       <div className="flex items-center justify-between px-4 py-3 border-b border-app bg-surface">
-        <span className="text-sm font-semibold text-app">选择主机</span>
+        <span className="text-sm font-semibold text-app">{t('sftp.selectHost')}</span>
         <button onClick={() => setShowPicker(false)} className="text-xs text-app-subtle hover:text-app">
-          返回
+          {t('common.back')}
         </button>
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-6">
         {groups.length > 0 && (
           <section>
-            <h4 className="text-xs font-medium text-app-subtle uppercase tracking-wider mb-3">Groups</h4>
+            <h4 className="text-xs font-medium text-app-subtle uppercase tracking-wider mb-3">{t('sftp.groups')}</h4>
             <div className="space-y-2">
               {groups.map((group) => {
                 const groupHosts = hosts.filter((h) => h.groupId === group.id)
@@ -137,10 +137,10 @@ function HostSelectPane({
 
         <section>
           <h4 className="text-xs font-medium text-app-subtle uppercase tracking-wider mb-3">
-            {groups.length > 0 ? '其他主机' : 'Hosts'}
+            {groups.length > 0 ? t('sftp.otherHosts') : t('sftp.hosts')}
           </h4>
           {hosts.filter((h) => !h.groupId).length === 0 && hosts.length === 0 ? (
-            <p className="text-sm text-app-faint py-4">暂无主机，请先在「主机」菜单添加</p>
+            <p className="text-sm text-app-faint py-4">{t('sftp.noHosts')}</p>
           ) : (
             <div className="space-y-1">
               {(groups.length > 0 ? hosts.filter((h) => !h.groupId) : hosts).map((host) => (
@@ -163,6 +163,8 @@ function HostRow({
   group?: Group
   onConnect: (host: Host) => void
 }) {
+  const { t } = useI18n()
+
   return (
     <button
       onClick={() => onConnect(host)}
@@ -184,7 +186,7 @@ function HostRow({
         </div>
       </div>
       <span className="text-xs text-emerald-400 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-        连接 →
+        {t('sftp.connect')}
       </span>
     </button>
   )

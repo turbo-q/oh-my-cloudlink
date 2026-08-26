@@ -5,6 +5,7 @@ import { SearchAddon } from '@xterm/addon-search'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import { getStoredTheme, getTerminalTheme, resolveTheme, THEME_CHANGE_EVENT } from '../theme'
 import { TerminalSearchBar, useTerminalSearchShortcut } from './TerminalSearchBar'
+import { useI18n } from '../i18n/I18nProvider'
 import 'xterm/css/xterm.css'
 
 interface LogViewerProps {
@@ -15,6 +16,7 @@ interface LogViewerProps {
 }
 
 export function LogViewer({ logId, title, live = false }: LogViewerProps) {
+  const { t } = useI18n()
   const containerRef = useRef<HTMLDivElement>(null)
   const terminalRef = useRef<Terminal | null>(null)
   const fitAddonRef = useRef<FitAddon | null>(null)
@@ -94,13 +96,14 @@ export function LogViewer({ logId, title, live = false }: LogViewerProps) {
     if (loadedLogIdRef.current === logId) return
 
     let cancelled = false
+    const emptyMsg = t('logs.noContent')
     void window.electronAPI.logsGet(logId).then((content) => {
       if (cancelled) return
       term.clear()
       if (content) {
         term.write(content)
       } else {
-        term.writeln('\x1b[90m（暂无日志内容）\x1b[0m')
+        term.writeln(`\x1b[90m${emptyMsg}\x1b[0m`)
       }
       term.scrollToBottom()
       loadedLogIdRef.current = logId
@@ -110,7 +113,7 @@ export function LogViewer({ logId, title, live = false }: LogViewerProps) {
     return () => {
       cancelled = true
     }
-  }, [logId])
+  }, [logId, t])
 
   useEffect(() => {
     if (!live || !logId) return
@@ -138,15 +141,15 @@ export function LogViewer({ logId, title, live = false }: LogViewerProps) {
     <div className="flex flex-col h-full min-h-0 bg-app">
       <div className="shrink-0 flex items-center justify-between gap-3 px-4 py-2 border-b border-app bg-surface">
         <div className="min-w-0">
-          <p className="text-sm font-medium text-app truncate">{title ?? '会话日志'}</p>
-          <p className="text-xs text-app-subtle">只读 · ⌘F / Ctrl+F 搜索</p>
+          <p className="text-sm font-medium text-app truncate">{title ?? t('logs.sessionLog')}</p>
+          <p className="text-xs text-app-subtle">{t('logs.readonlyHint')}</p>
         </div>
         <button
           type="button"
           onClick={openSearch}
           className="btn-secondary px-3 py-1.5 text-xs shrink-0"
         >
-          搜索
+          {t('common.search')}
         </button>
       </div>
 
@@ -156,7 +159,7 @@ export function LogViewer({ logId, title, live = false }: LogViewerProps) {
         onQueryChange={setQuery}
         onClose={closeSearch}
         onSearch={runSearch}
-        placeholder="搜索日志…"
+        placeholder={t('logs.searchLog')}
       />
 
       <div ref={containerRef} className="flex-1 min-h-0 p-2" tabIndex={0} />

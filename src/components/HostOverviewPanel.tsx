@@ -265,12 +265,12 @@ export function HostOverviewPanel({
             {groupFilter === '__ungrouped__' && (
               <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-400">{t('hosts.ungrouped')}</span>
             )}
-            <span className="text-xs text-app-faint">{displayHosts.length} 台</span>
+            <span className="text-xs text-app-faint">{t('hosts.hostsCount', { n: displayHosts.length })}</span>
           </div>
 
           {displayHosts.length === 0 ? (
             <p className="text-sm text-app-subtle py-8 text-center">
-              {searchQuery ? '没有匹配的主机' : '该分组下暂无主机'}
+              {searchQuery ? t('hosts.noMatch') : t('hosts.noHostsInGroup')}
             </p>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">

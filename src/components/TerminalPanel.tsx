@@ -8,6 +8,7 @@ import type { Host, Snippet } from '../types'
 import { insertSnippetToSession } from '../utils/snippets'
 import { TerminalSearchBar, useTerminalSearchShortcut } from './TerminalSearchBar'
 import { TerminalSnippetPicker, useTerminalSnippetShortcut } from './TerminalSnippetPicker'
+import { useI18n } from '../i18n/I18nProvider'
 import 'xterm/css/xterm.css'
 
 interface TerminalPanelProps {
@@ -31,6 +32,7 @@ export function TerminalPanel({
   snippets,
   onStatusChange,
 }: TerminalPanelProps) {
+  const { t } = useI18n()
   const containerRef = useRef<HTMLDivElement>(null)
   const terminalRef = useRef<Terminal | null>(null)
   const fitAddonRef = useRef<FitAddon | null>(null)
@@ -69,7 +71,7 @@ export function TerminalPanel({
   const handleInsertSnippet = useCallback(
     (snippet: Snippet, run: boolean) => {
       if (!connectedRef.current) {
-        alert('终端尚未连接成功')
+        alert(t('terminal.notConnected'))
         return
       }
       const host = hosts.find((h) => h.id === hostId) ?? null
@@ -81,7 +83,7 @@ export function TerminalPanel({
         requestAnimationFrame(() => terminalRef.current?.focus())
       })
     },
-    [hosts, hostId, hostName, hostname, sessionId],
+    [hosts, hostId, hostName, hostname, sessionId, t],
   )
 
   useEffect(() => {
@@ -90,6 +92,10 @@ export function TerminalPanel({
     const appendLog = (text: string) => {
       void window.electronAPI.sessionLogAppend(sessionId, text)
     }
+
+    const connectingText = t('terminal.connecting')
+    const connectedText = t('terminal.connected')
+    const disconnectedText = t('terminal.disconnected')
 
     const term = new Terminal({
       cursorBlink: true,
@@ -112,7 +118,7 @@ export function TerminalPanel({
     searchAddonRef.current = searchAddon
 
     void window.electronAPI.sessionLogPrepare(sessionId, hostId).then(() => {
-      const banner = '\x1b[38;2;16;185;129mOh My CloudLink\x1b[0m — 正在连接...\r\n'
+      const banner = `\x1b[38;2;16;185;129mOh My CloudLink\x1b[0m — ${connectingText}\r\n`
       term.writeln(banner)
       appendLog(banner)
       onStatusChange(sessionId, 'connecting')
@@ -122,7 +128,7 @@ export function TerminalPanel({
         .then(() => {
           connectedRef.current = true
           onStatusChange(sessionId, 'connected')
-          const ok = '\x1b[90m连接成功\x1b[0m\r\n'
+          const ok = `\x1b[90m${connectedText}\x1b[0m\r\n`
           term.writeln(ok)
           appendLog(ok)
           fitAddon.fit()
@@ -130,7 +136,7 @@ export function TerminalPanel({
           void window.electronAPI.sshResize(sessionId, cols, rows)
         })
         .catch((err: Error) => {
-          const fail = `\r\n\x1b[31m连接失败: ${err.message}\x1b[0m\r\n`
+          const fail = `\r\n\x1b[31m${t('terminal.connectFail', { message: err.message })}\x1b[0m\r\n`
           term.writeln(fail)
           appendLog(fail)
           onStatusChange(sessionId, 'error', err.message)
@@ -151,7 +157,7 @@ export function TerminalPanel({
       if (sid === sessionId) {
         connectedRef.current = false
         onStatusChange(sessionId, 'disconnected')
-        const msg = '\r\n\x1b[90m[连接已断开]\x1b[0m'
+        const msg = `\r\n\x1b[90m${disconnectedText}\x1b[0m`
         term.writeln(msg)
         appendLog(`${msg}\r\n`)
       }
@@ -161,7 +167,7 @@ export function TerminalPanel({
       if (sid === sessionId) {
         connectedRef.current = false
         onStatusChange(sessionId, 'error', error)
-        const msg = `\r\n\x1b[31m[错误] ${error}\x1b[0m`
+        const msg = `\r\n\x1b[31m${t('terminal.error', { message: error })}\x1b[0m`
         term.writeln(msg)
         appendLog(`${msg}\r\n`)
       }
@@ -201,7 +207,7 @@ export function TerminalPanel({
       fitAddonRef.current = null
       searchAddonRef.current = null
     }
-  }, [sessionId, hostId, onStatusChange])
+  }, [sessionId, hostId, onStatusChange, t])
 
   useEffect(() => {
     if (active && fitAddonRef.current) {
@@ -217,7 +223,7 @@ export function TerminalPanel({
         onQueryChange={setQuery}
         onClose={closeSearch}
         onSearch={runSearch}
-        placeholder="搜索终端输出…"
+        placeholder={t('terminal.searchPlaceholder')}
       />
       <div className="relative flex-1 min-h-0">
         <TerminalSnippetPicker

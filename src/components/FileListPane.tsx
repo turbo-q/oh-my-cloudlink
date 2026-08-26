@@ -1,7 +1,9 @@
 import { useEffect, useState, type DragEvent } from 'react'
 import type { RemoteFileEntry } from '../types'
-import { formatFileSize, formatDate, formatTransferSpeed, formatEta } from '../types'
+import { formatFileSize, formatTransferSpeed } from '../types'
 import type { TransferProgress } from '../hooks/useTransferProgress'
+import { useI18n } from '../i18n/I18nProvider'
+import { formatDateLocalized, formatEtaLocalized } from '../i18n/format'
 
 export const SFTP_FILE_DRAG_MIME = 'application/x-yunlian-sftp-file'
 
@@ -19,6 +21,7 @@ export interface FileListPaneProps {
   entries: RemoteFileEntry[]
   loading: boolean
   message?: string | null
+  messageError?: boolean
   transfer?: TransferProgress | null
   operating?: boolean
   subtitle?: string
@@ -103,6 +106,7 @@ export function FileListPane({
   entries,
   loading,
   message,
+  messageError = false,
   transfer = null,
   operating = false,
   subtitle,
@@ -119,6 +123,7 @@ export function FileListPane({
   onRename,
   onDisconnect,
 }: FileListPaneProps) {
+  const { t, locale } = useI18n()
   const segments = pathSegments(currentPath)
   const canGoUp = segments.length > 1 || (currentPath !== '/' && currentPath.length > 3)
   const [pathInput, setPathInput] = useState(currentPath)
@@ -176,36 +181,36 @@ export function FileListPane({
 
         {variant === 'remote' && onDisconnect && (
           <button onClick={onDisconnect} className="btn-secondary text-xs py-1 px-2">
-            断开
+            {t('files.disconnect')}
           </button>
         )}
         <button
           onClick={onGoUp}
           disabled={!canGoUp || operating}
           className="btn-secondary text-xs py-1 px-2 disabled:opacity-40"
-          title="上级"
+          title={t('files.goUp')}
         >
           ↑
         </button>
-        <button onClick={onGoHome} disabled={operating} className="btn-secondary text-xs py-1 px-2" title="主目录">
+        <button onClick={onGoHome} disabled={operating} className="btn-secondary text-xs py-1 px-2" title={t('files.goHome')}>
           🏠
         </button>
         <button
           onClick={onRefresh}
           disabled={loading || operating}
           className="btn-secondary text-xs py-1 px-2"
-          title="刷新"
+          title={t('files.refresh')}
         >
           ↻
         </button>
         {onMkdir && (
           <button onClick={onMkdir} disabled={operating} className="btn-secondary text-xs py-1 px-2">
-            新建文件夹
+            {t('files.newFolder')}
           </button>
         )}
         {onUpload && (
           <button onClick={onUpload} disabled={operating} className="btn-primary text-xs py-1 px-2">
-            上传
+            {t('files.upload')}
           </button>
         )}
       </div>
@@ -220,7 +225,7 @@ export function FileListPane({
             if (e.key === 'Escape') setPathInput(currentPath)
           }}
           disabled={operating || !onPathSubmit}
-          placeholder="输入路径后按 Enter"
+          placeholder={t('files.pathPlaceholder')}
           className="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg bg-app border border-app-strong text-xs font-mono text-app-secondary placeholder:text-app-faint focus:outline-none focus:border-emerald-500/50 disabled:opacity-50"
           spellCheck={false}
         />
@@ -243,7 +248,7 @@ export function FileListPane({
       {message && !transfer && (
         <div
           className={`px-4 py-1.5 text-xs shrink-0 border-b border-app ${
-            message.includes('失败') ? 'bg-red-500/10 text-red-400' : 'bg-emerald-500/10 text-emerald-400'
+            messageError ? 'bg-red-500/10 text-red-400' : 'bg-emerald-500/10 text-emerald-400'
           }`}
         >
           {message}
@@ -259,20 +264,20 @@ export function FileListPane({
         onDrop={handleDrop}
       >
         {loading ? (
-          <div className="flex items-center justify-center h-full text-app-subtle text-sm">加载中...</div>
+          <div className="flex items-center justify-center h-full text-app-subtle text-sm">{t('files.loading')}</div>
         ) : entries.length === 0 ? (
           <div className="flex items-center justify-center h-full text-app-subtle text-sm">
-            {onFileDrop ? '此目录为空，可将文件或文件夹拖入此处' : '此目录为空'}
+            {onFileDrop ? t('files.emptyDrop') : t('files.empty')}
           </div>
         ) : (
           <table className="w-full text-sm">
             <thead className="sticky top-0 bg-surface text-app-subtle text-xs uppercase tracking-wider z-10">
               <tr>
-                <th className="text-left px-4 py-2 font-medium">名称</th>
-                <th className="text-right px-4 py-2 font-medium w-24">大小</th>
-                <th className="text-right px-4 py-2 font-medium w-36">修改时间</th>
+                <th className="text-left px-4 py-2 font-medium">{t('files.colName')}</th>
+                <th className="text-right px-4 py-2 font-medium w-24">{t('files.colSize')}</th>
+                <th className="text-right px-4 py-2 font-medium w-36">{t('files.colModified')}</th>
                 {(onDownload || onDelete || onRename) && (
-                  <th className="text-right px-4 py-2 font-medium w-24">操作</th>
+                  <th className="text-right px-4 py-2 font-medium w-24">{t('files.colActions')}</th>
                 )}
               </tr>
             </thead>
@@ -298,7 +303,7 @@ export function FileListPane({
                   <td className="px-4 py-2 text-right text-app-subtle font-mono text-xs">
                     {entry.isDirectory ? '—' : formatFileSize(entry.size)}
                   </td>
-                  <td className="px-4 py-2 text-right text-app-subtle text-xs">{formatDate(entry.modifiedAt)}</td>
+                  <td className="px-4 py-2 text-right text-app-subtle text-xs">{formatDateLocalized(locale, entry.modifiedAt)}</td>
                   {(onDownload || onDelete || onRename) && (
                     <td className="px-4 py-2 text-right" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-end gap-1">
@@ -307,7 +312,7 @@ export function FileListPane({
                             onClick={() => onDownload(entry)}
                             disabled={operating}
                             className="p-1 rounded hover:bg-emerald-500/20 text-emerald-400 text-xs"
-                            title={entry.isDirectory ? '下载文件夹' : '下载'}
+                            title={entry.isDirectory ? t('files.downloadFolder') : t('files.download')}
                           >
                             ↓
                           </button>
@@ -340,12 +345,20 @@ export function FileListPane({
         )}
       </div>
 
-      {transfer && <TransferStatusBar transfer={transfer} />}
+      {transfer && <TransferStatusBar transfer={transfer} locale={locale} t={t} />}
     </div>
   )
 }
 
-function TransferStatusBar({ transfer }: { transfer: TransferProgress }) {
+function TransferStatusBar({
+  transfer,
+  locale,
+  t,
+}: {
+  transfer: TransferProgress
+  locale: import('../i18n/types').Locale
+  t: (key: string, params?: Record<string, string | number>) => string
+}) {
   const percent =
     transfer.status === 'success'
       ? 100
@@ -401,7 +414,7 @@ function TransferStatusBar({ transfer }: { transfer: TransferProgress }) {
           </div>
           {transfer.status === 'error' && transfer.total > 0 && (
             <div className="text-[10px] text-red-400/70 mt-0.5 tabular-nums">
-              已完成 {transfer.current}/{transfer.total} 个文件
+              {t('files.filesCompleted', { current: transfer.current, total: transfer.total })}
             </div>
           )}
         </div>
@@ -428,11 +441,11 @@ function TransferStatusBar({ transfer }: { transfer: TransferProgress }) {
           {sizeLabel && <span className="shrink-0">{sizeLabel}</span>}
           <span className="shrink-0">{formatTransferSpeed(transfer.speedBps ?? 0)}</span>
           <span className="shrink-0 text-app-faint">·</span>
-          <span className="shrink-0">{formatEta(transfer.etaSeconds)}</span>
+          <span className="shrink-0">{formatEtaLocalized(locale, transfer.etaSeconds)}</span>
           <span className="flex-1" />
           {transfer.total > 0 && (
             <span className="shrink-0">
-              {transfer.current}/{transfer.total} 文件
+              {t('files.filesCount', { current: transfer.current, total: transfer.total })}
             </span>
           )}
         </div>

@@ -118,7 +118,7 @@ export function TerminalSnippetPicker({
                 onClose()
               }
             }}
-            placeholder="搜索命令片段… Enter 插入，⌘/Ctrl+Enter 执行"
+            placeholder={t('snippets.pickerPlaceholder')}
             className="flex-1 min-w-0 bg-transparent text-sm text-app outline-none placeholder:text-app-faint"
           />
           <button type="button" onClick={onClose} className="text-app-subtle hover:text-app text-xs px-1">
@@ -129,7 +129,7 @@ export function TerminalSnippetPicker({
         <div className="max-h-64 overflow-y-auto">
           {filtered.length === 0 ? (
             <p className="px-4 py-6 text-sm text-app-subtle text-center">
-              {snippets.length === 0 ? '还没有片段，请到「片段」面板创建' : '无匹配结果'}
+              {snippets.length === 0 ? t('snippets.pickerEmpty') : t('snippets.pickerNoMatch')}
             </p>
           ) : (
             filtered.map((s, i) => (

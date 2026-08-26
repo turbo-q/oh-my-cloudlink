@@ -5,6 +5,7 @@ import { assertElectronMethod } from '../utils/electronApi'
 import { useTransferProgress } from '../hooks/useTransferProgress'
 import { formatTransferError } from '../utils/transferError'
 import { getLastLocalPath, setLastLocalPath } from '../utils/localPathMemory'
+import { useI18n } from '../i18n/I18nProvider'
 
 interface LocalFilePaneProps {
   sessionId?: string
@@ -12,16 +13,19 @@ interface LocalFilePaneProps {
 }
 
 export function LocalFilePane({ sessionId, remoteConnected = false }: LocalFilePaneProps) {
+  const { t } = useI18n()
   const [currentPath, setCurrentPath] = useState(() => getLastLocalPath() ?? '')
   const [entries, setEntries] = useState<RemoteFileEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [operating, setOperating] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
+  const [messageError, setMessageError] = useState(false)
   const { transfer, start, applyFileProgress, succeed, fail } = useTransferProgress()
 
   const loadDirectory = useCallback(async (path?: string) => {
     setLoading(true)
     setMessage(null)
+    setMessageError(false)
     try {
       const localHome = assertElectronMethod('localHome')
       const localList = assertElectronMethod('localList')
@@ -31,7 +35,6 @@ export function LocalFilePane({ sessionId, remoteConnected = false }: LocalFileP
       setCurrentPath(target)
       setLastLocalPath(target)
     } catch (err) {
-      // Remembered path may no longer exist after remount — fall back to home once
       const remembered = getLastLocalPath()
       if (path && remembered && path === remembered) {
         try {
@@ -43,17 +46,20 @@ export function LocalFilePane({ sessionId, remoteConnected = false }: LocalFileP
           setCurrentPath(home)
           setLastLocalPath(home)
           setMessage(null)
+          setMessageError(false)
           return
         } catch (homeErr) {
-          setMessage(`加载失败: ${(homeErr as Error).message}`)
+          setMessage(t('files.loadFail', { message: (homeErr as Error).message }))
+          setMessageError(true)
           return
         }
       }
-      setMessage(`加载失败: ${(err as Error).message}`)
+      setMessage(t('files.loadFail', { message: (err as Error).message }))
+      setMessageError(true)
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [t])
 
   useEffect(() => {
     const remembered = getLastLocalPath()
@@ -74,20 +80,21 @@ export function LocalFilePane({ sessionId, remoteConnected = false }: LocalFileP
 
     setOperating(true)
     setMessage(null)
-    start('下载中', 1)
+    setMessageError(false)
+    start(t('files.downloading'), 1)
     const unsub = window.electronAPI.onFileProgress((p) => {
       if (p.sessionId !== sessionId) return
-      applyFileProgress(p, '下载中')
+      applyFileProgress(p, t('files.downloading'))
     })
     try {
       for (const item of remoteItems) {
         const localPath = joinPath(currentPath, item.name)
         await window.electronAPI.fileDownload(sessionId, item.path, localPath)
       }
-      succeed(`已下载 ${remoteItems.length} 项到本机`)
+      succeed(t('files.downloadedItems', { n: remoteItems.length }))
       await loadDirectory(currentPath)
     } catch (err) {
-      fail('下载失败', formatTransferError(err))
+      fail(t('files.downloadFail'), formatTransferError(err, t))
     } finally {
       unsub()
       setOperating(false)
@@ -96,13 +103,14 @@ export function LocalFilePane({ sessionId, remoteConnected = false }: LocalFileP
 
   return (
     <FileListPane
-      title="Local"
+      title={t('files.local')}
       variant="local"
       currentPath={currentPath}
       entries={entries}
       loading={loading}
       operating={operating}
       message={message}
+      messageError={messageError}
       transfer={transfer}
       onNavigate={navigateTo}
       onGoUp={() => void loadDirectory(parentPath(currentPath))}
