@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Host, Snippet } from '../types'
 import { filterSnippetsForHost, formatSnippetScope } from '../utils/snippets'
+import { useI18n } from '../i18n/I18nProvider'
 
 interface TerminalSnippetPickerProps {
   open: boolean
@@ -49,9 +50,15 @@ export function TerminalSnippetPicker({
   const [query, setQuery] = useState('')
   const [index, setIndex] = useState(0)
 
+  const { t } = useI18n()
   const hostName = useMemo(() => {
-    return (snippet: Snippet) => formatSnippetScope(snippet, hosts)
-  }, [hosts])
+    return (snippet: Snippet) =>
+      formatSnippetScope(snippet, hosts, {
+        allHosts: t('snippets.scopeAll'),
+        unknown: t('common.unknownHost'),
+        more: (names, n) => t('snippets.scopeMore', { names, n }),
+      })
+  }, [hosts, t])
 
   const filtered = useMemo(() => {
     const base = filterSnippetsForHost(snippets, hostId)

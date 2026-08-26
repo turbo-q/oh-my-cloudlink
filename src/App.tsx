@@ -15,6 +15,7 @@ import type { Host, Group, SSHKey, AppSession, DiscoveredKey, PortForward, Snipp
 import type { AppPanel } from './types/app'
 import { isFileProtocol, isSshHost, getHostFileProtocol, GROUP_COLORS } from './types'
 import { filterHosts, type GroupFilter } from './utils/filterHosts'
+import { useI18n } from './i18n/I18nProvider'
 
 type ModalState =
   | { type: 'none' }
@@ -26,6 +27,7 @@ type ModalState =
   | { type: 'snippet'; snippet?: Snippet }
 
 export default function App() {
+  const { t } = useI18n()
   const {
     hosts,
     groups,
@@ -75,7 +77,7 @@ export default function App() {
 
   const connectHost = useCallback((host: Host, mode: 'ssh' | 'sftp' = 'ssh') => {
     if (mode === 'ssh' && !isSshHost(host)) {
-      alert('FTP 主机请切换到 SFTP 进行文件传输')
+      alert(t('app.ftpUseSftp'))
       return
     }
 
@@ -94,7 +96,7 @@ export default function App() {
     setActiveSessionId(sessionId)
     setMountedSessions((prev) => new Set(prev).add(sessionId))
     setShowSession(true)
-  }, [])
+  }, [t])
 
   const handleConnectFromPanel = useCallback(
     (host: Host) => {
@@ -150,13 +152,13 @@ export default function App() {
   }
 
   const handleDeleteHost = async (host: Host) => {
-    if (!confirm(`确定删除主机「${host.name}」？`)) return
+    if (!confirm(t('app.deleteHost', { name: host.name }))) return
     await deleteHost(host.id)
     if (selectedHostId === host.id) setSelectedHostId(null)
   }
 
   const handleDeleteGroup = async (group: Group) => {
-    if (!confirm(`确定删除分组「${group.name}」？组内主机将变为未分组。`)) return
+    if (!confirm(t('app.deleteGroup', { name: group.name }))) return
     await deleteGroup(group.id)
     if (groupFilter === group.id) setGroupFilter(null)
   }
@@ -170,17 +172,17 @@ export default function App() {
   )
 
   const handleDeleteKey = async (key: SSHKey) => {
-    if (!confirm(`确定删除密钥「${key.name}」？`)) return
+    if (!confirm(t('app.deleteKey', { name: key.name }))) return
     await deleteKey(key.id)
   }
 
   const handleDeleteForward = async (forward: PortForward) => {
-    if (!confirm(`确定删除转发规则「${forward.name}」？`)) return
+    if (!confirm(t('app.deleteForward', { name: forward.name }))) return
     await deletePortForward(forward.id)
   }
 
   const handleDeleteSnippet = async (snippet: Snippet) => {
-    if (!confirm(`确定删除命令片段「${snippet.name}」？`)) return
+    if (!confirm(t('app.deleteSnippet', { name: snippet.name }))) return
     await deleteSnippet(snippet.id)
   }
 
@@ -205,11 +207,11 @@ export default function App() {
       try {
         const text = await file.text()
         const data = JSON.parse(text)
-        if (!confirm('导入将覆盖当前所有数据，确定继续？')) return
+        if (!confirm(t('app.importOverwrite'))) return
         await importData(data)
-        alert('导入成功')
+        alert(t('app.importOk'))
       } catch {
-        alert('导入失败：文件格式不正确')
+        alert(t('app.importFail'))
       }
     }
     input.click()
@@ -218,7 +220,7 @@ export default function App() {
   const handleImportDiscoveredKeys = async (discovered: DiscoveredKey[]) => {
     for (const key of discovered) {
       await saveKey({
-        name: `${key.name} (本机)`,
+        name: `${key.name}${t('app.localKeySuffix')}`,
         privateKey: key.privateKey,
         publicKey: key.publicKey,
       })
@@ -228,7 +230,7 @@ export default function App() {
   if (loading) {
     return (
       <div className="h-screen flex items-center justify-center bg-app text-app-muted">
-        加载中...
+        {t('common.loading')}
       </div>
     )
   }

@@ -1,6 +1,7 @@
 import type { AppSession } from '../types'
 import { PROTOCOL_COLORS } from '../types'
 import type { AppPanel } from '../types/app'
+import { useI18n } from '../i18n/I18nProvider'
 
 interface SessionTabBarProps {
   sessions: AppSession[]
@@ -21,6 +22,8 @@ export function SessionTabBar({
   onSelectSession,
   onCloseSession,
 }: SessionTabBarProps) {
+  const { t } = useI18n()
+
   const navBtn = (panel: AppPanel, label: string) => (
     <button
       key={panel}
@@ -46,13 +49,13 @@ export function SessionTabBar({
           </div>
         </div>
 
-        {navBtn('hosts', '主机')}
-        {navBtn('sftp', 'SFTP')}
-        {navBtn('keys', '密钥')}
-        {navBtn('forwards', '转发')}
-        {navBtn('snippets', '片段')}
-        {navBtn('logs', '日志')}
-        {navBtn('settings', '设置')}
+        {navBtn('hosts', t('nav.hosts'))}
+        {navBtn('sftp', t('nav.sftp'))}
+        {navBtn('keys', t('nav.keys'))}
+        {navBtn('forwards', t('nav.forwards'))}
+        {navBtn('snippets', t('nav.snippets'))}
+        {navBtn('logs', t('nav.logs'))}
+        {navBtn('settings', t('nav.settings'))}
 
         {sessions.length > 0 && (
           <div className="flex items-end border-l border-app ml-1">

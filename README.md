@@ -1,15 +1,19 @@
 # Oh My CloudLink
 
-一款类 [Termius](https://termius.com) 的 SSH / SFTP 连接管理桌面应用（原「云连 SSH」），支持主机管理、分组、SSH 密钥和终端连接。
+一款类 [Termius](https://termius.com) 的 SSH / SFTP / FTP 连接管理桌面应用（原「云连 SSH」），支持主机管理、分组、SSH 密钥、终端、文件传输、端口转发与命令片段。
 
 ## 功能特性
 
-- **主机管理** — 添加、编辑、删除 SSH 主机，支持密码和密钥认证
+- **主机管理** — 添加、编辑、删除主机，支持密码和密钥认证
 - **分组与标签** — 按环境/项目分组，支持标签搜索
-- **SSH 密钥** — 统一管理私钥，关联到主机
-- **终端连接** — 基于 xterm.js 的全功能 SSH 终端，支持多标签
-- **数据导入导出** — JSON 格式备份与恢复配置（底层持久化为 SQLite）
-- **协议预留** — 数据模型已预留 SFTP / FTP 扩展位，后续可接入文件传输
+- **SSH 密钥** — 统一管理私钥，关联到主机；支持发现本机 `~/.ssh` 密钥
+- **SSH 终端** — 基于 xterm.js 的全功能终端，多标签、同一主机多开、⌘F 搜索
+- **SFTP / FTP 文件传输** — 双栏文件浏览器，上传 / 下载 / 删除 / 重命名
+- **端口转发** — 本地 / 远程 / SOCKS5 动态转发，独立于终端会话启停
+- **命令片段** — 收藏常用命令，终端内快捷插入（支持多主机作用范围）
+- **连接日志** — 会话输出记录与只读回放
+- **数据导入导出 / 备份恢复** — JSON 备份；底层持久化为 SQLite
+- **中英文界面** — 设置中切换语言（可跟随系统）
 
 ## 技术栈
 
@@ -59,26 +63,30 @@ oh-my-cloudlink/
 │   ├── main.ts         # 窗口 & IPC 入口
 │   ├── preload.ts      # 渲染进程 API 桥接
 │   ├── ssh-manager.ts  # SSH 连接管理
+│   ├── sftp-manager.ts # SFTP 文件传输
+│   ├── ftp-manager.ts  # FTP 文件传输
 │   └── data-store.ts   # 本地数据持久化
 ├── src/                # React 渲染进程
 │   ├── components/     # UI 组件
 │   ├── hooks/          # 数据 hooks
-│   └── types/          # 类型定义（含 FTP/SFTP 预留）
+│   ├── i18n/           # 中英文文案
+│   └── types/          # 类型定义
 └── public/
 ```
 
 ## 数据模型
 
 ```typescript
-// 连接协议 — 当前仅实现 ssh
 type ConnectionProtocol = 'ssh' | 'sftp' | 'ftp'
 
 interface Host {
-  protocol: ConnectionProtocol  // sftp/ftp 预留
+  protocol: ConnectionProtocol  // SSH 终端 / SFTP / FTP 文件传输
   authType: 'password' | 'key'
   // ...
 }
 ```
+
+> 说明：UI 上主机主要用于 SSH/SFTP；纯 FTP 主机走文件传输面板。`protocol` 字段区分连接方式。
 
 ## 路线图
 
@@ -89,6 +97,7 @@ interface Host {
 - [x] 数据导入导出
 - [x] 端口转发
 - [x] Snippets / 命令片段
+- [x] 中英文国际化
 - [ ] 数据加密存储
 
 ## 许可证

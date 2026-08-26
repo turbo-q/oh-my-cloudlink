@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useI18n } from '../i18n/I18nProvider'
 import type { AppSession, Host, Snippet } from '../types'
 import {
   formatSnippetScope,
@@ -36,6 +37,7 @@ export function SnippetsPanel({
   onEdit,
   onDelete,
 }: SnippetsPanelProps) {
+  const { t } = useI18n()
   const [query, setQuery] = useState('')
   const [filterHostId, setFilterHostId] = useState<string>('all')
   const [busyId, setBusyId] = useState<string | null>(null)
@@ -125,13 +127,13 @@ export function SnippetsPanel({
     <div className="flex-1 flex flex-col bg-app min-h-0">
       <div className="px-8 py-6 border-b border-app flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-xl font-semibold text-app">命令片段</h2>
+          <h2 className="text-xl font-semibold text-app">{t('snippets.title')}</h2>
           <p className="text-sm text-app-subtle mt-1">
-            作用范围只控制「哪些主机看得到」；插入只会写进下面选中的那一个终端
+            {t('snippets.subtitle')}
           </p>
         </div>
         <button onClick={onAdd} className="btn-primary text-sm px-4 py-2 shrink-0">
-          + 新建片段
+          {t('snippets.new')}
         </button>
       </div>
 
@@ -139,31 +141,31 @@ export function SnippetsPanel({
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="搜索名称、命令或标签…"
+          placeholder={t('snippets.search')}
           className="input-field w-full"
         />
 
         <div className="flex flex-col sm:flex-row sm:items-center gap-2 rounded-xl border border-app-strong bg-app-card px-4 py-3">
-          <span className="text-xs text-app-muted shrink-0 sm:w-24">筛选范围</span>
+          <span className="text-xs text-app-muted shrink-0 sm:w-24">{t('snippets.filterScope')}</span>
           <select
             value={filterHostId}
             onChange={(e) => setFilterHostId(e.target.value)}
             className="input-field flex-1 min-w-0 text-sm"
           >
-            <option value="all">全部片段</option>
-            <option value="global">仅「全部主机」</option>
+            <option value="all">{t('snippets.filterAll')}</option>
+            <option value="global">{t('snippets.filterGlobal')}</option>
             {hosts.map((h) => (
               <option key={h.id} value={h.id}>
-                含 {h.name}
+                {t('snippets.filterHost', { name: h.name })}
               </option>
             ))}
           </select>
         </div>
 
         <div className="flex flex-col sm:flex-row sm:items-center gap-2 rounded-xl border border-app-strong bg-app-card px-4 py-3">
-          <span className="text-xs text-app-muted shrink-0 sm:w-24">插入目标终端</span>
+          <span className="text-xs text-app-muted shrink-0 sm:w-24">{t('snippets.insertTarget')}</span>
           {connectedSessions.length === 0 ? (
-            <span className="text-sm text-amber-400/90">尚未打开 SSH 终端 — 请先连接一台主机</span>
+            <span className="text-sm text-amber-400/90">{t('snippets.noSession')}</span>
           ) : (
             <select
               value={targetSessionId}
@@ -210,7 +212,11 @@ export function SnippetsPanel({
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-sm font-medium text-app">{s.name}</span>
                         <span className="text-[10px] px-1.5 py-0.5 rounded bg-app-hover text-app-muted">
-                          {formatSnippetScope(s, hosts)}
+                          {formatSnippetScope(s, hosts, {
+                            allHosts: t('snippets.scopeAll'),
+                            unknown: t('common.unknownHost'),
+                            more: (names, n) => t('snippets.scopeMore', { names, n }),
+                          })}
                         </span>
                         {s.tags.map((t) => (
                           <span

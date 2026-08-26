@@ -45,13 +45,20 @@ export function filterSnippetsForHost(snippets: Snippet[], hostId?: string | nul
     })
 }
 
-export function formatSnippetScope(snippet: Snippet, hosts: Host[]): string {
-  if (isSnippetGlobal(snippet)) return '全部主机'
+export function formatSnippetScope(
+  snippet: Snippet,
+  hosts: Host[],
+  labels?: { allHosts: string; unknown: string; more: (names: string, n: number) => string },
+): string {
+  const allHosts = labels?.allHosts ?? '全部主机'
+  const unknown = labels?.unknown ?? '未知'
+  if (isSnippetGlobal(snippet)) return allHosts
   const names = snippet.hostIds
-    .map((id) => hosts.find((h) => h.id === id)?.name ?? '未知')
+    .map((id) => hosts.find((h) => h.id === id)?.name ?? unknown)
     .filter(Boolean)
-  if (names.length === 0) return '全部主机'
-  if (names.length <= 2) return names.join('、')
+  if (names.length === 0) return allHosts
+  if (names.length <= 2) return names.join(labels ? ', ' : '、')
+  if (labels?.more) return labels.more(names.slice(0, 2).join(labels ? ', ' : '、'), names.length)
   return `${names.slice(0, 2).join('、')} 等 ${names.length} 台`
 }
 

@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useI18n } from '../i18n/I18nProvider'
+import { dateLocaleTag } from '../i18n'
 import { LogViewer } from './LogViewer'
 
 interface SessionLogMeta {
@@ -14,16 +16,16 @@ interface SessionLogMeta {
   byteSize: number
 }
 
-function formatTime(iso: string): string {
+function formatTime(iso: string, localeTag: string): string {
   try {
-    return new Date(iso).toLocaleString('zh-CN', { hour12: false })
+    return new Date(iso).toLocaleString(localeTag, { hour12: false })
   } catch {
     return iso
   }
 }
 
-function formatDuration(startedAt: string, endedAt: string | null): string {
-  if (!endedAt) return '进行中'
+function formatDuration(startedAt: string, endedAt: string | null, activeLabel: string): string {
+  if (!endedAt) return activeLabel
   const ms = new Date(endedAt).getTime() - new Date(startedAt).getTime()
   if (ms < 1000) return '<1s'
   const sec = Math.floor(ms / 1000)
@@ -38,20 +40,21 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
-function statusLabel(status: SessionLogMeta['status']): string {
+function statusLabel(status: SessionLogMeta['status'], t: (k: string) => string): string {
   switch (status) {
     case 'connecting':
-      return '连接中'
+      return t('logs.statusConnecting')
     case 'connected':
-      return '进行中'
+      return t('logs.statusConnected')
     case 'disconnected':
-      return '已断开'
+      return t('logs.statusDisconnected')
     case 'error':
-      return '错误'
+      return t('logs.statusError')
   }
 }
 
 export function LogsPanel() {
+  const { t, locale } = useI18n()
   const [logs, setLogs] = useState<SessionLogMeta[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -88,7 +91,7 @@ export function LogsPanel() {
   const isLive = selected != null && (selected.status === 'connecting' || selected.status === 'connected')
 
   const handleDelete = async (id: string) => {
-    if (!confirm('确定删除这条连接日志？')) return
+    if (!confirm(t('logs.deleteConfirm'))) return
     setBusy(true)
     try {
       await window.electronAPI.logsDelete(id)
@@ -103,7 +106,7 @@ export function LogsPanel() {
   }
 
   const handleClear = async () => {
-    if (!confirm('确定清空全部连接日志？')) return
+    if (!confirm(t('logs.clearConfirm'))) return
     setBusy(true)
     try {
       await window.electronAPI.logsClear()
@@ -120,8 +123,8 @@ export function LogsPanel() {
   return (
     <div className="flex-1 flex flex-col bg-app min-h-0 w-full">
       <div className="px-8 py-6 border-b border-app shrink-0">
-        <h2 className="text-xl font-semibold text-app">日志</h2>
-        <p className="text-sm text-app-subtle mt-1">最近 SSH 连接会话记录，只读回放，支持搜索</p>
+        <h2 className="text-xl font-semibold text-app">{t('logs.title')}</h2>
+        <p className="text-sm text-app-subtle mt-1">{t('logs.subtitle')}</p>
       </div>
 
       <div className="flex-1 flex min-h-0">
@@ -142,9 +145,7 @@ export function LogsPanel() {
                 disabled={busy || logs.length === 0}
                 onClick={() => void handleClear()}
                 className="text-xs text-app-subtle hover:text-red-400 disabled:opacity-50"
-              >
-                清空
-              </button>
+              >{t('logs.clear')}</button>
             </div>
           </div>
 
@@ -175,14 +176,15 @@ export function LogsPanel() {
                                 : 'bg-app-faint text-app-subtle'
                           }`}
                         >
-                          {statusLabel(log.status)}
+                          {statusLabel(log.status, t)}
                         </span>
                       </div>
                       <p className="text-xs text-app-subtle mt-1 truncate">
                         {log.username}@{log.hostname}
                       </p>
                       <p className="text-xs text-app-subtle mt-1">
-                        {formatTime(log.startedAt)} · {formatDuration(log.startedAt, log.endedAt)} ·{' '}
+                        {formatTime(log.startedAt, dateLocaleTag(locale))} ·{' '}
+                        {formatDuration(log.startedAt, log.endedAt, t('logs.statusConnected'))} ·{' '}
                         {formatSize(log.byteSize)}
                       </p>
                     </button>
@@ -211,7 +213,7 @@ export function LogsPanel() {
                   key={selected.id}
                   logId={selected.id}
                   live={isLive}
-                  title={`${selected.hostName} — ${formatTime(selected.startedAt)}`}
+                  title={`${selected.hostName} — ${formatTime(selected.startedAt, dateLocaleTag(locale))}`}
                 />
               </div>
             </>

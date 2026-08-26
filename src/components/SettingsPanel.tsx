@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useTheme } from '../hooks/useTheme'
+import { useI18n } from '../i18n/I18nProvider'
+import { dateLocaleTag, type LocalePreference } from '../i18n'
 import type { ThemeMode } from '../theme'
 
 interface BackupInfo {
@@ -20,25 +22,32 @@ interface SettingsPanelProps {
   onDataRestored: () => void | Promise<void>
 }
 
-const THEME_OPTIONS: { value: ThemeMode; label: string; description: string }[] = [
-  { value: 'system', label: '跟随系统', description: '自动匹配 macOS / Windows 外观' },
-  { value: 'light', label: '浅色', description: '明亮界面，适合白天使用' },
-  { value: 'dark', label: '深色', description: '暗色界面，适合夜间使用' },
-]
-
-function formatBackupTime(mtime: number): string {
-  try {
-    return new Date(mtime).toLocaleString('zh-CN', { hour12: false })
-  } catch {
-    return String(mtime)
-  }
-}
-
 export function SettingsPanel({ onExport, onImport, onDataRestored }: SettingsPanelProps) {
   const { mode, resolved, setTheme } = useTheme()
+  const { t, locale, preference, setLocale } = useI18n()
   const [backups, setBackups] = useState<BackupInfo[]>([])
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
+
+  const themeOptions: { value: ThemeMode; label: string; description: string }[] = [
+    { value: 'system', label: t('settings.themeSystem'), description: t('settings.themeSystemDesc') },
+    { value: 'light', label: t('settings.themeLight'), description: t('settings.themeLightDesc') },
+    { value: 'dark', label: t('settings.themeDark'), description: t('settings.themeDarkDesc') },
+  ]
+
+  const languageOptions: { value: LocalePreference; label: string; description: string }[] = [
+    { value: 'system', label: t('settings.langSystem'), description: t('settings.langSystemDesc') },
+    { value: 'zh', label: t('settings.langZh'), description: t('settings.langZhDesc') },
+    { value: 'en', label: t('settings.langEn'), description: t('settings.langEnDesc') },
+  ]
+
+  const formatBackupTime = (mtime: number) => {
+    try {
+      return new Date(mtime).toLocaleString(dateLocaleTag(locale), { hour12: false })
+    } catch {
+      return String(mtime)
+    }
+  }
 
   const refreshBackups = useCallback(async () => {
     try {
@@ -46,9 +55,9 @@ export function SettingsPanel({ onExport, onImport, onDataRestored }: SettingsPa
       setBackups(list)
     } catch (err) {
       console.error(err)
-      setMessage('读取备份列表失败')
+      setMessage(t('settings.backupListFail'))
     }
-  }, [])
+  }, [t])
 
   useEffect(() => {
     void refreshBackups()
@@ -59,65 +68,81 @@ export function SettingsPanel({ onExport, onImport, onDataRestored }: SettingsPa
     setMessage(null)
     try {
       const info = await window.electronAPI.createBackup()
-      setMessage(`已创建备份：${info.fileName}`)
+      setMessage(t('settings.backupCreated', { fileName: info.fileName }))
       await refreshBackups()
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : '备份失败')
+      setMessage(err instanceof Error ? err.message : t('settings.backupFail'))
     } finally {
       setBusy(false)
     }
   }
 
   const handleRestoreBackup = async (fileName: string) => {
-    if (!confirm(`将用备份「${fileName}」覆盖当前所有数据，确定继续？`)) return
+    if (!confirm(t('settings.restoreConfirm', { fileName }))) return
     setBusy(true)
     setMessage(null)
     try {
       await window.electronAPI.restoreBackup(fileName)
       await onDataRestored()
-      setMessage('恢复成功')
+      setMessage(t('settings.restoreOk'))
       await refreshBackups()
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : '恢复失败')
+      setMessage(err instanceof Error ? err.message : t('settings.restoreFail'))
     } finally {
       setBusy(false)
     }
   }
 
   const handleRestoreFromFile = async () => {
-    if (!confirm('将用所选文件覆盖当前所有数据，确定继续？')) return
+    if (!confirm(t('settings.restoreFileConfirm'))) return
     setBusy(true)
     setMessage(null)
     try {
       const ok = await window.electronAPI.restoreBackupFromFile()
       if (!ok) {
-        setMessage('已取消选择文件')
+        setMessage(t('settings.restoreCancelled'))
         return
       }
       await onDataRestored()
-      setMessage('从文件恢复成功')
+      setMessage(t('settings.restoreFileOk'))
       await refreshBackups()
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : '从文件恢复失败')
+      setMessage(err instanceof Error ? err.message : t('settings.restoreFileFail'))
     } finally {
       setBusy(false)
     }
   }
 
+  const roadmapItems = [
+    t('settings.roadmapItems.ssh'),
+    t('settings.roadmapItems.sftp'),
+    t('settings.roadmapItems.forward'),
+    t('settings.roadmapItems.snippets'),
+  ]
+
+  const langLabel =
+    preference === 'system'
+      ? `${t(locale === 'zh' ? 'settings.langZh' : 'settings.langEn')}${t('settings.followingSystem')}`
+      : preference === 'zh'
+        ? t('settings.langZh')
+        : t('settings.langEn')
+
   return (
     <div className="flex-1 flex flex-col bg-app min-h-0 w-full">
       <div className="px-8 py-6 border-b border-app shrink-0">
-        <h2 className="text-xl font-semibold text-app">设置</h2>
-        <p className="text-sm text-app-subtle mt-1">外观、数据管理与关于</p>
+        <h2 className="text-xl font-semibold text-app">{t('settings.title')}</h2>
+        <p className="text-sm text-app-subtle mt-1">{t('settings.subtitle')}</p>
       </div>
 
       <div className="flex-1 overflow-y-auto w-full">
         <div className="w-full px-8 py-8 grid gap-8 xl:grid-cols-2 xl:gap-10">
           <div className="space-y-8 min-w-0">
             <section>
-              <h3 className="text-sm font-medium text-app-muted uppercase tracking-wider mb-4">外观</h3>
+              <h3 className="text-sm font-medium text-app-muted uppercase tracking-wider mb-4">
+                {t('settings.appearance')}
+              </h3>
               <div className="grid gap-3 sm:grid-cols-3">
-                {THEME_OPTIONS.map((option) => (
+                {themeOptions.map((option) => (
                   <button
                     key={option.value}
                     type="button"
@@ -130,17 +155,39 @@ export function SettingsPanel({ onExport, onImport, onDataRestored }: SettingsPa
                 ))}
               </div>
               <p className="text-xs text-app-subtle mt-3">
-                当前生效：{resolved === 'dark' ? '深色' : '浅色'}
-                {mode === 'system' ? '（跟随系统）' : ''}
+                {t('settings.themeActive', {
+                  theme: resolved === 'dark' ? t('settings.themeDarkName') : t('settings.themeLightName'),
+                })}
+                {mode === 'system' ? t('settings.followingSystem') : ''}
               </p>
             </section>
 
             <section>
-              <h3 className="text-sm font-medium text-app-muted uppercase tracking-wider mb-4">备份与恢复</h3>
+              <h3 className="text-sm font-medium text-app-muted uppercase tracking-wider mb-4">
+                {t('settings.language')}
+              </h3>
+              <div className="grid gap-3 sm:grid-cols-3">
+                {languageOptions.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => setLocale(option.value)}
+                    className={`theme-option ${preference === option.value ? 'theme-option-active' : ''}`}
+                  >
+                    <span className="text-sm font-medium">{option.label}</span>
+                    <span className="text-xs opacity-80">{option.description}</span>
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-app-subtle mt-3">{t('settings.langActive', { lang: langLabel })}</p>
+            </section>
+
+            <section>
+              <h3 className="text-sm font-medium text-app-muted uppercase tracking-wider mb-4">
+                {t('settings.backup')}
+              </h3>
               <div className="rounded-xl border border-app-strong bg-app-card p-5 space-y-4">
-                <p className="text-sm text-app-muted">
-                  数据变更时会自动按时间保存备份，最多保留最近 5 份。库异常时可从下方列表或自选文件恢复。
-                </p>
+                <p className="text-sm text-app-muted">{t('settings.backupHelp')}</p>
                 <div className="flex flex-wrap gap-3">
                   <button
                     type="button"
@@ -148,7 +195,7 @@ export function SettingsPanel({ onExport, onImport, onDataRestored }: SettingsPa
                     onClick={() => void handleCreateBackup()}
                     className="btn-secondary px-6 py-2.5 disabled:opacity-50"
                   >
-                    立即备份
+                    {t('settings.backupNow')}
                   </button>
                   <button
                     type="button"
@@ -156,7 +203,7 @@ export function SettingsPanel({ onExport, onImport, onDataRestored }: SettingsPa
                     onClick={() => void handleRestoreFromFile()}
                     className="btn-secondary px-6 py-2.5 disabled:opacity-50"
                   >
-                    选择文件恢复
+                    {t('settings.restoreFile')}
                   </button>
                 </div>
 
@@ -164,18 +211,18 @@ export function SettingsPanel({ onExport, onImport, onDataRestored }: SettingsPa
 
                 <div className="border-t border-app pt-4">
                   <div className="flex items-center justify-between mb-3">
-                    <h4 className="text-sm font-medium text-app">本地备份</h4>
+                    <h4 className="text-sm font-medium text-app">{t('settings.localBackups')}</h4>
                     <button
                       type="button"
                       disabled={busy}
                       onClick={() => void refreshBackups()}
                       className="text-xs text-app-subtle hover:text-app"
                     >
-                      刷新
+                      {t('common.refresh')}
                     </button>
                   </div>
                   {backups.length === 0 ? (
-                    <p className="text-sm text-app-subtle">暂无备份。可先点「立即备份」，或用「选择文件恢复」导入 JSON。</p>
+                    <p className="text-sm text-app-subtle">{t('settings.noBackups')}</p>
                   ) : (
                     <ul className="space-y-2">
                       {backups.map((b) => (
@@ -186,9 +233,16 @@ export function SettingsPanel({ onExport, onImport, onDataRestored }: SettingsPa
                           <div className="min-w-0 flex-1">
                             <p className="text-sm text-app truncate">{formatBackupTime(b.mtime)}</p>
                             <p className="text-xs text-app-subtle truncate">
-                              {b.hosts} 主机 · {b.groups} 分组 · {b.keys} 密钥
-                              {b.portForwards ? ` · ${b.portForwards} 转发` : ''}
-                              {b.snippets ? ` · ${b.snippets} 片段` : ''} · {b.fileName}
+                              {t('settings.backupSummary', {
+                                hosts: b.hosts,
+                                groups: b.groups,
+                                keys: b.keys,
+                              })}
+                              {b.portForwards
+                                ? t('settings.backupForwards', { n: b.portForwards })
+                                : ''}
+                              {b.snippets ? t('settings.backupSnippets', { n: b.snippets }) : ''} ·{' '}
+                              {b.fileName}
                             </p>
                           </div>
                           <button
@@ -197,7 +251,7 @@ export function SettingsPanel({ onExport, onImport, onDataRestored }: SettingsPa
                             onClick={() => void handleRestoreBackup(b.fileName)}
                             className="btn-secondary px-3 py-1.5 text-xs shrink-0 disabled:opacity-50"
                           >
-                            恢复
+                            {t('settings.restore')}
                           </button>
                         </li>
                       ))}
@@ -208,17 +262,17 @@ export function SettingsPanel({ onExport, onImport, onDataRestored }: SettingsPa
             </section>
 
             <section>
-              <h3 className="text-sm font-medium text-app-muted uppercase tracking-wider mb-4">数据管理</h3>
+              <h3 className="text-sm font-medium text-app-muted uppercase tracking-wider mb-4">
+                {t('settings.data')}
+              </h3>
               <div className="rounded-xl border border-app-strong bg-app-card p-5">
-                <p className="text-sm text-app-muted mb-4">
-                  导出到任意位置，或导入外部 JSON（与「选择文件恢复」相同，会覆盖当前数据）。
-                </p>
+                <p className="text-sm text-app-muted mb-4">{t('settings.dataHelp')}</p>
                 <div className="flex flex-wrap gap-3">
                   <button onClick={onExport} className="btn-secondary px-6 py-2.5">
-                    导出配置
+                    {t('settings.export')}
                   </button>
                   <button onClick={onImport} className="btn-secondary px-6 py-2.5">
-                    导入配置
+                    {t('settings.import')}
                   </button>
                 </div>
               </div>
@@ -227,17 +281,21 @@ export function SettingsPanel({ onExport, onImport, onDataRestored }: SettingsPa
 
           <div className="space-y-8 min-w-0">
             <section>
-              <h3 className="text-sm font-medium text-app-muted uppercase tracking-wider mb-4">关于</h3>
+              <h3 className="text-sm font-medium text-app-muted uppercase tracking-wider mb-4">
+                {t('settings.about')}
+              </h3>
               <div className="text-sm text-app-muted space-y-1 rounded-xl border border-app-strong bg-app-card p-5">
                 <p className="text-app font-medium">Oh My CloudLink v0.1.1</p>
-                <p className="text-app-subtle">类 Termius 的 SSH 连接管理工具</p>
+                <p className="text-app-subtle">{t('settings.aboutBlurb')}</p>
               </div>
             </section>
 
             <section>
-              <h3 className="text-sm font-medium text-app-muted uppercase tracking-wider mb-4">路线图</h3>
+              <h3 className="text-sm font-medium text-app-muted uppercase tracking-wider mb-4">
+                {t('settings.roadmap')}
+              </h3>
               <ul className="text-sm text-app-subtle space-y-2 rounded-xl border border-app-strong bg-app-card p-5">
-                {['SSH 终端连接', 'SFTP 文件传输', '端口转发', '命令片段'].map((item) => (
+                {roadmapItems.map((item) => (
                   <li key={item} className="flex items-center gap-2">
                     <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-emerald-400" />
                     {item}

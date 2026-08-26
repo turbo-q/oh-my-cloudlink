@@ -1,4 +1,5 @@
 import type { SSHKey } from '../types'
+import { useI18n } from '../i18n/I18nProvider'
 
 interface KeysPanelProps {
   keys: SSHKey[]
@@ -15,19 +16,21 @@ export function KeysPanel({
   onEditKey,
   onDeleteKey,
 }: KeysPanelProps) {
+  const { t } = useI18n()
+
   return (
     <div className="flex-1 flex flex-col bg-app min-h-0">
       <div className="px-8 py-6 border-b border-app flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-semibold text-app">SSH 密钥</h2>
-          <p className="text-sm text-app-subtle mt-1">管理连接认证用的密钥</p>
+          <h2 className="text-xl font-semibold text-app">{t('keys.title')}</h2>
+          <p className="text-sm text-app-subtle mt-1">{t('keys.subtitle')}</p>
         </div>
         <div className="flex gap-2">
           <button onClick={onDiscoverKeys} className="btn-secondary text-sm px-4 py-2">
-            发现本机密钥
+            {t('keys.discover')}
           </button>
           <button onClick={onAddKey} className="btn-primary text-sm px-4 py-2">
-            + 添加密钥
+            {t('keys.add')}
           </button>
         </div>
       </div>
@@ -35,8 +38,8 @@ export function KeysPanel({
       <div className="flex-1 overflow-y-auto p-8">
         {keys.length === 0 ? (
           <div className="text-center py-16 text-app-subtle">
-            <p className="mb-2">暂无 SSH 密钥</p>
-            <p className="text-sm text-app-faint">点击「发现本机密钥」自动扫描 ~/.ssh 目录</p>
+            <p className="mb-2">{t('keys.empty')}</p>
+            <p className="text-sm text-app-faint">{t('keys.emptyHint')}</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-w-4xl">

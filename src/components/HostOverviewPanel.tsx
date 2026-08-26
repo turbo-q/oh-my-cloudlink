@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { useI18n } from '../i18n/I18nProvider'
 import type { Host, Group } from '../types'
 import type { AppPanel } from '../types/app'
 import { filterHosts, type GroupFilter } from '../utils/filterHosts'
@@ -40,6 +41,7 @@ export function HostOverviewPanel({
   onEditGroup,
   onDeleteGroup,
 }: HostOverviewPanelProps) {
+  const { t } = useI18n()
   const isSftp = panel === 'sftp'
 
   const searchFilteredHosts = useMemo(
@@ -87,14 +89,14 @@ export function HostOverviewPanel({
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center max-w-md px-6">
             <h2 className="text-2xl font-bold text-app mb-2">
-              {isSftp ? '暂无可用主机' : '欢迎使用 Oh My CloudLink'}
+              {isSftp ? t('hosts.noHostsSftp') : t('hosts.welcome')}
             </h2>
             <p className="text-app-muted mb-8">
-              {isSftp ? '请先添加服务器配置' : '添加你的第一台服务器，开始安全连接'}
+              {isSftp ? t('hosts.noHostsSftpHint') : t('hosts.welcomeHint')}
             </p>
             {!isSftp && (
               <button onClick={onAddHost} className="btn-primary px-8">
-                + 新建主机
+                + {t('hosts.newHost')}
               </button>
             )}
           </div>
@@ -121,7 +123,7 @@ export function HostOverviewPanel({
             className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-surface border border-app-strong text-sm font-medium text-app hover:bg-app-hover"
           >
             <span className="text-emerald-400">+</span>
-            新建主机
+            {t('hosts.newHost')}
           </button>
         </div>
       )}
@@ -131,19 +133,19 @@ export function HostOverviewPanel({
         {(groups.length > 0 || !isSftp) && (
           <section>
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-base font-semibold text-app">Groups</h3>
+              <h3 className="text-base font-semibold text-app">{t('hosts.groups')}</h3>
               {!isSftp && (
                 <button
                   onClick={onAddGroup}
                   className="text-xs text-app-subtle hover:text-emerald-400 transition-colors"
                 >
-                  + 新建分组
+                  + {t('hosts.newGroup')}
                 </button>
               )}
             </div>
 
             {groups.length === 0 ? (
-              <p className="text-sm text-app-faint py-4">暂无分组，添加主机时可输入分组名创建</p>
+              <p className="text-sm text-app-faint py-4">{t('hosts.noGroups')}</p>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                 <button
@@ -162,7 +164,7 @@ export function HostOverviewPanel({
                       </svg>
                     </div>
                     <div>
-                      <h4 className="font-semibold text-app">全部主机</h4>
+                      <h4 className="font-semibold text-app">{t('hosts.allHosts')}</h4>
                       <p className="text-xs text-app-subtle mt-1">{searchFilteredHosts.length} Hosts</p>
                     </div>
                   </div>
@@ -209,7 +211,7 @@ export function HostOverviewPanel({
                           }}
                           className="p-1 rounded text-app-muted hover:text-app text-xs"
                         >
-                          编辑
+                          {t('hosts.edit')}
                         </button>
                         <button
                           onClick={(e) => {
@@ -218,7 +220,7 @@ export function HostOverviewPanel({
                           }}
                           className="p-1 rounded text-red-400/70 hover:text-red-400 text-xs"
                         >
-                          删除
+                          {t('hosts.delete')}
                         </button>
                       </div>
                     </div>
@@ -240,7 +242,7 @@ export function HostOverviewPanel({
                         <span className="text-app-subtle text-lg">—</span>
                       </div>
                       <div>
-                        <h4 className="font-semibold text-app">未分组</h4>
+                        <h4 className="font-semibold text-app">{t('hosts.ungrouped')}</h4>
                         <p className="text-xs text-app-subtle mt-1">{ungroupedCount} Hosts</p>
                       </div>
                     </div>
@@ -261,7 +263,7 @@ export function HostOverviewPanel({
               </span>
             )}
             {groupFilter === '__ungrouped__' && (
-              <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-400">未分组</span>
+              <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-400">{t('hosts.ungrouped')}</span>
             )}
             <span className="text-xs text-app-faint">{displayHosts.length} 台</span>
           </div>
@@ -309,6 +311,7 @@ function HostCard({
   onEdit: () => void
   onDelete: () => void
 }) {
+  const { t } = useI18n()
   const subtitle = [group?.name, ...host.tags].filter(Boolean).join(', ')
 
   return (
@@ -346,7 +349,7 @@ function HostCard({
           }}
           className="p-1.5 rounded-lg text-app-muted hover:text-app hover:bg-app-hover-strong text-xs"
         >
-          编辑
+          {t('hosts.edit')}
         </button>
         <button
           onClick={(e) => {
@@ -355,7 +358,7 @@ function HostCard({
           }}
           className="p-1.5 rounded-lg text-red-400/70 hover:text-red-400 hover:bg-red-500/10 text-xs"
         >
-          删除
+          {t('hosts.delete')}
         </button>
       </div>
     </div>
@@ -377,6 +380,7 @@ function SearchBar({
   onSearchKeyDown: (e: React.KeyboardEvent) => void
   onConnect: () => void
 }) {
+  const { t } = useI18n()
   return (
     <div className="px-8 pt-5 pb-4">
       <div className="flex gap-3 max-w-3xl">
@@ -389,7 +393,7 @@ function SearchBar({
             onChange={(e) => onSearchChange(e.target.value)}
             onKeyDown={onSearchKeyDown}
             className="w-full pl-11 pr-4 py-3 bg-surface border border-app-strong rounded-xl text-sm text-app-secondary placeholder:text-app-faint focus:outline-none focus:border-emerald-500/40"
-            placeholder="搜索主机，或 user@hostname..."
+            placeholder={isSftp ? t('hosts.searchPlaceholderSftp') : t('hosts.searchPlaceholder')}
           />
         </div>
         <button
@@ -397,7 +401,7 @@ function SearchBar({
           disabled={!canConnect}
           className="px-8 py-3 rounded-xl text-sm font-semibold tracking-wide bg-emerald-500 text-white hover:bg-emerald-400 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0"
         >
-          {isSftp ? 'SFTP' : 'CONNECT'}
+          {isSftp ? t('hosts.sftp') : t('hosts.connect')}
         </button>
       </div>
     </div>
