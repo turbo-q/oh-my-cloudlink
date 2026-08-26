@@ -16,9 +16,11 @@ export function TerminalSearchBar({
   onQueryChange,
   onClose,
   onSearch,
-  placeholder = '搜索…',
+  placeholder,
 }: TerminalSearchBarProps) {
+  const { t } = useI18n()
   const inputRef = useRef<HTMLInputElement>(null)
+  const resolvedPlaceholder = placeholder ?? `${t('common.search')}…`
 
   useEffect(() => {
     if (open) {
@@ -44,7 +46,7 @@ export function TerminalSearchBar({
             onClose()
           }
         }}
-        placeholder={placeholder}
+        placeholder={resolvedPlaceholder}
         className="flex-1 min-w-0 px-3 py-1.5 text-sm rounded-lg border border-app-strong bg-app text-app"
       />
       <button type="button" onClick={() => onSearch('prev')} className="btn-secondary px-2 py-1 text-xs">
