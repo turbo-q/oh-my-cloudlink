@@ -1,1 +1,1 @@
-export type AppPanel = 'hosts' | 'sftp' | 'keys' | 'settings'
+export type AppPanel = 'hosts' | 'sftp' | 'keys' | 'logs' | 'settings'

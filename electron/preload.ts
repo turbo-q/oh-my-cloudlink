@@ -44,6 +44,23 @@ const electronAPI = {
     ipcRenderer.invoke('ssh:resize', sessionId, cols, rows),
   sshDisconnect: (sessionId: string) => ipcRenderer.invoke('ssh:disconnect', sessionId),
 
+  // 连接日志
+  logsList: () => ipcRenderer.invoke('logs:list'),
+  logsGet: (id: string) => ipcRenderer.invoke('logs:get', id) as Promise<string>,
+  logsDelete: (id: string) => ipcRenderer.invoke('logs:delete', id),
+  logsClear: () => ipcRenderer.invoke('logs:clear'),
+  sessionLogPrepare: (sessionId: string, hostId: string) =>
+    ipcRenderer.invoke('sessionLog:prepare', sessionId, hostId),
+  sessionLogAppend: (sessionId: string, text: string) =>
+    ipcRenderer.invoke('sessionLog:append', sessionId, text),
+
+  onLogAppend: (callback: (sessionId: string, chunk: string) => void) => {
+    const handler = (_: Electron.IpcRendererEvent, sessionId: string, chunk: string) =>
+      callback(sessionId, chunk)
+    ipcRenderer.on('log:append', handler)
+    return () => ipcRenderer.removeListener('log:append', handler)
+  },
+
   onSshData: (callback: (sessionId: string, data: string) => void) => {
     const handler = (_: Electron.IpcRendererEvent, sessionId: string, data: string) =>
       callback(sessionId, data)

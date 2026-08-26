@@ -49,6 +49,7 @@ export function SessionTabBar({
         {navBtn('hosts', '主机')}
         {navBtn('sftp', 'SFTP')}
         {navBtn('keys', '密钥')}
+        {navBtn('logs', '日志')}
         {navBtn('settings', '设置')}
 
         {sessions.length > 0 && (

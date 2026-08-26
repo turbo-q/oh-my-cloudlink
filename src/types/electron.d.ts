@@ -54,6 +54,27 @@ export interface ElectronAPI {
   onSshClose: (callback: (sessionId: string) => void) => () => void
   onSshError: (callback: (sessionId: string, error: string) => void) => () => void
 
+  logsList: () => Promise<
+    {
+      id: string
+      sessionId: string
+      hostId: string
+      hostName: string
+      hostname: string
+      username: string
+      startedAt: string
+      endedAt: string | null
+      status: 'connecting' | 'connected' | 'disconnected' | 'error'
+      byteSize: number
+    }[]
+  >
+  logsGet: (id: string) => Promise<string>
+  logsDelete: (id: string) => Promise<boolean>
+  logsClear: () => Promise<boolean>
+  sessionLogPrepare: (sessionId: string, hostId: string) => Promise<boolean>
+  sessionLogAppend: (sessionId: string, text: string) => Promise<boolean>
+  onLogAppend: (callback: (sessionId: string, chunk: string) => void) => () => void
+
   fileConnect: (sessionId: string, hostId: string, fileProtocol?: 'sftp' | 'ftp') => Promise<string>
   fileDisconnect: (sessionId: string) => Promise<void>
   fileList: (sessionId: string, dirPath: string) => Promise<RemoteFileEntry[]>

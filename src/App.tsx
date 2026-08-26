@@ -5,6 +5,7 @@ import { SessionTabBar } from './components/SessionTabBar'
 import { HostOverviewPanel } from './components/HostOverviewPanel'
 import { KeysPanel } from './components/KeysPanel'
 import { SettingsPanel } from './components/SettingsPanel'
+import { LogsPanel } from './components/LogsPanel'
 import { SftpPanel } from './components/SftpPanel'
 import { TerminalPanel } from './components/TerminalPanel'
 import { HostFormModal, GroupFormModal, KeyFormModal, DiscoverKeysModal } from './components/Modals'
@@ -263,6 +264,8 @@ export default function App() {
             onDeleteKey={handleDeleteKey}
           />
         )}
+
+        {!showSession && browsePanel === 'logs' && <LogsPanel />}
 
         {!showSession && browsePanel === 'settings' && (
           <SettingsPanel onExport={handleExport} onImport={handleImport} onDataRestored={refresh} />

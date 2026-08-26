@@ -6,6 +6,7 @@ import { SshManager } from './ssh-manager'
 import { FileManager } from './file-manager'
 import { LocalFileManager } from './local-file-manager'
 import { discoverLocalKeys, readKeyFromFile } from './key-discovery'
+import { SessionLogStore } from './session-log-store'
 
 // Must run before DataStore reads userData (keep path ASCII-only)
 ensureAppPaths()
@@ -14,6 +15,7 @@ const isDev = !app.isPackaged
 let mainWindow: BrowserWindow | null = null
 
 const dataStore = new DataStore()
+const sessionLogStore = new SessionLogStore()
 const sshManager = new SshManager()
 const fileManager = new FileManager()
 const localFileManager = new LocalFileManager()
@@ -137,15 +139,47 @@ function registerIpcHandlers(): void {
     if (!mainWindow) throw new Error('窗口未就绪')
     const host = dataStore.getHosts().find((h) => h.id === hostId)
     if (!host) throw new Error('主机不存在')
-    await sshManager.connect(
-      sessionId,
-      { host, keys: dataStore.getKeys() },
-      mainWindow,
-    )
+
+    sessionLogStore.startSession(sessionId, {
+      hostId: host.id,
+      hostName: host.name,
+      hostname: host.hostname,
+      username: host.username,
+    })
+
+    const logHooks = {
+      onOutput: (data: string) => {
+        sessionLogStore.append(sessionId, data)
+        mainWindow?.webContents.send('log:append', sessionId, data)
+      },
+      onClose: () => sessionLogStore.endSession(sessionId, 'disconnected'),
+      onError: (message: string) => {
+        sessionLogStore.append(sessionId, `\r\n\x1b[31m[错误] ${message}\x1b[0m\r\n`)
+        sessionLogStore.endSession(sessionId, 'error')
+      },
+    }
+
+    try {
+      await sshManager.connect(
+        sessionId,
+        { host, keys: dataStore.getKeys() },
+        mainWindow,
+        logHooks,
+      )
+      sessionLogStore.updateStatus(sessionId, 'connected')
+    } catch (err) {
+      sessionLogStore.endSession(sessionId, 'error')
+      throw err
+    }
   })
 
   safeHandle('ssh:write', (_e, sessionId: string, data: string) => {
-    sshManager.write(sessionId, data)
+    sshManager.write(sessionId, data, {
+      onInput: (chunk) => {
+        sessionLogStore.append(sessionId, chunk)
+        mainWindow?.webContents.send('log:append', sessionId, chunk)
+      },
+    })
   })
 
   safeHandle('ssh:resize', (_e, sessionId: string, cols: number, rows: number) => {
@@ -153,7 +187,34 @@ function registerIpcHandlers(): void {
   })
 
   safeHandle('ssh:disconnect', async (_e, sessionId: string) => {
-    await sshManager.disconnect(sessionId)
+    await sshManager.disconnect(sessionId, {
+      onClose: () => sessionLogStore.endSession(sessionId, 'disconnected'),
+    })
+  })
+
+  // 连接日志
+  safeHandle('logs:list', () => sessionLogStore.list())
+  safeHandle('logs:get', (_e, id: string) => sessionLogStore.getContent(id))
+  safeHandle('logs:delete', (_e, id: string) => sessionLogStore.deleteLog(id))
+  safeHandle('logs:clear', () => {
+    sessionLogStore.clearAll()
+    return true
+  })
+  safeHandle('sessionLog:prepare', (_e, sessionId: string, hostId: string) => {
+    const host = dataStore.getHosts().find((h) => h.id === hostId)
+    if (!host) throw new Error('主机不存在')
+    sessionLogStore.startSession(sessionId, {
+      hostId: host.id,
+      hostName: host.name,
+      hostname: host.hostname,
+      username: host.username,
+    })
+    return true
+  })
+  safeHandle('sessionLog:append', (_e, sessionId: string, text: string) => {
+    sessionLogStore.append(sessionId, text)
+    mainWindow?.webContents.send('log:append', sessionId, text)
+    return true
   })
 
   // 文件传输 (SFTP / FTP)
@@ -269,6 +330,7 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
   dataStore.close()
+  sessionLogStore.close()
   sshManager.disconnectAll()
   fileManager.disconnectAll()
 })

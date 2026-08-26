@@ -21,6 +21,10 @@ export function TerminalPanel({ sessionId, hostId, active, onStatusChange }: Ter
   useEffect(() => {
     if (!containerRef.current || terminalRef.current) return
 
+    const appendLog = (text: string) => {
+      void window.electronAPI.sessionLogAppend(sessionId, text)
+    }
+
     const term = new Terminal({
       cursorBlink: true,
       fontSize: 14,
@@ -38,24 +42,31 @@ export function TerminalPanel({ sessionId, hostId, active, onStatusChange }: Ter
     terminalRef.current = term
     fitAddonRef.current = fitAddon
 
-    term.writeln('\x1b[38;2;16;185;129mOh My CloudLink\x1b[0m — 正在连接...\r\n')
+    void window.electronAPI.sessionLogPrepare(sessionId, hostId).then(() => {
+      const banner = '\x1b[38;2;16;185;129mOh My CloudLink\x1b[0m — 正在连接...\r\n'
+      term.writeln(banner)
+      appendLog(banner)
+      onStatusChange(sessionId, 'connecting')
 
-    onStatusChange(sessionId, 'connecting')
-
-    void window.electronAPI
-      .sshConnect(sessionId, hostId)
-      .then(() => {
-        connectedRef.current = true
-        onStatusChange(sessionId, 'connected')
-        term.writeln('\x1b[90m连接成功\x1b[0m\r\n')
-        fitAddon.fit()
-        const { cols, rows } = term
-        void window.electronAPI.sshResize(sessionId, cols, rows)
-      })
-      .catch((err: Error) => {
-        term.writeln(`\r\n\x1b[31m连接失败: ${err.message}\x1b[0m\r\n`)
-        onStatusChange(sessionId, 'error', err.message)
-      })
+      void window.electronAPI
+        .sshConnect(sessionId, hostId)
+        .then(() => {
+          connectedRef.current = true
+          onStatusChange(sessionId, 'connected')
+          const ok = '\x1b[90m连接成功\x1b[0m\r\n'
+          term.writeln(ok)
+          appendLog(ok)
+          fitAddon.fit()
+          const { cols, rows } = term
+          void window.electronAPI.sshResize(sessionId, cols, rows)
+        })
+        .catch((err: Error) => {
+          const fail = `\r\n\x1b[31m连接失败: ${err.message}\x1b[0m\r\n`
+          term.writeln(fail)
+          appendLog(fail)
+          onStatusChange(sessionId, 'error', err.message)
+        })
+    })
 
     term.onData((data) => {
       if (connectedRef.current) {
@@ -71,7 +82,9 @@ export function TerminalPanel({ sessionId, hostId, active, onStatusChange }: Ter
       if (sid === sessionId) {
         connectedRef.current = false
         onStatusChange(sessionId, 'disconnected')
-        term.writeln('\r\n\x1b[90m[连接已断开]\x1b[0m')
+        const msg = '\r\n\x1b[90m[连接已断开]\x1b[0m'
+        term.writeln(msg)
+        appendLog(`${msg}\r\n`)
       }
     })
 
@@ -79,7 +92,9 @@ export function TerminalPanel({ sessionId, hostId, active, onStatusChange }: Ter
       if (sid === sessionId) {
         connectedRef.current = false
         onStatusChange(sessionId, 'error', error)
-        term.writeln(`\r\n\x1b[31m[错误] ${error}\x1b[0m`)
+        const msg = `\r\n\x1b[31m[错误] ${error}\x1b[0m`
+        term.writeln(msg)
+        appendLog(`${msg}\r\n`)
       }
     })
 

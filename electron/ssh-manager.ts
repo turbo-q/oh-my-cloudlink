@@ -7,10 +7,22 @@ interface ActiveSession {
   stream: ClientChannel
 }
 
+export interface SshSessionHooks {
+  onOutput?: (data: string) => void
+  onInput?: (data: string) => void
+  onClose?: () => void
+  onError?: (message: string) => void
+}
+
 export class SshManager {
   private sessions = new Map<string, ActiveSession>()
 
-  async connect(sessionId: string, options: ConnectOptions, win: BrowserWindow): Promise<void> {
+  async connect(
+    sessionId: string,
+    options: ConnectOptions,
+    win: BrowserWindow,
+    hooks?: SshSessionHooks,
+  ): Promise<void> {
     if (options.host.protocol === 'ftp') {
       throw new Error('FTP 主机请使用 SFTP 菜单进行文件传输')
     }
@@ -35,16 +47,21 @@ export class SshManager {
           this.sessions.set(sessionId, { client, stream })
 
           stream.on('data', (data: Buffer) => {
-            win.webContents.send('ssh:data', sessionId, data.toString('utf-8'))
+            const text = data.toString('utf-8')
+            hooks?.onOutput?.(text)
+            win.webContents.send('ssh:data', sessionId, text)
           })
 
           stream.on('close', () => {
             this.cleanup(sessionId)
+            hooks?.onClose?.()
             win.webContents.send('ssh:close', sessionId)
           })
 
           stream.stderr.on('data', (data: Buffer) => {
-            win.webContents.send('ssh:data', sessionId, data.toString('utf-8'))
+            const text = data.toString('utf-8')
+            hooks?.onOutput?.(text)
+            win.webContents.send('ssh:data', sessionId, text)
           })
 
           resolve()
@@ -53,6 +70,7 @@ export class SshManager {
 
       client.on('error', (err) => {
         this.cleanup(sessionId)
+        hooks?.onError?.(err.message)
         win.webContents.send('ssh:error', sessionId, err.message)
         reject(err)
       })
@@ -60,6 +78,7 @@ export class SshManager {
       client.on('close', () => {
         if (this.sessions.has(sessionId)) {
           this.cleanup(sessionId)
+          hooks?.onClose?.()
           win.webContents.send('ssh:close', sessionId)
         }
       })
@@ -68,9 +87,10 @@ export class SshManager {
     })
   }
 
-  write(sessionId: string, data: string): void {
+  write(sessionId: string, data: string, hooks?: Pick<SshSessionHooks, 'onInput'>): void {
     const session = this.sessions.get(sessionId)
     if (session) {
+      hooks?.onInput?.(data)
       session.stream.write(data)
     }
   }
@@ -82,7 +102,7 @@ export class SshManager {
     }
   }
 
-  async disconnect(sessionId: string): Promise<void> {
+  async disconnect(sessionId: string, hooks?: Pick<SshSessionHooks, 'onClose'>): Promise<void> {
     const session = this.sessions.get(sessionId)
     if (!session) return
 
@@ -90,10 +110,12 @@ export class SshManager {
       session.client.end()
       session.client.on('close', () => {
         this.cleanup(sessionId)
+        hooks?.onClose?.()
         resolve()
       })
       setTimeout(() => {
         this.cleanup(sessionId)
+        hooks?.onClose?.()
         resolve()
       }, 3000)
     })
