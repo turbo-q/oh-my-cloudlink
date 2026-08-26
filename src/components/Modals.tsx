@@ -7,6 +7,7 @@ import type {
   DiscoveredKey,
   PortForward,
   PortForwardType,
+  Snippet,
 } from '../types'
 import { GROUP_COLORS, PORT_FORWARD_TYPE_LABELS, isSshHost } from '../types'
 import { GroupCombobox } from './GroupCombobox'
@@ -901,6 +902,139 @@ export function PortForwardFormModal({
               取消
             </button>
             <button type="submit" disabled={saving || sshHosts.length === 0} className="btn-primary flex-1">
+              {saving ? '保存中...' : '保存'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+interface SnippetFormModalProps {
+  open: boolean
+  snippet?: Snippet | null
+  hosts: Host[]
+  defaultHostId?: string | null
+  onSave: (data: Partial<Snippet> & { name: string; command: string }) => Promise<unknown>
+  onClose: () => void
+}
+
+export function SnippetFormModal({
+  open,
+  snippet,
+  hosts,
+  defaultHostId,
+  onSave,
+  onClose,
+}: SnippetFormModalProps) {
+  const [name, setName] = useState('')
+  const [command, setCommand] = useState('')
+  const [hostId, setHostId] = useState('')
+  const [tags, setTags] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    if (!open) return
+    if (snippet) {
+      setName(snippet.name)
+      setCommand(snippet.command)
+      setHostId(snippet.hostId ?? '')
+      setTags(snippet.tags.join(', '))
+      return
+    }
+    setName('')
+    setCommand('')
+    setHostId(defaultHostId && hosts.some((h) => h.id === defaultHostId) ? defaultHostId : '')
+    setTags('')
+  }, [open, snippet, defaultHostId, hosts])
+
+  if (!open) return null
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!command.trim()) {
+      alert('请填写命令内容')
+      return
+    }
+    setSaving(true)
+    try {
+      await onSave({
+        id: snippet?.id,
+        name: name.trim() || command.trim().slice(0, 40),
+        command: command.replace(/\r\n/g, '\n'),
+        hostId: hostId || undefined,
+        tags: tags
+          .split(/[,，]/)
+          .map((t) => t.trim())
+          .filter(Boolean),
+      })
+      onClose()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : String(err))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--app-overlay)] backdrop-blur-sm">
+      <div className="bg-elevated border border-app-strong rounded-xl shadow-2xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
+        <div className="px-6 py-4 border-b border-app-strong">
+          <h2 className="text-lg font-semibold text-app">{snippet ? '编辑命令片段' : '新建命令片段'}</h2>
+        </div>
+        <form onSubmit={(e) => void handleSubmit(e)} className="p-6 space-y-4">
+          <div>
+            <label className="block text-sm text-app-muted mb-1">名称</label>
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="input-field"
+              placeholder="例如：查看 Docker / Nginx 日志"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm text-app-muted mb-1">命令内容</label>
+            <textarea
+              required
+              value={command}
+              onChange={(e) => setCommand(e.target.value)}
+              className="input-field font-mono text-xs h-36"
+              placeholder={'cd /var/log\ntail -f nginx/error.log'}
+            />
+            <p className="text-[10px] text-app-faint mt-1">
+              可用 {'{{hostname}}'} / {'{{hostName}}'} / {'{{username}}'} 占位符
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm text-app-muted mb-1">作用范围</label>
+            <select value={hostId} onChange={(e) => setHostId(e.target.value)} className="input-field">
+              <option value="">全局（所有主机可用）</option>
+              {hosts.map((h) => (
+                <option key={h.id} value={h.id}>
+                  仅 {h.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm text-app-muted mb-1">标签（逗号分隔，可选）</label>
+            <input
+              value={tags}
+              onChange={(e) => setTags(e.target.value)}
+              className="input-field"
+              placeholder="docker, 日志"
+            />
+          </div>
+
+          <div className="flex gap-3 pt-2">
+            <button type="button" onClick={onClose} className="btn-secondary flex-1">
+              取消
+            </button>
+            <button type="submit" disabled={saving} className="btn-primary flex-1">
               {saving ? '保存中...' : '保存'}
             </button>
           </div>

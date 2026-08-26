@@ -11,6 +11,7 @@ interface BackupInfo {
   groups: number
   keys: number
   portForwards?: number
+  snippets?: number
 }
 
 interface SettingsPanelProps {
@@ -186,7 +187,8 @@ export function SettingsPanel({ onExport, onImport, onDataRestored }: SettingsPa
                             <p className="text-sm text-app truncate">{formatBackupTime(b.mtime)}</p>
                             <p className="text-xs text-app-subtle truncate">
                               {b.hosts} 主机 · {b.groups} 分组 · {b.keys} 密钥
-                              {b.portForwards ? ` · ${b.portForwards} 转发` : ''} · {b.fileName}
+                              {b.portForwards ? ` · ${b.portForwards} 转发` : ''}
+                              {b.snippets ? ` · ${b.snippets} 片段` : ''} · {b.fileName}
                             </p>
                           </div>
                           <button
@@ -235,9 +237,9 @@ export function SettingsPanel({ onExport, onImport, onDataRestored }: SettingsPa
             <section>
               <h3 className="text-sm font-medium text-app-muted uppercase tracking-wider mb-4">路线图</h3>
               <ul className="text-sm text-app-subtle space-y-2 rounded-xl border border-app-strong bg-app-card p-5">
-                {['SSH 终端连接', 'SFTP 文件传输', '端口转发', 'Snippets'].map((item, i) => (
+                {['SSH 终端连接', 'SFTP 文件传输', '端口转发', '命令片段'].map((item) => (
                   <li key={item} className="flex items-center gap-2">
-                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${i < 3 ? 'bg-emerald-400' : 'bg-app-faint'}`} />
+                    <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-emerald-400" />
                     {item}
                   </li>
                 ))}

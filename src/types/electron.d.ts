@@ -1,4 +1,13 @@
-import type { Host, Group, SSHKey, RemoteFileEntry, DiscoveredKey, PortForward, PortForwardRuntime } from './index'
+import type {
+  Host,
+  Group,
+  SSHKey,
+  RemoteFileEntry,
+  DiscoveredKey,
+  PortForward,
+  PortForwardRuntime,
+  Snippet,
+} from './index'
 
 export interface ElectronAPI {
   getHosts: () => Promise<Host[]>
@@ -30,7 +39,19 @@ export interface ElectronAPI {
   forwardStopAll: () => Promise<boolean>
   onForwardStatus: (callback: (info: PortForwardRuntime) => void) => () => void
 
-  exportData: () => Promise<{ hosts: Host[]; groups: Group[]; keys: SSHKey[]; portForwards: PortForward[] }>
+  getSnippets: () => Promise<Snippet[]>
+  saveSnippet: (
+    snippet: Partial<Snippet> & { name: string; command: string },
+  ) => Promise<Snippet>
+  deleteSnippet: (id: string) => Promise<boolean>
+
+  exportData: () => Promise<{
+    hosts: Host[]
+    groups: Group[]
+    keys: SSHKey[]
+    portForwards: PortForward[]
+    snippets: Snippet[]
+  }>
   importData: (data: unknown) => Promise<boolean>
   listBackups: () => Promise<
     {
@@ -42,6 +63,7 @@ export interface ElectronAPI {
       groups: number
       keys: number
       portForwards: number
+      snippets: number
     }[]
   >
   createBackup: () => Promise<{
@@ -53,6 +75,7 @@ export interface ElectronAPI {
     groups: number
     keys: number
     portForwards: number
+    snippets: number
   }>
   restoreBackup: (fileName: string) => Promise<boolean>
   restoreBackupFromFile: () => Promise<boolean>

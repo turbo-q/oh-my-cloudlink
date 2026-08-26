@@ -50,6 +50,7 @@ export function SessionTabBar({
         {navBtn('sftp', 'SFTP')}
         {navBtn('keys', '密钥')}
         {navBtn('forwards', '转发')}
+        {navBtn('snippets', '片段')}
         {navBtn('logs', '日志')}
         {navBtn('settings', '设置')}
 

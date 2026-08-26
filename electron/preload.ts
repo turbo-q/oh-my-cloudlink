@@ -21,6 +21,11 @@ const electronAPI = {
   savePortForward: (forward: unknown) => ipcRenderer.invoke('data:savePortForward', forward),
   deletePortForward: (id: string) => ipcRenderer.invoke('data:deletePortForward', id),
 
+  // 命令片段
+  getSnippets: () => ipcRenderer.invoke('data:getSnippets'),
+  saveSnippet: (snippet: unknown) => ipcRenderer.invoke('data:saveSnippet', snippet),
+  deleteSnippet: (id: string) => ipcRenderer.invoke('data:deleteSnippet', id),
+
   // 端口转发运行时
   forwardStart: (ruleId: string) => ipcRenderer.invoke('forward:start', ruleId),
   forwardStop: (ruleId: string) => ipcRenderer.invoke('forward:stop', ruleId),

@@ -59,11 +59,24 @@ export interface StoredPortForward {
   updatedAt: string
 }
 
+/** 命令片段（可全局或绑定主机） */
+export interface StoredSnippet {
+  id: string
+  name: string
+  command: string
+  /** 为空表示全局；有值则优先在该主机会话中展示 */
+  hostId?: string
+  tags: string[]
+  createdAt: string
+  updatedAt: string
+}
+
 export interface DataFile {
   hosts: StoredHost[]
   groups: StoredGroup[]
   keys: StoredKey[]
   portForwards: StoredPortForward[]
+  snippets: StoredSnippet[]
 }
 
 export interface BackupInfo {
@@ -75,6 +88,7 @@ export interface BackupInfo {
   groups: number
   keys: number
   portForwards: number
+  snippets: number
 }
 
 const MAX_BACKUPS = 5
@@ -126,6 +140,16 @@ interface PortForwardRow {
   updated_at: string
 }
 
+interface SnippetRow {
+  id: string
+  name: string
+  command: string
+  host_id: string | null
+  tags: string
+  created_at: string
+  updated_at: string
+}
+
 export class DataStore {
   private db: DatabaseSync
   private dbPath: string
@@ -165,7 +189,12 @@ export class DataStore {
       const data = this.readDataFile(this.legacyBackupPath)
       if (
         !data ||
-        data.hosts.length + data.groups.length + data.keys.length + data.portForwards.length === 0
+        data.hosts.length +
+          data.groups.length +
+          data.keys.length +
+          data.portForwards.length +
+          data.snippets.length ===
+          0
       ) {
         return
       }
@@ -241,10 +270,22 @@ export class DataStore {
         updated_at TEXT NOT NULL
       );
 
+      CREATE TABLE IF NOT EXISTS snippets (
+        id TEXT PRIMARY KEY NOT NULL,
+        name TEXT NOT NULL,
+        command TEXT NOT NULL,
+        host_id TEXT,
+        tags TEXT NOT NULL DEFAULT '[]',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
       CREATE INDEX IF NOT EXISTS idx_hosts_group_id ON hosts(group_id);
       CREATE INDEX IF NOT EXISTS idx_hosts_name ON hosts(name);
       CREATE INDEX IF NOT EXISTS idx_groups_name ON groups(name);
       CREATE INDEX IF NOT EXISTS idx_port_forwards_host_id ON port_forwards(host_id);
+      CREATE INDEX IF NOT EXISTS idx_snippets_host_id ON snippets(host_id);
+      CREATE INDEX IF NOT EXISTS idx_snippets_name ON snippets(name);
     `)
   }
 
@@ -254,7 +295,8 @@ export class DataStore {
       this.countRows('hosts') +
         this.countRows('groups') +
         this.countRows('keys') +
-        this.countRows('port_forwards') >
+        this.countRows('port_forwards') +
+        this.countRows('snippets') >
       0
     ) {
       return
@@ -285,7 +327,11 @@ export class DataStore {
         const data = this.readDataFile(jsonPath)
         if (!data) continue
         if (
-          data.hosts.length + data.groups.length + data.keys.length + data.portForwards.length ===
+          data.hosts.length +
+            data.groups.length +
+            data.keys.length +
+            data.portForwards.length +
+            data.snippets.length ===
           0
         ) {
           continue
@@ -325,6 +371,7 @@ export class DataStore {
       groups: Array.isArray(parsed.groups) ? parsed.groups : [],
       keys: Array.isArray(parsed.keys) ? parsed.keys : [],
       portForwards: Array.isArray(parsed.portForwards) ? parsed.portForwards : [],
+      snippets: Array.isArray(parsed.snippets) ? parsed.snippets : [],
     }
   }
 
@@ -362,7 +409,11 @@ export class DataStore {
 
       const data = this.exportData()
       if (
-        data.hosts.length + data.groups.length + data.keys.length + data.portForwards.length ===
+        data.hosts.length +
+          data.groups.length +
+          data.keys.length +
+          data.portForwards.length +
+          data.snippets.length ===
         0
       ) {
         return null
@@ -391,6 +442,7 @@ export class DataStore {
         groups: data.groups.length,
         keys: data.keys.length,
         portForwards: data.portForwards.length,
+        snippets: data.snippets.length,
       }
     } catch (err) {
       console.error('[data-store] backup failed:', err)
@@ -406,6 +458,7 @@ export class DataStore {
         let groups = 0
         let keys = 0
         let portForwards = 0
+        let snippets = 0
         try {
           const data = this.readDataFile(f.filePath)
           if (data) {
@@ -413,6 +466,7 @@ export class DataStore {
             groups = data.groups.length
             keys = data.keys.length
             portForwards = data.portForwards.length
+            snippets = data.snippets.length
           }
         } catch {
           /* ignore broken backup preview */
@@ -426,6 +480,7 @@ export class DataStore {
           groups,
           keys,
           portForwards,
+          snippets,
         }
       })
   }
@@ -446,7 +501,11 @@ export class DataStore {
     const data = this.readDataFile(filePath)
     if (!data) throw new Error('备份文件格式不正确')
     if (
-      data.hosts.length + data.groups.length + data.keys.length + data.portForwards.length ===
+      data.hosts.length +
+        data.groups.length +
+        data.keys.length +
+        data.portForwards.length +
+        data.snippets.length ===
       0
     ) {
       throw new Error('备份文件为空')
@@ -455,7 +514,7 @@ export class DataStore {
     return data
   }
 
-  private countRows(table: 'hosts' | 'groups' | 'keys' | 'port_forwards'): number {
+  private countRows(table: 'hosts' | 'groups' | 'keys' | 'port_forwards' | 'snippets'): number {
     const row = this.db.prepare(`SELECT COUNT(*) AS c FROM ${table}`).get() as
       | { c: number }
       | undefined
@@ -526,9 +585,22 @@ export class DataStore {
     }
   }
 
+  private mapSnippet(row: SnippetRow): StoredSnippet {
+    return {
+      id: row.id,
+      name: row.name,
+      command: row.command,
+      hostId: row.host_id ?? undefined,
+      tags: this.parseTags(row.tags),
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    }
+  }
+
   private replaceAll(data: DataFile, options?: { skipBackup?: boolean }): void {
     this.db.exec('BEGIN')
     try {
+      this.db.exec('DELETE FROM snippets')
       this.db.exec('DELETE FROM port_forwards')
       this.db.exec('DELETE FROM hosts')
       this.db.exec('DELETE FROM groups')
@@ -598,6 +670,23 @@ export class DataStore {
           f.remotePort ?? null,
           f.createdAt,
           f.updatedAt,
+        )
+      }
+
+      const insertSnippet = this.db.prepare(
+        `INSERT INTO snippets (
+          id, name, command, host_id, tags, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      )
+      for (const s of data.snippets ?? []) {
+        insertSnippet.run(
+          s.id,
+          s.name,
+          s.command,
+          s.hostId ?? null,
+          JSON.stringify(s.tags ?? []),
+          s.createdAt,
+          s.updatedAt,
         )
       }
 
@@ -687,6 +776,8 @@ export class DataStore {
     this.db.exec('BEGIN')
     try {
       this.db.prepare('DELETE FROM port_forwards WHERE host_id = ?').run(id)
+      // Keep snippets; just clear host binding so they become global
+      this.db.prepare('UPDATE snippets SET host_id = NULL WHERE host_id = ?').run(id)
       const result = this.db.prepare('DELETE FROM hosts WHERE id = ?').run(id)
       this.db.exec('COMMIT')
       if (result.changes > 0) this.createTimedBackup()
@@ -917,12 +1008,91 @@ export class DataStore {
     return result.changes > 0
   }
 
+  getSnippets(): StoredSnippet[] {
+    const rows = this.db
+      .prepare('SELECT * FROM snippets ORDER BY name COLLATE NOCASE')
+      .all() as unknown as SnippetRow[]
+    return rows.map((r) => this.mapSnippet(r))
+  }
+
+  saveSnippet(
+    snippet: Omit<StoredSnippet, 'id' | 'createdAt' | 'updatedAt'> & { id?: string },
+  ): StoredSnippet {
+    if (snippet.hostId) {
+      const host = this.db.prepare('SELECT id FROM hosts WHERE id = ?').get(snippet.hostId)
+      if (!host) throw new Error('关联主机不存在')
+    }
+
+    const now = new Date().toISOString()
+    const tagsJson = JSON.stringify(snippet.tags ?? [])
+
+    if (snippet.id) {
+      const existing = this.db
+        .prepare('SELECT * FROM snippets WHERE id = ?')
+        .get(snippet.id) as unknown as SnippetRow | undefined
+      if (existing) {
+        this.db
+          .prepare(
+            `UPDATE snippets SET
+              name = ?, command = ?, host_id = ?, tags = ?, updated_at = ?
+             WHERE id = ?`,
+          )
+          .run(
+            snippet.name,
+            snippet.command,
+            snippet.hostId ?? null,
+            tagsJson,
+            now,
+            snippet.id,
+          )
+        const updated = this.db
+          .prepare('SELECT * FROM snippets WHERE id = ?')
+          .get(snippet.id) as unknown as SnippetRow
+        this.createTimedBackup()
+        return this.mapSnippet(updated)
+      }
+    }
+
+    const created: StoredSnippet = {
+      id: randomUUID(),
+      name: snippet.name,
+      command: snippet.command,
+      hostId: snippet.hostId,
+      tags: snippet.tags ?? [],
+      createdAt: now,
+      updatedAt: now,
+    }
+    this.db
+      .prepare(
+        `INSERT INTO snippets (id, name, command, host_id, tags, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        created.id,
+        created.name,
+        created.command,
+        created.hostId ?? null,
+        JSON.stringify(created.tags),
+        created.createdAt,
+        created.updatedAt,
+      )
+    this.createTimedBackup()
+    return created
+  }
+
+  deleteSnippet(id: string): boolean {
+    const result = this.db.prepare('DELETE FROM snippets WHERE id = ?').run(id)
+    if (result.changes > 0) this.createTimedBackup()
+    return result.changes > 0
+  }
+
   exportData(): DataFile {
     return {
       hosts: this.getHosts(),
       groups: this.getGroups(),
       keys: this.getKeys(),
       portForwards: this.getPortForwards(),
+      snippets: this.getSnippets(),
     }
   }
 
@@ -932,6 +1102,7 @@ export class DataStore {
       groups: data.groups ?? [],
       keys: data.keys ?? [],
       portForwards: data.portForwards ?? [],
+      snippets: data.snippets ?? [],
     })
   }
 }

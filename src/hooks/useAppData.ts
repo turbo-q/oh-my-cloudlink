@@ -1,25 +1,28 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { Group, Host, PortForward, SSHKey } from '../types'
+import type { Group, Host, PortForward, Snippet, SSHKey } from '../types'
 
 export function useAppData() {
   const [hosts, setHosts] = useState<Host[]>([])
   const [groups, setGroups] = useState<Group[]>([])
   const [keys, setKeys] = useState<SSHKey[]>([])
   const [portForwards, setPortForwards] = useState<PortForward[]>([])
+  const [snippets, setSnippets] = useState<Snippet[]>([])
   const [loading, setLoading] = useState(true)
 
   const refresh = useCallback(async () => {
     if (!window.electronAPI) return
-    const [h, g, k, f] = await Promise.all([
+    const [h, g, k, f, s] = await Promise.all([
       window.electronAPI.getHosts(),
       window.electronAPI.getGroups(),
       window.electronAPI.getKeys(),
       window.electronAPI.getPortForwards(),
+      window.electronAPI.getSnippets(),
     ])
     setHosts(h as Host[])
     setGroups(g as Group[])
     setKeys(k as SSHKey[])
     setPortForwards(f as PortForward[])
+    setSnippets(s as Snippet[])
     setLoading(false)
   }, [])
 
@@ -79,6 +82,17 @@ export function useAppData() {
     await refresh()
   }
 
+  const saveSnippet = async (snippet: Partial<Snippet> & { name: string; command: string }) => {
+    const saved = await window.electronAPI.saveSnippet(snippet)
+    await refresh()
+    return saved
+  }
+
+  const deleteSnippet = async (id: string) => {
+    await window.electronAPI.deleteSnippet(id)
+    await refresh()
+  }
+
   const exportData = async () => {
     return window.electronAPI.exportData()
   }
@@ -93,6 +107,7 @@ export function useAppData() {
     groups,
     keys,
     portForwards,
+    snippets,
     loading,
     refresh,
     saveHost,
@@ -103,6 +118,8 @@ export function useAppData() {
     deleteKey,
     savePortForward,
     deletePortForward,
+    saveSnippet,
+    deleteSnippet,
     exportData,
     importData,
   }

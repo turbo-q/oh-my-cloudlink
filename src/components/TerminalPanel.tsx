@@ -4,17 +4,33 @@ import { FitAddon } from '@xterm/addon-fit'
 import { SearchAddon } from '@xterm/addon-search'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import { getStoredTheme, getTerminalTheme, resolveTheme, THEME_CHANGE_EVENT } from '../theme'
+import type { Host, Snippet } from '../types'
+import { insertSnippetToSession } from '../utils/snippets'
 import { TerminalSearchBar, useTerminalSearchShortcut } from './TerminalSearchBar'
+import { TerminalSnippetPicker, useTerminalSnippetShortcut } from './TerminalSnippetPicker'
 import 'xterm/css/xterm.css'
 
 interface TerminalPanelProps {
   sessionId: string
   hostId: string
+  hostName: string
+  hostname: string
   active: boolean
+  hosts: Host[]
+  snippets: Snippet[]
   onStatusChange: (sessionId: string, status: 'connecting' | 'connected' | 'disconnected' | 'error', error?: string) => void
 }
 
-export function TerminalPanel({ sessionId, hostId, active, onStatusChange }: TerminalPanelProps) {
+export function TerminalPanel({
+  sessionId,
+  hostId,
+  hostName,
+  hostname,
+  active,
+  hosts,
+  snippets,
+  onStatusChange,
+}: TerminalPanelProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const terminalRef = useRef<Terminal | null>(null)
   const fitAddonRef = useRef<FitAddon | null>(null)
@@ -23,6 +39,7 @@ export function TerminalPanel({ sessionId, hostId, active, onStatusChange }: Ter
 
   const [searchOpen, setSearchOpen] = useState(false)
   const [query, setQuery] = useState('')
+  const [snippetOpen, setSnippetOpen] = useState(false)
 
   const runSearch = useCallback(
     (direction: 'next' | 'prev') => {
@@ -34,10 +51,38 @@ export function TerminalPanel({ sessionId, hostId, active, onStatusChange }: Ter
     [query],
   )
 
-  const openSearch = useCallback(() => setSearchOpen(true), [])
+  const openSearch = useCallback(() => {
+    setSnippetOpen(false)
+    setSearchOpen(true)
+  }, [])
   const closeSearch = useCallback(() => setSearchOpen(false), [])
 
-  useTerminalSearchShortcut(active, searchOpen, openSearch, closeSearch)
+  const openSnippet = useCallback(() => {
+    setSearchOpen(false)
+    setSnippetOpen(true)
+  }, [])
+  const closeSnippet = useCallback(() => setSnippetOpen(false), [])
+
+  useTerminalSearchShortcut(active && !snippetOpen, searchOpen, openSearch, closeSearch)
+  useTerminalSnippetShortcut(active && !searchOpen, snippetOpen, openSnippet, closeSnippet)
+
+  const handleInsertSnippet = useCallback(
+    (snippet: Snippet, run: boolean) => {
+      if (!connectedRef.current) {
+        alert('终端尚未连接成功')
+        return
+      }
+      const host = hosts.find((h) => h.id === hostId) ?? null
+      void insertSnippetToSession(sessionId, snippet.command, {
+        run,
+        session: { id: sessionId, hostId, hostName, hostname, protocol: 'ssh', status: 'connected' },
+        host,
+      }).then(() => {
+        requestAnimationFrame(() => terminalRef.current?.focus())
+      })
+    },
+    [hosts, hostId, hostName, hostname, sessionId],
+  )
 
   useEffect(() => {
     if (!containerRef.current || terminalRef.current) return
@@ -162,7 +207,7 @@ export function TerminalPanel({ sessionId, hostId, active, onStatusChange }: Ter
     if (active && fitAddonRef.current) {
       requestAnimationFrame(() => fitAddonRef.current?.fit())
     }
-  }, [active, searchOpen])
+  }, [active, searchOpen, snippetOpen])
 
   return (
     <div className={`absolute inset-0 flex flex-col min-h-0 bg-app ${active ? 'block' : 'hidden'}`}>
@@ -174,7 +219,17 @@ export function TerminalPanel({ sessionId, hostId, active, onStatusChange }: Ter
         onSearch={runSearch}
         placeholder="搜索终端输出…"
       />
-      <div ref={containerRef} className="flex-1 min-h-0 p-2" tabIndex={0} />
+      <div className="relative flex-1 min-h-0">
+        <TerminalSnippetPicker
+          open={snippetOpen}
+          hostId={hostId}
+          hosts={hosts}
+          snippets={snippets}
+          onClose={closeSnippet}
+          onInsert={handleInsertSnippet}
+        />
+        <div ref={containerRef} className="absolute inset-0 p-2" tabIndex={0} />
+      </div>
     </div>
   )
 }

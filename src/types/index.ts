@@ -115,6 +115,19 @@ export const PORT_FORWARD_TYPE_LABELS: Record<PortForwardType, string> = {
   dynamic: '动态 (SOCKS5)',
 }
 
+/** 命令片段 */
+export interface Snippet {
+  id: string
+  name: string
+  command: string
+  hostId?: string
+  tags: string[]
+  createdAt: string
+  updatedAt: string
+}
+
+export type SnippetFormData = Omit<Snippet, 'id' | 'createdAt' | 'updatedAt'>
+
 export const PROTOCOL_LABELS: Record<ConnectionProtocol, string> = {
   ssh: 'SSH 终端',
   sftp: 'SFTP 文件',

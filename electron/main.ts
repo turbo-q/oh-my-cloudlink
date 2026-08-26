@@ -89,6 +89,11 @@ function registerIpcHandlers(): void {
     return dataStore.deletePortForward(id)
   })
 
+  // 命令片段 CRUD
+  safeHandle('data:getSnippets', () => dataStore.getSnippets())
+  safeHandle('data:saveSnippet', (_e, snippet) => dataStore.saveSnippet(snippet))
+  safeHandle('data:deleteSnippet', (_e, id: string) => dataStore.deleteSnippet(id))
+
   // 端口转发运行时
   safeHandle('forward:start', async (_e, ruleId: string) => {
     const rule = dataStore.getPortForward(ruleId)

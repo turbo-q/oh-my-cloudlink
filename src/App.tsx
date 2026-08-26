@@ -8,9 +8,10 @@ import { SettingsPanel } from './components/SettingsPanel'
 import { LogsPanel } from './components/LogsPanel'
 import { SftpPanel } from './components/SftpPanel'
 import { TerminalPanel } from './components/TerminalPanel'
-import { HostFormModal, GroupFormModal, KeyFormModal, DiscoverKeysModal, PortForwardFormModal } from './components/Modals'
+import { HostFormModal, GroupFormModal, KeyFormModal, DiscoverKeysModal, PortForwardFormModal, SnippetFormModal } from './components/Modals'
 import { PortForwardsPanel } from './components/PortForwardsPanel'
-import type { Host, Group, SSHKey, AppSession, DiscoveredKey, PortForward } from './types'
+import { SnippetsPanel } from './components/SnippetsPanel'
+import type { Host, Group, SSHKey, AppSession, DiscoveredKey, PortForward, Snippet } from './types'
 import type { AppPanel } from './types/app'
 import { isFileProtocol, isSshHost, getHostFileProtocol, GROUP_COLORS } from './types'
 import { filterHosts, type GroupFilter } from './utils/filterHosts'
@@ -22,6 +23,7 @@ type ModalState =
   | { type: 'key'; key?: SSHKey }
   | { type: 'discoverKeys' }
   | { type: 'forward'; forward?: PortForward }
+  | { type: 'snippet'; snippet?: Snippet }
 
 export default function App() {
   const {
@@ -29,6 +31,7 @@ export default function App() {
     groups,
     keys,
     portForwards,
+    snippets,
     loading,
     refresh,
     saveHost,
@@ -39,6 +42,8 @@ export default function App() {
     deleteKey,
     savePortForward,
     deletePortForward,
+    saveSnippet,
+    deleteSnippet,
     exportData,
     importData,
   } = useAppData()
@@ -174,6 +179,16 @@ export default function App() {
     await deletePortForward(forward.id)
   }
 
+  const handleDeleteSnippet = async (snippet: Snippet) => {
+    if (!confirm(`确定删除命令片段「${snippet.name}」？`)) return
+    await deleteSnippet(snippet.id)
+  }
+
+  const activeSession = useMemo(
+    () => (activeSessionId ? sessions.find((s) => s.id === activeSessionId) ?? null : null),
+    [sessions, activeSessionId],
+  )
+
   const handleExport = async () => {
     const data = await exportData()
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
@@ -285,6 +300,17 @@ export default function App() {
           />
         )}
 
+        {!showSession && browsePanel === 'snippets' && (
+          <SnippetsPanel
+            hosts={hosts}
+            snippets={snippets}
+            activeSession={activeSession?.protocol === 'ssh' ? activeSession : null}
+            onAdd={() => setModal({ type: 'snippet' })}
+            onEdit={(s) => setModal({ type: 'snippet', snippet: s })}
+            onDelete={handleDeleteSnippet}
+          />
+        )}
+
         {!showSession && browsePanel === 'logs' && <LogsPanel />}
 
         {!showSession && browsePanel === 'settings' && (
@@ -321,7 +347,11 @@ export default function App() {
                   key={sessionId}
                   sessionId={sessionId}
                   hostId={session.hostId}
+                  hostName={session.hostName}
+                  hostname={session.hostname}
                   active={showSession && activeSessionId === sessionId}
+                  hosts={hosts}
+                  snippets={snippets}
                   onStatusChange={updateSessionStatus}
                 />
               )
@@ -363,6 +393,14 @@ export default function App() {
         hosts={hosts}
         defaultHostId={selectedHostId}
         onSave={savePortForward}
+        onClose={() => setModal({ type: 'none' })}
+      />
+      <SnippetFormModal
+        open={modal.type === 'snippet'}
+        snippet={modal.type === 'snippet' ? modal.snippet : null}
+        hosts={hosts}
+        defaultHostId={selectedHostId}
+        onSave={saveSnippet}
         onClose={() => setModal({ type: 'none' })}
       />
     </div>
