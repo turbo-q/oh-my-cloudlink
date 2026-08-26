@@ -136,17 +136,19 @@ export function SnippetsPanel({
       </div>
 
       <div className="px-8 py-4 border-b border-app space-y-3">
-        <div className="flex flex-col sm:flex-row gap-3">
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="搜索名称、命令或标签…"
-            className="input-field flex-1 min-w-0"
-          />
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="搜索名称、命令或标签…"
+          className="input-field w-full"
+        />
+
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 rounded-xl border border-app-strong bg-app-card px-4 py-3">
+          <span className="text-xs text-app-muted shrink-0 sm:w-24">筛选范围</span>
           <select
             value={filterHostId}
             onChange={(e) => setFilterHostId(e.target.value)}
-            className="input-field sm:w-48"
+            className="input-field flex-1 min-w-0 text-sm"
           >
             <option value="all">全部片段</option>
             <option value="global">仅「全部主机」</option>
@@ -159,7 +161,7 @@ export function SnippetsPanel({
         </div>
 
         <div className="flex flex-col sm:flex-row sm:items-center gap-2 rounded-xl border border-app-strong bg-app-card px-4 py-3">
-          <span className="text-xs text-app-muted shrink-0">插入目标终端</span>
+          <span className="text-xs text-app-muted shrink-0 sm:w-24">插入目标终端</span>
           {connectedSessions.length === 0 ? (
             <span className="text-sm text-amber-400/90">尚未打开 SSH 终端 — 请先连接一台主机</span>
           ) : (
