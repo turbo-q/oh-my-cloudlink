@@ -1,6 +1,14 @@
 import { useEffect, useState } from 'react'
-import type { Host, Group, SSHKey, AuthType, DiscoveredKey } from '../types'
-import { GROUP_COLORS } from '../types'
+import type {
+  Host,
+  Group,
+  SSHKey,
+  AuthType,
+  DiscoveredKey,
+  PortForward,
+  PortForwardType,
+} from '../types'
+import { GROUP_COLORS, PORT_FORWARD_TYPE_LABELS, isSshHost } from '../types'
 import { GroupCombobox } from './GroupCombobox'
 
 function PasswordInput({
@@ -622,6 +630,281 @@ export function DiscoverKeysModal({ open, existingKeys, onImport, onClose }: Dis
             {importing ? '导入中...' : `导入选中 (${selected.size})`}
           </button>
         </div>
+      </div>
+    </div>
+  )
+}
+
+interface PortForwardFormModalProps {
+  open: boolean
+  forward?: PortForward | null
+  hosts: Host[]
+  defaultHostId?: string | null
+  onSave: (
+    data: Partial<PortForward> & {
+      hostId: string
+      name: string
+      type: PortForwardType
+      localHost: string
+      localPort: number
+    },
+  ) => Promise<unknown>
+  onClose: () => void
+}
+
+export function PortForwardFormModal({
+  open,
+  forward,
+  hosts,
+  defaultHostId,
+  onSave,
+  onClose,
+}: PortForwardFormModalProps) {
+  const sshHosts = hosts.filter(isSshHost)
+  const [name, setName] = useState('')
+  const [hostId, setHostId] = useState('')
+  const [type, setType] = useState<PortForwardType>('local')
+  const [localHost, setLocalHost] = useState('127.0.0.1')
+  const [localPort, setLocalPort] = useState(18080)
+  const [remoteHost, setRemoteHost] = useState('127.0.0.1')
+  const [remotePort, setRemotePort] = useState(80)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    if (!open) return
+    const available = hosts.filter(isSshHost)
+    if (forward) {
+      setName(forward.name)
+      setHostId(forward.hostId)
+      setType(forward.type)
+      setLocalHost(forward.localHost || '127.0.0.1')
+      setLocalPort(forward.localPort)
+      setRemoteHost(forward.remoteHost || '127.0.0.1')
+      setRemotePort(forward.remotePort || 80)
+      return
+    }
+    setName('')
+    setHostId(
+      defaultHostId && available.some((h) => h.id === defaultHostId)
+        ? defaultHostId
+        : available[0]?.id ?? '',
+    )
+    setType('local')
+    setLocalHost('127.0.0.1')
+    setLocalPort(18080)
+    setRemoteHost('127.0.0.1')
+    setRemotePort(80)
+  }, [open, forward, defaultHostId, hosts])
+
+  if (!open) return null
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!hostId) {
+      alert('请选择主机')
+      return
+    }
+    setSaving(true)
+    try {
+      await onSave({
+        id: forward?.id,
+        hostId,
+        name: name.trim() || PORT_FORWARD_TYPE_LABELS[type],
+        type,
+        localHost: localHost.trim() || '127.0.0.1',
+        localPort: Number(localPort) || 0,
+        remoteHost: type === 'dynamic' ? undefined : remoteHost.trim(),
+        remotePort: type === 'dynamic' ? undefined : Number(remotePort) || undefined,
+      })
+      onClose()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : String(err))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--app-overlay)] backdrop-blur-sm">
+      <div className="bg-elevated border border-app-strong rounded-xl shadow-2xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
+        <div className="px-6 py-4 border-b border-app-strong">
+          <h2 className="text-lg font-semibold text-app">{forward ? '编辑转发规则' : '新建端口转发'}</h2>
+        </div>
+        <form onSubmit={(e) => void handleSubmit(e)} className="p-6 space-y-4">
+          <div>
+            <label className="block text-sm text-app-muted mb-1">名称</label>
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="input-field"
+              placeholder="例如：MySQL / SOCKS 代理"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm text-app-muted mb-1">关联主机</label>
+            <select
+              required
+              value={hostId}
+              onChange={(e) => setHostId(e.target.value)}
+              className="input-field"
+            >
+              {sshHosts.map((h) => (
+                <option key={h.id} value={h.id}>
+                  {h.name} ({h.username}@{h.hostname})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm text-app-muted mb-2">转发类型</label>
+            <div className="flex flex-wrap gap-2">
+              {(['local', 'remote', 'dynamic'] as PortForwardType[]).map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setType(t)}
+                  className={`px-3 py-1.5 rounded-lg text-xs border transition-colors ${
+                    type === t
+                      ? 'border-emerald-500/50 bg-emerald-500/15 text-emerald-300'
+                      : 'border-app bg-app-hover text-app-muted hover:text-app'
+                  }`}
+                >
+                  {PORT_FORWARD_TYPE_LABELS[t]}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {type === 'local' && (
+            <>
+              <p className="text-xs text-app-faint">本机访问本地端口 → 经 SSH 转到远端目标</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm text-app-muted mb-1">本机地址</label>
+                  <input value={localHost} onChange={(e) => setLocalHost(e.target.value)} className="input-field" />
+                </div>
+                <div>
+                  <label className="block text-sm text-app-muted mb-1">本机端口</label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={65535}
+                    value={localPort}
+                    onChange={(e) => setLocalPort(Number(e.target.value))}
+                    className="input-field"
+                  />
+                  <p className="text-[10px] text-app-faint mt-1">填 0 由系统分配</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm text-app-muted mb-1">远端目标主机</label>
+                  <input
+                    required
+                    value={remoteHost}
+                    onChange={(e) => setRemoteHost(e.target.value)}
+                    className="input-field"
+                    placeholder="127.0.0.1"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-app-muted mb-1">远端目标端口</label>
+                  <input
+                    type="number"
+                    required
+                    min={1}
+                    max={65535}
+                    value={remotePort}
+                    onChange={(e) => setRemotePort(Number(e.target.value))}
+                    className="input-field"
+                  />
+                </div>
+              </div>
+            </>
+          )}
+
+          {type === 'remote' && (
+            <>
+              <p className="text-xs text-app-faint">远端机器访问远端端口 → 转到本机服务</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm text-app-muted mb-1">远端监听地址</label>
+                  <input
+                    value={remoteHost}
+                    onChange={(e) => setRemoteHost(e.target.value)}
+                    className="input-field"
+                    placeholder="127.0.0.1 或 0.0.0.0"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-app-muted mb-1">远端监听端口</label>
+                  <input
+                    type="number"
+                    required
+                    min={1}
+                    max={65535}
+                    value={remotePort}
+                    onChange={(e) => setRemotePort(Number(e.target.value))}
+                    className="input-field"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm text-app-muted mb-1">本机目标地址</label>
+                  <input value={localHost} onChange={(e) => setLocalHost(e.target.value)} className="input-field" />
+                </div>
+                <div>
+                  <label className="block text-sm text-app-muted mb-1">本机目标端口</label>
+                  <input
+                    type="number"
+                    required
+                    min={1}
+                    max={65535}
+                    value={localPort}
+                    onChange={(e) => setLocalPort(Number(e.target.value))}
+                    className="input-field"
+                  />
+                </div>
+              </div>
+            </>
+          )}
+
+          {type === 'dynamic' && (
+            <>
+              <p className="text-xs text-app-faint">在本机开启 SOCKS5 代理，流量经 SSH 出口</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm text-app-muted mb-1">监听地址</label>
+                  <input value={localHost} onChange={(e) => setLocalHost(e.target.value)} className="input-field" />
+                </div>
+                <div>
+                  <label className="block text-sm text-app-muted mb-1">监听端口</label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={65535}
+                    value={localPort}
+                    onChange={(e) => setLocalPort(Number(e.target.value))}
+                    className="input-field"
+                  />
+                  <p className="text-[10px] text-app-faint mt-1">常用 1080；填 0 由系统分配</p>
+                </div>
+              </div>
+            </>
+          )}
+
+          <div className="flex gap-3 pt-2">
+            <button type="button" onClick={onClose} className="btn-secondary flex-1">
+              取消
+            </button>
+            <button type="submit" disabled={saving || sshHosts.length === 0} className="btn-primary flex-1">
+              {saving ? '保存中...' : '保存'}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   )

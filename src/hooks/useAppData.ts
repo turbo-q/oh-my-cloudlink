@@ -1,22 +1,25 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { Group, Host, SSHKey } from '../types'
+import type { Group, Host, PortForward, SSHKey } from '../types'
 
 export function useAppData() {
   const [hosts, setHosts] = useState<Host[]>([])
   const [groups, setGroups] = useState<Group[]>([])
   const [keys, setKeys] = useState<SSHKey[]>([])
+  const [portForwards, setPortForwards] = useState<PortForward[]>([])
   const [loading, setLoading] = useState(true)
 
   const refresh = useCallback(async () => {
     if (!window.electronAPI) return
-    const [h, g, k] = await Promise.all([
+    const [h, g, k, f] = await Promise.all([
       window.electronAPI.getHosts(),
       window.electronAPI.getGroups(),
       window.electronAPI.getKeys(),
+      window.electronAPI.getPortForwards(),
     ])
     setHosts(h as Host[])
     setGroups(g as Group[])
     setKeys(k as SSHKey[])
+    setPortForwards(f as PortForward[])
     setLoading(false)
   }, [])
 
@@ -57,6 +60,25 @@ export function useAppData() {
     await refresh()
   }
 
+  const savePortForward = async (
+    forward: Partial<PortForward> & {
+      hostId: string
+      name: string
+      type: PortForward['type']
+      localHost: string
+      localPort: number
+    },
+  ) => {
+    const saved = await window.electronAPI.savePortForward(forward)
+    await refresh()
+    return saved
+  }
+
+  const deletePortForward = async (id: string) => {
+    await window.electronAPI.deletePortForward(id)
+    await refresh()
+  }
+
   const exportData = async () => {
     return window.electronAPI.exportData()
   }
@@ -70,6 +92,7 @@ export function useAppData() {
     hosts,
     groups,
     keys,
+    portForwards,
     loading,
     refresh,
     saveHost,
@@ -78,6 +101,8 @@ export function useAppData() {
     deleteGroup,
     saveKey,
     deleteKey,
+    savePortForward,
+    deletePortForward,
     exportData,
     importData,
   }

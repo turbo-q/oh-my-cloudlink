@@ -39,10 +39,31 @@ export interface StoredKey {
   createdAt: string
 }
 
+export type PortForwardType = 'local' | 'remote' | 'dynamic'
+
+/** SSH 端口转发规则（持久化） */
+export interface StoredPortForward {
+  id: string
+  hostId: string
+  name: string
+  type: PortForwardType
+  /** 本机监听地址，默认 127.0.0.1；远程转发时为本机目标地址 */
+  localHost: string
+  /** 本机端口；本地/动态为 0 时表示系统分配；远程转发时为本地目标端口 */
+  localPort: number
+  /** 本地转发：远端目标主机；远程转发：远端监听地址；动态：不用 */
+  remoteHost?: string
+  /** 本地转发：远端目标端口；远程转发：远端监听端口；动态：不用 */
+  remotePort?: number
+  createdAt: string
+  updatedAt: string
+}
+
 export interface DataFile {
   hosts: StoredHost[]
   groups: StoredGroup[]
   keys: StoredKey[]
+  portForwards: StoredPortForward[]
 }
 
 export interface BackupInfo {
@@ -53,6 +74,7 @@ export interface BackupInfo {
   hosts: number
   groups: number
   keys: number
+  portForwards: number
 }
 
 const MAX_BACKUPS = 5
@@ -89,6 +111,19 @@ interface KeyRow {
   public_key: string | null
   passphrase: string | null
   created_at: string
+}
+
+interface PortForwardRow {
+  id: string
+  host_id: string
+  name: string
+  type: string
+  local_host: string
+  local_port: number
+  remote_host: string | null
+  remote_port: number | null
+  created_at: string
+  updated_at: string
 }
 
 export class DataStore {
@@ -128,7 +163,12 @@ export class DataStore {
       if (this.listBackupFiles().length > 0) return
       if (!fs.existsSync(this.legacyBackupPath)) return
       const data = this.readDataFile(this.legacyBackupPath)
-      if (!data || data.hosts.length + data.groups.length + data.keys.length === 0) return
+      if (
+        !data ||
+        data.hosts.length + data.groups.length + data.keys.length + data.portForwards.length === 0
+      ) {
+        return
+      }
       const fileName = this.formatBackupFileName()
       const filePath = path.join(this.backupsDir, fileName)
       fs.copyFileSync(this.legacyBackupPath, filePath)
@@ -188,15 +228,35 @@ export class DataStore {
         updated_at TEXT NOT NULL
       );
 
+      CREATE TABLE IF NOT EXISTS port_forwards (
+        id TEXT PRIMARY KEY NOT NULL,
+        host_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        type TEXT NOT NULL,
+        local_host TEXT NOT NULL,
+        local_port INTEGER NOT NULL,
+        remote_host TEXT,
+        remote_port INTEGER,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
       CREATE INDEX IF NOT EXISTS idx_hosts_group_id ON hosts(group_id);
       CREATE INDEX IF NOT EXISTS idx_hosts_name ON hosts(name);
       CREATE INDEX IF NOT EXISTS idx_groups_name ON groups(name);
+      CREATE INDEX IF NOT EXISTS idx_port_forwards_host_id ON port_forwards(host_id);
     `)
   }
 
   /** Import legacy / backup JSON once into SQLite when DB is empty. */
   private migrateFromJsonIfNeeded(userData: string): void {
-    if (this.countRows('hosts') + this.countRows('groups') + this.countRows('keys') > 0) {
+    if (
+      this.countRows('hosts') +
+        this.countRows('groups') +
+        this.countRows('keys') +
+        this.countRows('port_forwards') >
+      0
+    ) {
       return
     }
 
@@ -224,7 +284,12 @@ export class DataStore {
       try {
         const data = this.readDataFile(jsonPath)
         if (!data) continue
-        if (data.hosts.length + data.groups.length + data.keys.length === 0) continue
+        if (
+          data.hosts.length + data.groups.length + data.keys.length + data.portForwards.length ===
+          0
+        ) {
+          continue
+        }
 
         this.replaceAll(data, { skipBackup: true })
         const bak = `${jsonPath}.migrated.bak`
@@ -259,6 +324,7 @@ export class DataStore {
       hosts: Array.isArray(parsed.hosts) ? parsed.hosts : [],
       groups: Array.isArray(parsed.groups) ? parsed.groups : [],
       keys: Array.isArray(parsed.keys) ? parsed.keys : [],
+      portForwards: Array.isArray(parsed.portForwards) ? parsed.portForwards : [],
     }
   }
 
@@ -295,7 +361,12 @@ export class DataStore {
       }
 
       const data = this.exportData()
-      if (data.hosts.length + data.groups.length + data.keys.length === 0) return null
+      if (
+        data.hosts.length + data.groups.length + data.keys.length + data.portForwards.length ===
+        0
+      ) {
+        return null
+      }
 
       if (!fs.existsSync(this.backupsDir)) {
         fs.mkdirSync(this.backupsDir, { recursive: true })
@@ -319,6 +390,7 @@ export class DataStore {
         hosts: data.hosts.length,
         groups: data.groups.length,
         keys: data.keys.length,
+        portForwards: data.portForwards.length,
       }
     } catch (err) {
       console.error('[data-store] backup failed:', err)
@@ -333,12 +405,14 @@ export class DataStore {
         let hosts = 0
         let groups = 0
         let keys = 0
+        let portForwards = 0
         try {
           const data = this.readDataFile(f.filePath)
           if (data) {
             hosts = data.hosts.length
             groups = data.groups.length
             keys = data.keys.length
+            portForwards = data.portForwards.length
           }
         } catch {
           /* ignore broken backup preview */
@@ -351,6 +425,7 @@ export class DataStore {
           hosts,
           groups,
           keys,
+          portForwards,
         }
       })
   }
@@ -370,14 +445,17 @@ export class DataStore {
   restoreFromAbsolutePath(filePath: string): DataFile {
     const data = this.readDataFile(filePath)
     if (!data) throw new Error('备份文件格式不正确')
-    if (data.hosts.length + data.groups.length + data.keys.length === 0) {
+    if (
+      data.hosts.length + data.groups.length + data.keys.length + data.portForwards.length ===
+      0
+    ) {
       throw new Error('备份文件为空')
     }
     this.replaceAll(data)
     return data
   }
 
-  private countRows(table: 'hosts' | 'groups' | 'keys'): number {
+  private countRows(table: 'hosts' | 'groups' | 'keys' | 'port_forwards'): number {
     const row = this.db.prepare(`SELECT COUNT(*) AS c FROM ${table}`).get() as
       | { c: number }
       | undefined
@@ -433,9 +511,25 @@ export class DataStore {
     }
   }
 
+  private mapPortForward(row: PortForwardRow): StoredPortForward {
+    return {
+      id: row.id,
+      hostId: row.host_id,
+      name: row.name,
+      type: row.type as PortForwardType,
+      localHost: row.local_host,
+      localPort: row.local_port,
+      remoteHost: row.remote_host ?? undefined,
+      remotePort: row.remote_port ?? undefined,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    }
+  }
+
   private replaceAll(data: DataFile, options?: { skipBackup?: boolean }): void {
     this.db.exec('BEGIN')
     try {
+      this.db.exec('DELETE FROM port_forwards')
       this.db.exec('DELETE FROM hosts')
       this.db.exec('DELETE FROM groups')
       this.db.exec('DELETE FROM keys')
@@ -484,6 +578,26 @@ export class DataStore {
           h.notes ?? null,
           h.createdAt,
           h.updatedAt,
+        )
+      }
+
+      const insertForward = this.db.prepare(
+        `INSERT INTO port_forwards (
+          id, host_id, name, type, local_host, local_port, remote_host, remote_port, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      for (const f of data.portForwards ?? []) {
+        insertForward.run(
+          f.id,
+          f.hostId,
+          f.name,
+          f.type,
+          f.localHost,
+          f.localPort,
+          f.remoteHost ?? null,
+          f.remotePort ?? null,
+          f.createdAt,
+          f.updatedAt,
         )
       }
 
@@ -570,9 +684,17 @@ export class DataStore {
   }
 
   deleteHost(id: string): boolean {
-    const result = this.db.prepare('DELETE FROM hosts WHERE id = ?').run(id)
-    if (result.changes > 0) this.createTimedBackup()
-    return result.changes > 0
+    this.db.exec('BEGIN')
+    try {
+      this.db.prepare('DELETE FROM port_forwards WHERE host_id = ?').run(id)
+      const result = this.db.prepare('DELETE FROM hosts WHERE id = ?').run(id)
+      this.db.exec('COMMIT')
+      if (result.changes > 0) this.createTimedBackup()
+      return result.changes > 0
+    } catch (err) {
+      this.db.exec('ROLLBACK')
+      throw err
+    }
   }
 
   getGroups(): StoredGroup[] {
@@ -697,11 +819,110 @@ export class DataStore {
     }
   }
 
+  getPortForwards(hostId?: string): StoredPortForward[] {
+    if (hostId) {
+      const rows = this.db
+        .prepare('SELECT * FROM port_forwards WHERE host_id = ? ORDER BY name COLLATE NOCASE')
+        .all(hostId) as unknown as PortForwardRow[]
+      return rows.map((r) => this.mapPortForward(r))
+    }
+    const rows = this.db
+      .prepare('SELECT * FROM port_forwards ORDER BY name COLLATE NOCASE')
+      .all() as unknown as PortForwardRow[]
+    return rows.map((r) => this.mapPortForward(r))
+  }
+
+  getPortForward(id: string): StoredPortForward | null {
+    const row = this.db.prepare('SELECT * FROM port_forwards WHERE id = ?').get(id) as unknown as
+      | PortForwardRow
+      | undefined
+    return row ? this.mapPortForward(row) : null
+  }
+
+  savePortForward(
+    forward: Omit<StoredPortForward, 'id' | 'createdAt' | 'updatedAt'> & { id?: string },
+  ): StoredPortForward {
+    const host = this.db.prepare('SELECT id FROM hosts WHERE id = ?').get(forward.hostId)
+    if (!host) throw new Error('关联主机不存在')
+
+    const now = new Date().toISOString()
+    if (forward.id) {
+      const existing = this.db
+        .prepare('SELECT * FROM port_forwards WHERE id = ?')
+        .get(forward.id) as unknown as PortForwardRow | undefined
+      if (existing) {
+        this.db
+          .prepare(
+            `UPDATE port_forwards SET
+              host_id = ?, name = ?, type = ?, local_host = ?, local_port = ?,
+              remote_host = ?, remote_port = ?, updated_at = ?
+             WHERE id = ?`,
+          )
+          .run(
+            forward.hostId,
+            forward.name,
+            forward.type,
+            forward.localHost || '127.0.0.1',
+            forward.localPort,
+            forward.remoteHost ?? null,
+            forward.remotePort ?? null,
+            now,
+            forward.id,
+          )
+        const updated = this.db
+          .prepare('SELECT * FROM port_forwards WHERE id = ?')
+          .get(forward.id) as unknown as PortForwardRow
+        this.createTimedBackup()
+        return this.mapPortForward(updated)
+      }
+    }
+
+    const created: StoredPortForward = {
+      id: randomUUID(),
+      hostId: forward.hostId,
+      name: forward.name,
+      type: forward.type,
+      localHost: forward.localHost || '127.0.0.1',
+      localPort: forward.localPort,
+      remoteHost: forward.remoteHost,
+      remotePort: forward.remotePort,
+      createdAt: now,
+      updatedAt: now,
+    }
+    this.db
+      .prepare(
+        `INSERT INTO port_forwards (
+          id, host_id, name, type, local_host, local_port, remote_host, remote_port, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        created.id,
+        created.hostId,
+        created.name,
+        created.type,
+        created.localHost,
+        created.localPort,
+        created.remoteHost ?? null,
+        created.remotePort ?? null,
+        created.createdAt,
+        created.updatedAt,
+      )
+    this.createTimedBackup()
+    return created
+  }
+
+  deletePortForward(id: string): boolean {
+    const result = this.db.prepare('DELETE FROM port_forwards WHERE id = ?').run(id)
+    if (result.changes > 0) this.createTimedBackup()
+    return result.changes > 0
+  }
+
   exportData(): DataFile {
     return {
       hosts: this.getHosts(),
       groups: this.getGroups(),
       keys: this.getKeys(),
+      portForwards: this.getPortForwards(),
     }
   }
 
@@ -710,6 +931,7 @@ export class DataStore {
       hosts: data.hosts ?? [],
       groups: data.groups ?? [],
       keys: data.keys ?? [],
+      portForwards: data.portForwards ?? [],
     })
   }
 }

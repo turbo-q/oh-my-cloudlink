@@ -5,6 +5,7 @@ import { DataStore } from './data-store'
 import { SshManager } from './ssh-manager'
 import { FileManager } from './file-manager'
 import { LocalFileManager } from './local-file-manager'
+import { PortForwardManager } from './port-forward-manager'
 import { discoverLocalKeys, readKeyFromFile } from './key-discovery'
 import { SessionLogStore } from './session-log-store'
 
@@ -19,6 +20,7 @@ const sessionLogStore = new SessionLogStore()
 const sshManager = new SshManager()
 const fileManager = new FileManager()
 const localFileManager = new LocalFileManager()
+const portForwardManager = new PortForwardManager()
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -64,7 +66,10 @@ function registerIpcHandlers(): void {
   // 主机 CRUD
   safeHandle('data:getHosts', () => dataStore.getHosts())
   safeHandle('data:saveHost', (_e, host) => dataStore.saveHost(host))
-  safeHandle('data:deleteHost', (_e, id: string) => dataStore.deleteHost(id))
+  safeHandle('data:deleteHost', async (_e, id: string) => {
+    await portForwardManager.stopByHost(id, mainWindow)
+    return dataStore.deleteHost(id)
+  })
 
   // 分组 CRUD
   safeHandle('data:getGroups', () => dataStore.getGroups())
@@ -76,13 +81,40 @@ function registerIpcHandlers(): void {
   safeHandle('data:saveKey', (_e, key) => dataStore.saveKey(key))
   safeHandle('data:deleteKey', (_e, id: string) => dataStore.deleteKey(id))
 
+  // 端口转发规则 CRUD
+  safeHandle('data:getPortForwards', (_e, hostId?: string) => dataStore.getPortForwards(hostId))
+  safeHandle('data:savePortForward', (_e, forward) => dataStore.savePortForward(forward))
+  safeHandle('data:deletePortForward', async (_e, id: string) => {
+    await portForwardManager.stop(id, mainWindow)
+    return dataStore.deletePortForward(id)
+  })
+
+  // 端口转发运行时
+  safeHandle('forward:start', async (_e, ruleId: string) => {
+    const rule = dataStore.getPortForward(ruleId)
+    if (!rule) throw new Error('转发规则不存在')
+    const host = dataStore.getHosts().find((h) => h.id === rule.hostId)
+    if (!host) throw new Error('关联主机不存在')
+    return portForwardManager.start(rule, host, dataStore.getKeys(), mainWindow)
+  })
+  safeHandle('forward:stop', async (_e, ruleId: string) => {
+    await portForwardManager.stop(ruleId, mainWindow)
+    return true
+  })
+  safeHandle('forward:list', () => portForwardManager.listRuntime())
+  safeHandle('forward:stopAll', async () => {
+    portForwardManager.stopAll(mainWindow)
+    return true
+  })
+
   // 本机密钥发现
   safeHandle('keys:discover', () => discoverLocalKeys())
   safeHandle('keys:readFile', (_e, filePath: string) => readKeyFromFile(filePath))
 
   // 导入导出 / 备份
   safeHandle('data:export', () => dataStore.exportData())
-  safeHandle('data:import', (_e, data) => {
+  safeHandle('data:import', async (_e, data) => {
+    portForwardManager.stopAll(mainWindow)
     dataStore.importData(data)
     return true
   })
@@ -92,7 +124,8 @@ function registerIpcHandlers(): void {
     if (!info) throw new Error('当前没有可备份的数据')
     return info
   })
-  safeHandle('data:restoreBackup', (_e, fileName: string) => {
+  safeHandle('data:restoreBackup', async (_e, fileName: string) => {
+    portForwardManager.stopAll(mainWindow)
     dataStore.restoreBackupFile(fileName)
     return true
   })
@@ -104,6 +137,7 @@ function registerIpcHandlers(): void {
       filters: [{ name: 'JSON 备份', extensions: ['json'] }],
     })
     if (result.canceled || !result.filePaths[0]) return false
+    portForwardManager.stopAll(mainWindow)
     dataStore.restoreFromAbsolutePath(result.filePaths[0])
     return true
   })
@@ -324,6 +358,7 @@ app.whenReady().then(() => {
 })
 
 app.on('window-all-closed', () => {
+  portForwardManager.stopAll()
   sshManager.disconnectAll()
   fileManager.disconnectAll()
   if (process.platform !== 'darwin') {
@@ -334,6 +369,7 @@ app.on('window-all-closed', () => {
 app.on('before-quit', () => {
   dataStore.close()
   sessionLogStore.close()
+  portForwardManager.stopAll()
   sshManager.disconnectAll()
   fileManager.disconnectAll()
 })

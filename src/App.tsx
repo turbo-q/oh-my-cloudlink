@@ -8,8 +8,9 @@ import { SettingsPanel } from './components/SettingsPanel'
 import { LogsPanel } from './components/LogsPanel'
 import { SftpPanel } from './components/SftpPanel'
 import { TerminalPanel } from './components/TerminalPanel'
-import { HostFormModal, GroupFormModal, KeyFormModal, DiscoverKeysModal } from './components/Modals'
-import type { Host, Group, SSHKey, AppSession, DiscoveredKey } from './types'
+import { HostFormModal, GroupFormModal, KeyFormModal, DiscoverKeysModal, PortForwardFormModal } from './components/Modals'
+import { PortForwardsPanel } from './components/PortForwardsPanel'
+import type { Host, Group, SSHKey, AppSession, DiscoveredKey, PortForward } from './types'
 import type { AppPanel } from './types/app'
 import { isFileProtocol, isSshHost, getHostFileProtocol, GROUP_COLORS } from './types'
 import { filterHosts, type GroupFilter } from './utils/filterHosts'
@@ -20,12 +21,14 @@ type ModalState =
   | { type: 'group'; group?: Group }
   | { type: 'key'; key?: SSHKey }
   | { type: 'discoverKeys' }
+  | { type: 'forward'; forward?: PortForward }
 
 export default function App() {
   const {
     hosts,
     groups,
     keys,
+    portForwards,
     loading,
     refresh,
     saveHost,
@@ -34,6 +37,8 @@ export default function App() {
     deleteGroup,
     saveKey,
     deleteKey,
+    savePortForward,
+    deletePortForward,
     exportData,
     importData,
   } = useAppData()
@@ -164,6 +169,11 @@ export default function App() {
     await deleteKey(key.id)
   }
 
+  const handleDeleteForward = async (forward: PortForward) => {
+    if (!confirm(`确定删除转发规则「${forward.name}」？`)) return
+    await deletePortForward(forward.id)
+  }
+
   const handleExport = async () => {
     const data = await exportData()
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
@@ -265,6 +275,16 @@ export default function App() {
           />
         )}
 
+        {!showSession && browsePanel === 'forwards' && (
+          <PortForwardsPanel
+            hosts={hosts}
+            forwards={portForwards}
+            onAdd={() => setModal({ type: 'forward' })}
+            onEdit={(f) => setModal({ type: 'forward', forward: f })}
+            onDelete={handleDeleteForward}
+          />
+        )}
+
         {!showSession && browsePanel === 'logs' && <LogsPanel />}
 
         {!showSession && browsePanel === 'settings' && (
@@ -335,6 +355,14 @@ export default function App() {
         open={modal.type === 'discoverKeys'}
         existingKeys={keys}
         onImport={handleImportDiscoveredKeys}
+        onClose={() => setModal({ type: 'none' })}
+      />
+      <PortForwardFormModal
+        open={modal.type === 'forward'}
+        forward={modal.type === 'forward' ? modal.forward : null}
+        hosts={hosts}
+        defaultHostId={selectedHostId}
+        onSave={savePortForward}
         onClose={() => setModal({ type: 'none' })}
       />
     </div>

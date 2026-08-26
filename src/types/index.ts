@@ -81,6 +81,40 @@ export type GroupFormData = Omit<Group, 'id' | 'createdAt'>
 /** 新建/编辑密钥表单 */
 export type KeyFormData = Omit<SSHKey, 'id' | 'createdAt'>
 
+/** 端口转发类型 */
+export type PortForwardType = 'local' | 'remote' | 'dynamic'
+
+/** 端口转发规则 */
+export interface PortForward {
+  id: string
+  hostId: string
+  name: string
+  type: PortForwardType
+  localHost: string
+  localPort: number
+  remoteHost?: string
+  remotePort?: number
+  createdAt: string
+  updatedAt: string
+}
+
+export type PortForwardRuntimeStatus = 'stopped' | 'starting' | 'running' | 'error'
+
+export interface PortForwardRuntime {
+  ruleId: string
+  hostId: string
+  status: PortForwardRuntimeStatus
+  boundPort?: number
+  error?: string
+  connections: number
+}
+
+export const PORT_FORWARD_TYPE_LABELS: Record<PortForwardType, string> = {
+  local: '本地转发',
+  remote: '远程转发',
+  dynamic: '动态 (SOCKS5)',
+}
+
 export const PROTOCOL_LABELS: Record<ConnectionProtocol, string> = {
   ssh: 'SSH 终端',
   sftp: 'SFTP 文件',

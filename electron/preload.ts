@@ -16,6 +16,41 @@ const electronAPI = {
   saveKey: (key: unknown) => ipcRenderer.invoke('data:saveKey', key),
   deleteKey: (id: string) => ipcRenderer.invoke('data:deleteKey', id),
 
+  // 端口转发规则
+  getPortForwards: (hostId?: string) => ipcRenderer.invoke('data:getPortForwards', hostId),
+  savePortForward: (forward: unknown) => ipcRenderer.invoke('data:savePortForward', forward),
+  deletePortForward: (id: string) => ipcRenderer.invoke('data:deletePortForward', id),
+
+  // 端口转发运行时
+  forwardStart: (ruleId: string) => ipcRenderer.invoke('forward:start', ruleId),
+  forwardStop: (ruleId: string) => ipcRenderer.invoke('forward:stop', ruleId),
+  forwardList: () => ipcRenderer.invoke('forward:list'),
+  forwardStopAll: () => ipcRenderer.invoke('forward:stopAll'),
+  onForwardStatus: (
+    callback: (info: {
+      ruleId: string
+      hostId: string
+      status: 'stopped' | 'starting' | 'running' | 'error'
+      boundPort?: number
+      error?: string
+      connections: number
+    }) => void,
+  ) => {
+    const handler = (
+      _: Electron.IpcRendererEvent,
+      info: {
+        ruleId: string
+        hostId: string
+        status: 'stopped' | 'starting' | 'running' | 'error'
+        boundPort?: number
+        error?: string
+        connections: number
+      },
+    ) => callback(info)
+    ipcRenderer.on('forward:status', handler)
+    return () => ipcRenderer.removeListener('forward:status', handler)
+  },
+
   discoverLocalKeys: () => ipcRenderer.invoke('keys:discover'),
   readKeyFile: (filePath: string) => ipcRenderer.invoke('keys:readFile', filePath),
 
