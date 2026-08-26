@@ -930,7 +930,8 @@ export function SnippetFormModal({
 }: SnippetFormModalProps) {
   const [name, setName] = useState('')
   const [command, setCommand] = useState('')
-  const [hostId, setHostId] = useState('')
+  const [scopeAll, setScopeAll] = useState(true)
+  const [selectedHostIds, setSelectedHostIds] = useState<string[]>([])
   const [tags, setTags] = useState('')
   const [saving, setSaving] = useState(false)
 
@@ -939,22 +940,38 @@ export function SnippetFormModal({
     if (snippet) {
       setName(snippet.name)
       setCommand(snippet.command)
-      setHostId(snippet.hostId ?? '')
+      const ids = snippet.hostIds ?? []
+      setScopeAll(ids.length === 0)
+      setSelectedHostIds(ids)
       setTags(snippet.tags.join(', '))
       return
     }
     setName('')
     setCommand('')
-    setHostId(defaultHostId && hosts.some((h) => h.id === defaultHostId) ? defaultHostId : '')
+    if (defaultHostId && hosts.some((h) => h.id === defaultHostId)) {
+      setScopeAll(false)
+      setSelectedHostIds([defaultHostId])
+    } else {
+      setScopeAll(true)
+      setSelectedHostIds([])
+    }
     setTags('')
   }, [open, snippet, defaultHostId, hosts])
 
   if (!open) return null
 
+  const toggleHost = (id: string) => {
+    setSelectedHostIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!command.trim()) {
       alert('请填写命令内容')
+      return
+    }
+    if (!scopeAll && selectedHostIds.length === 0) {
+      alert('请至少选择一台主机，或改为「全部主机可用」')
       return
     }
     setSaving(true)
@@ -963,7 +980,7 @@ export function SnippetFormModal({
         id: snippet?.id,
         name: name.trim() || command.trim().slice(0, 40),
         command: command.replace(/\r\n/g, '\n'),
-        hostId: hostId || undefined,
+        hostIds: scopeAll ? [] : selectedHostIds,
         tags: tags
           .split(/[,，]/)
           .map((t) => t.trim())
@@ -1009,15 +1026,57 @@ export function SnippetFormModal({
           </div>
 
           <div>
-            <label className="block text-sm text-app-muted mb-1">作用范围</label>
-            <select value={hostId} onChange={(e) => setHostId(e.target.value)} className="input-field">
-              <option value="">全局（所有主机可用）</option>
-              {hosts.map((h) => (
-                <option key={h.id} value={h.id}>
-                  仅 {h.name}
-                </option>
-              ))}
-            </select>
+            <label className="block text-sm text-app-muted mb-2">作用范围</label>
+            <p className="text-[11px] text-app-faint mb-2">
+              只决定「在哪些主机的终端选择器里能看到这条」；插入时仍只写入你指定的那一个 SSH 标签。
+            </p>
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 text-sm text-app cursor-pointer">
+                <input
+                  type="radio"
+                  checked={scopeAll}
+                  onChange={() => {
+                    setScopeAll(true)
+                    setSelectedHostIds([])
+                  }}
+                />
+                全部主机可用
+              </label>
+              <label className="flex items-center gap-2 text-sm text-app cursor-pointer">
+                <input
+                  type="radio"
+                  checked={!scopeAll}
+                  onChange={() => setScopeAll(false)}
+                />
+                仅以下主机（可多选）
+              </label>
+            </div>
+            {!scopeAll && (
+              <div className="mt-2 max-h-40 overflow-y-auto rounded-lg border border-app p-2 space-y-1">
+                {hosts.length === 0 ? (
+                  <p className="text-xs text-app-subtle px-1 py-2">暂无主机</p>
+                ) : (
+                  hosts.map((h) => (
+                    <label
+                      key={h.id}
+                      className={`flex items-center gap-2 px-2 py-1.5 rounded-md text-sm cursor-pointer ${
+                        selectedHostIds.includes(h.id) ? 'bg-emerald-500/10' : 'hover:bg-app-hover'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedHostIds.includes(h.id)}
+                        onChange={() => toggleHost(h.id)}
+                      />
+                      <span className="text-app truncate">{h.name}</span>
+                      <span className="text-xs text-app-faint truncate">
+                        {h.username}@{h.hostname}
+                      </span>
+                    </label>
+                  ))
+                )}
+              </div>
+            )}
           </div>
 
           <div>

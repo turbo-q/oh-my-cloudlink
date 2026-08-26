@@ -184,11 +184,6 @@ export default function App() {
     await deleteSnippet(snippet.id)
   }
 
-  const activeSession = useMemo(
-    () => (activeSessionId ? sessions.find((s) => s.id === activeSessionId) ?? null : null),
-    [sessions, activeSessionId],
-  )
-
   const handleExport = async () => {
     const data = await exportData()
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
@@ -304,7 +299,9 @@ export default function App() {
           <SnippetsPanel
             hosts={hosts}
             snippets={snippets}
-            activeSession={activeSession?.protocol === 'ssh' ? activeSession : null}
+            sshSessions={sessions.filter((s) => s.protocol === 'ssh')}
+            activeSessionId={activeSessionId}
+            onSelectSession={handleSelectSession}
             onAdd={() => setModal({ type: 'snippet' })}
             onEdit={(s) => setModal({ type: 'snippet', snippet: s })}
             onDelete={handleDeleteSnippet}

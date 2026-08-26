@@ -120,7 +120,8 @@ export interface Snippet {
   id: string
   name: string
   command: string
-  hostId?: string
+  /** 空数组 = 全部主机可用；非空 = 仅列出的主机可见 */
+  hostIds: string[]
   tags: string[]
   createdAt: string
   updatedAt: string

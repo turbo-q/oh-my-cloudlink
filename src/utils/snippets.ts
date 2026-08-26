@@ -22,15 +22,37 @@ export function expandSnippetCommand(
     .replaceAll('{{username}}', username)
 }
 
+/** Empty hostIds = available on all hosts. */
+export function isSnippetGlobal(snippet: Snippet): boolean {
+  return !snippet.hostIds || snippet.hostIds.length === 0
+}
+
+export function snippetAppliesToHost(snippet: Snippet, hostId: string): boolean {
+  return isSnippetGlobal(snippet) || snippet.hostIds.includes(hostId)
+}
+
 export function filterSnippetsForHost(snippets: Snippet[], hostId?: string | null): Snippet[] {
-  const globalOnes = snippets.filter((s) => !s.hostId)
-  if (!hostId) return [...snippets].sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'))
-  const hostOnes = snippets.filter((s) => s.hostId === hostId)
-  return [...hostOnes, ...globalOnes].sort((a, b) => {
-    // Host-scoped first
-    if (!!a.hostId !== !!b.hostId) return a.hostId ? -1 : 1
-    return a.name.localeCompare(b.name, 'zh-CN')
-  })
+  if (!hostId) {
+    return [...snippets].sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'))
+  }
+  return snippets
+    .filter((s) => snippetAppliesToHost(s, hostId))
+    .sort((a, b) => {
+      const aScoped = !isSnippetGlobal(a)
+      const bScoped = !isSnippetGlobal(b)
+      if (aScoped !== bScoped) return aScoped ? -1 : 1
+      return a.name.localeCompare(b.name, 'zh-CN')
+    })
+}
+
+export function formatSnippetScope(snippet: Snippet, hosts: Host[]): string {
+  if (isSnippetGlobal(snippet)) return '全部主机'
+  const names = snippet.hostIds
+    .map((id) => hosts.find((h) => h.id === id)?.name ?? '未知')
+    .filter(Boolean)
+  if (names.length === 0) return '全部主机'
+  if (names.length <= 2) return names.join('、')
+  return `${names.slice(0, 2).join('、')} 等 ${names.length} 台`
 }
 
 export async function insertSnippetToSession(

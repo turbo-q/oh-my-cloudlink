@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Host, Snippet } from '../types'
-import { filterSnippetsForHost } from '../utils/snippets'
+import { filterSnippetsForHost, formatSnippetScope } from '../utils/snippets'
 
 interface TerminalSnippetPickerProps {
   open: boolean
@@ -50,8 +50,7 @@ export function TerminalSnippetPicker({
   const [index, setIndex] = useState(0)
 
   const hostName = useMemo(() => {
-    const map = new Map(hosts.map((h) => [h.id, h.name]))
-    return (id?: string) => (id ? map.get(id) ?? '主机' : '全局')
+    return (snippet: Snippet) => formatSnippetScope(snippet, hosts)
   }, [hosts])
 
   const filtered = useMemo(() => {
@@ -138,7 +137,7 @@ export function TerminalSnippetPicker({
               >
                 <div className="flex items-center gap-2 mb-0.5">
                   <span className="text-sm text-app truncate">{s.name}</span>
-                  <span className="text-[10px] text-app-faint shrink-0">{hostName(s.hostId)}</span>
+                  <span className="text-[10px] text-app-faint shrink-0">{hostName(s)}</span>
                 </div>
                 <p className="text-xs font-mono text-app-muted truncate">{s.command}</p>
               </button>

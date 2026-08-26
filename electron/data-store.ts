@@ -59,13 +59,13 @@ export interface StoredPortForward {
   updatedAt: string
 }
 
-/** 命令片段（可全局或绑定主机） */
+/** 命令片段（可全局或绑定多台主机） */
 export interface StoredSnippet {
   id: string
   name: string
   command: string
-  /** 为空表示全局；有值则优先在该主机会话中展示 */
-  hostId?: string
+  /** 空数组 = 全部主机可用；非空 = 仅这些主机可见 */
+  hostIds: string[]
   tags: string[]
   createdAt: string
   updatedAt: string
@@ -144,7 +144,7 @@ interface SnippetRow {
   id: string
   name: string
   command: string
-  host_id: string | null
+  host_ids: string
   tags: string
   created_at: string
   updated_at: string
@@ -274,7 +274,7 @@ export class DataStore {
         id TEXT PRIMARY KEY NOT NULL,
         name TEXT NOT NULL,
         command TEXT NOT NULL,
-        host_id TEXT,
+        host_ids TEXT NOT NULL DEFAULT '[]',
         tags TEXT NOT NULL DEFAULT '[]',
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
@@ -284,9 +284,40 @@ export class DataStore {
       CREATE INDEX IF NOT EXISTS idx_hosts_name ON hosts(name);
       CREATE INDEX IF NOT EXISTS idx_groups_name ON groups(name);
       CREATE INDEX IF NOT EXISTS idx_port_forwards_host_id ON port_forwards(host_id);
-      CREATE INDEX IF NOT EXISTS idx_snippets_host_id ON snippets(host_id);
       CREATE INDEX IF NOT EXISTS idx_snippets_name ON snippets(name);
     `)
+    this.migrateSnippetsHostIdsColumn()
+  }
+
+  /** host_id (单选) → host_ids JSON 数组 */
+  private migrateSnippetsHostIdsColumn(): void {
+    try {
+      const cols = this.db.prepare(`PRAGMA table_info(snippets)`).all() as unknown as { name: string }[]
+      const names = new Set(cols.map((c) => c.name))
+      if (!names.has('host_ids')) {
+        this.db.exec(`ALTER TABLE snippets ADD COLUMN host_ids TEXT NOT NULL DEFAULT '[]'`)
+      }
+      if (names.has('host_id')) {
+        const rows = this.db.prepare('SELECT id, host_id FROM snippets').all() as unknown as {
+          id: string
+          host_id: string | null
+        }[]
+        const update = this.db.prepare('UPDATE snippets SET host_ids = ? WHERE id = ?')
+        for (const row of rows) {
+          const current = this.db.prepare('SELECT host_ids FROM snippets WHERE id = ?').get(row.id) as
+            | { host_ids: string }
+            | undefined
+          const existing = this.parseIdList(current?.host_ids ?? '[]')
+          if (existing.length === 0 && row.host_id) {
+            update.run(JSON.stringify([row.host_id]), row.id)
+          } else if (existing.length === 0) {
+            update.run('[]', row.id)
+          }
+        }
+      }
+    } catch (err) {
+      console.error('[data-store] migrate snippets host_ids failed:', err)
+    }
   }
 
   /** Import legacy / backup JSON once into SQLite when DB is empty. */
@@ -371,7 +402,17 @@ export class DataStore {
       groups: Array.isArray(parsed.groups) ? parsed.groups : [],
       keys: Array.isArray(parsed.keys) ? parsed.keys : [],
       portForwards: Array.isArray(parsed.portForwards) ? parsed.portForwards : [],
-      snippets: Array.isArray(parsed.snippets) ? parsed.snippets : [],
+      snippets: Array.isArray(parsed.snippets)
+        ? parsed.snippets.map((s) => {
+            const raw = s as StoredSnippet & { hostId?: string }
+            const hostIds = Array.isArray(raw.hostIds)
+              ? raw.hostIds
+              : raw.hostId
+                ? [raw.hostId]
+                : []
+            return { ...raw, hostIds, tags: Array.isArray(raw.tags) ? raw.tags : [] }
+          })
+        : [],
     }
   }
 
@@ -530,6 +571,27 @@ export class DataStore {
     }
   }
 
+  private parseIdList(raw: string): string[] {
+    try {
+      const parsed = JSON.parse(raw) as unknown
+      return Array.isArray(parsed) ? parsed.filter((t): t is string => typeof t === 'string' && !!t) : []
+    } catch {
+      return []
+    }
+  }
+
+  /** Normalize snippet host scope from new hostIds or legacy hostId. */
+  private normalizeSnippetHostIds(raw: {
+    hostIds?: string[]
+    hostId?: string
+  }): string[] {
+    if (Array.isArray(raw.hostIds)) {
+      return [...new Set(raw.hostIds.filter((id): id is string => typeof id === 'string' && !!id))]
+    }
+    if (typeof raw.hostId === 'string' && raw.hostId) return [raw.hostId]
+    return []
+  }
+
   private mapHost(row: HostRow): StoredHost {
     return {
       id: row.id,
@@ -590,7 +652,7 @@ export class DataStore {
       id: row.id,
       name: row.name,
       command: row.command,
-      hostId: row.host_id ?? undefined,
+      hostIds: this.parseIdList(row.host_ids),
       tags: this.parseTags(row.tags),
       createdAt: row.created_at,
       updatedAt: row.updated_at,
@@ -675,15 +737,16 @@ export class DataStore {
 
       const insertSnippet = this.db.prepare(
         `INSERT INTO snippets (
-          id, name, command, host_id, tags, created_at, updated_at
+          id, name, command, host_ids, tags, created_at, updated_at
         ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
       )
       for (const s of data.snippets ?? []) {
+        const hostIds = this.normalizeSnippetHostIds(s as StoredSnippet & { hostId?: string })
         insertSnippet.run(
           s.id,
           s.name,
           s.command,
-          s.hostId ?? null,
+          JSON.stringify(hostIds),
           JSON.stringify(s.tags ?? []),
           s.createdAt,
           s.updatedAt,
@@ -776,8 +839,16 @@ export class DataStore {
     this.db.exec('BEGIN')
     try {
       this.db.prepare('DELETE FROM port_forwards WHERE host_id = ?').run(id)
-      // Keep snippets; just clear host binding so they become global
-      this.db.prepare('UPDATE snippets SET host_id = NULL WHERE host_id = ?').run(id)
+      // Remove deleted host from snippet scopes (empty → 全部主机)
+      const snippetRows = this.db.prepare('SELECT id, host_ids FROM snippets').all() as unknown as {
+        id: string
+        host_ids: string
+      }[]
+      const updateSnippet = this.db.prepare('UPDATE snippets SET host_ids = ? WHERE id = ?')
+      for (const row of snippetRows) {
+        const ids = this.parseIdList(row.host_ids).filter((hid) => hid !== id)
+        updateSnippet.run(JSON.stringify(ids), row.id)
+      }
       const result = this.db.prepare('DELETE FROM hosts WHERE id = ?').run(id)
       this.db.exec('COMMIT')
       if (result.changes > 0) this.createTimedBackup()
@@ -1016,15 +1087,17 @@ export class DataStore {
   }
 
   saveSnippet(
-    snippet: Omit<StoredSnippet, 'id' | 'createdAt' | 'updatedAt'> & { id?: string },
+    snippet: Omit<StoredSnippet, 'id' | 'createdAt' | 'updatedAt'> & { id?: string; hostId?: string },
   ): StoredSnippet {
-    if (snippet.hostId) {
-      const host = this.db.prepare('SELECT id FROM hosts WHERE id = ?').get(snippet.hostId)
-      if (!host) throw new Error('关联主机不存在')
+    const hostIds = this.normalizeSnippetHostIds(snippet)
+    for (const hid of hostIds) {
+      const host = this.db.prepare('SELECT id FROM hosts WHERE id = ?').get(hid)
+      if (!host) throw new Error(`关联主机不存在: ${hid}`)
     }
 
     const now = new Date().toISOString()
     const tagsJson = JSON.stringify(snippet.tags ?? [])
+    const hostIdsJson = JSON.stringify(hostIds)
 
     if (snippet.id) {
       const existing = this.db
@@ -1034,17 +1107,10 @@ export class DataStore {
         this.db
           .prepare(
             `UPDATE snippets SET
-              name = ?, command = ?, host_id = ?, tags = ?, updated_at = ?
+              name = ?, command = ?, host_ids = ?, tags = ?, updated_at = ?
              WHERE id = ?`,
           )
-          .run(
-            snippet.name,
-            snippet.command,
-            snippet.hostId ?? null,
-            tagsJson,
-            now,
-            snippet.id,
-          )
+          .run(snippet.name, snippet.command, hostIdsJson, tagsJson, now, snippet.id)
         const updated = this.db
           .prepare('SELECT * FROM snippets WHERE id = ?')
           .get(snippet.id) as unknown as SnippetRow
@@ -1057,21 +1123,21 @@ export class DataStore {
       id: randomUUID(),
       name: snippet.name,
       command: snippet.command,
-      hostId: snippet.hostId,
+      hostIds,
       tags: snippet.tags ?? [],
       createdAt: now,
       updatedAt: now,
     }
     this.db
       .prepare(
-        `INSERT INTO snippets (id, name, command, host_id, tags, created_at, updated_at)
+        `INSERT INTO snippets (id, name, command, host_ids, tags, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         created.id,
         created.name,
         created.command,
-        created.hostId ?? null,
+        JSON.stringify(created.hostIds),
         JSON.stringify(created.tags),
         created.createdAt,
         created.updatedAt,
