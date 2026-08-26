@@ -28,6 +28,9 @@ function createWindow(): void {
     minHeight: 600,
     title: 'Oh My CloudLink',
     backgroundColor: '#0f1117',
+    ...(process.platform === 'darwin'
+      ? {}
+      : { icon: path.join(__dirname, '../build/icon.png') }),
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
