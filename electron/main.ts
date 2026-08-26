@@ -216,12 +216,9 @@ function registerIpcHandlers(): void {
   })
 
   safeHandle('ssh:write', (_e, sessionId: string, data: string) => {
-    sshManager.write(sessionId, data, {
-      onInput: (chunk) => {
-        sessionLogStore.append(sessionId, chunk)
-        mainWindow?.webContents.send('log:append', sessionId, chunk)
-      },
-    })
+    // Do not log input here — remote PTY echo already arrives via ssh:data / onOutput.
+    // Logging both doubles every typed character (ps → psps).
+    sshManager.write(sessionId, data)
   })
 
   safeHandle('ssh:resize', (_e, sessionId: string, cols: number, rows: number) => {
