@@ -4,6 +4,7 @@ import { FitAddon } from '@xterm/addon-fit'
 import { SearchAddon } from '@xterm/addon-search'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import { getStoredTheme, getTerminalTheme, resolveTheme, THEME_CHANGE_EVENT } from '../theme'
+import { TerminalSearchBar, useTerminalSearchShortcut } from './TerminalSearchBar'
 import 'xterm/css/xterm.css'
 
 interface LogViewerProps {
@@ -22,7 +23,6 @@ export function LogViewer({ logId, title, live = false }: LogViewerProps) {
 
   const [searchOpen, setSearchOpen] = useState(false)
   const [query, setQuery] = useState('')
-  const searchInputRef = useRef<HTMLInputElement>(null)
 
   const runSearch = useCallback(
     (direction: 'next' | 'prev') => {
@@ -33,6 +33,11 @@ export function LogViewer({ logId, title, live = false }: LogViewerProps) {
     },
     [query],
   )
+
+  const openSearch = useCallback(() => setSearchOpen(true), [])
+  const closeSearch = useCallback(() => setSearchOpen(false), [])
+
+  useTerminalSearchShortcut(Boolean(logId), searchOpen, openSearch, closeSearch)
 
   useEffect(() => {
     if (!containerRef.current) return
@@ -125,24 +130,8 @@ export function LogViewer({ logId, title, live = false }: LogViewerProps) {
 
   useEffect(() => {
     if (searchOpen) {
-      requestAnimationFrame(() => searchInputRef.current?.focus())
+      requestAnimationFrame(() => fitAddonRef.current?.fit())
     }
-  }, [searchOpen])
-
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'f') {
-        e.preventDefault()
-        setSearchOpen(true)
-        return
-      }
-      if (e.key === 'Escape' && searchOpen) {
-        e.preventDefault()
-        setSearchOpen(false)
-      }
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
   }, [searchOpen])
 
   return (
@@ -154,43 +143,21 @@ export function LogViewer({ logId, title, live = false }: LogViewerProps) {
         </div>
         <button
           type="button"
-          onClick={() => setSearchOpen(true)}
+          onClick={openSearch}
           className="btn-secondary px-3 py-1.5 text-xs shrink-0"
         >
           搜索
         </button>
       </div>
 
-      {searchOpen && (
-        <div className="shrink-0 flex items-center gap-2 px-4 py-2 border-b border-app bg-app-card">
-          <input
-            ref={searchInputRef}
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault()
-                runSearch(e.shiftKey ? 'prev' : 'next')
-              }
-              if (e.key === 'Escape') {
-                e.preventDefault()
-                setSearchOpen(false)
-              }
-            }}
-            placeholder="搜索日志…"
-            className="flex-1 min-w-0 px-3 py-1.5 text-sm rounded-lg border border-app-strong bg-app text-app"
-          />
-          <button type="button" onClick={() => runSearch('prev')} className="btn-secondary px-2 py-1 text-xs">
-            ↑
-          </button>
-          <button type="button" onClick={() => runSearch('next')} className="btn-secondary px-2 py-1 text-xs">
-            ↓
-          </button>
-          <button type="button" onClick={() => setSearchOpen(false)} className="text-app-subtle hover:text-app px-2">
-            ✕
-          </button>
-        </div>
-      )}
+      <TerminalSearchBar
+        open={searchOpen}
+        query={query}
+        onQueryChange={setQuery}
+        onClose={closeSearch}
+        onSearch={runSearch}
+        placeholder="搜索日志…"
+      />
 
       <div ref={containerRef} className="flex-1 min-h-0 p-2" tabIndex={0} />
     </div>

@@ -1,8 +1,10 @@
-import { useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Terminal } from 'xterm'
 import { FitAddon } from '@xterm/addon-fit'
+import { SearchAddon } from '@xterm/addon-search'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import { getStoredTheme, getTerminalTheme, resolveTheme, THEME_CHANGE_EVENT } from '../theme'
+import { TerminalSearchBar, useTerminalSearchShortcut } from './TerminalSearchBar'
 import 'xterm/css/xterm.css'
 
 interface TerminalPanelProps {
@@ -16,7 +18,26 @@ export function TerminalPanel({ sessionId, hostId, active, onStatusChange }: Ter
   const containerRef = useRef<HTMLDivElement>(null)
   const terminalRef = useRef<Terminal | null>(null)
   const fitAddonRef = useRef<FitAddon | null>(null)
+  const searchAddonRef = useRef<SearchAddon | null>(null)
   const connectedRef = useRef(false)
+
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [query, setQuery] = useState('')
+
+  const runSearch = useCallback(
+    (direction: 'next' | 'prev') => {
+      const addon = searchAddonRef.current
+      if (!addon || !query.trim()) return
+      if (direction === 'next') addon.findNext(query, { caseSensitive: false })
+      else addon.findPrevious(query, { caseSensitive: false })
+    },
+    [query],
+  )
+
+  const openSearch = useCallback(() => setSearchOpen(true), [])
+  const closeSearch = useCallback(() => setSearchOpen(false), [])
+
+  useTerminalSearchShortcut(active, searchOpen, openSearch, closeSearch)
 
   useEffect(() => {
     if (!containerRef.current || terminalRef.current) return
@@ -34,13 +55,16 @@ export function TerminalPanel({ sessionId, hostId, active, onStatusChange }: Ter
     })
 
     const fitAddon = new FitAddon()
+    const searchAddon = new SearchAddon()
     term.loadAddon(fitAddon)
+    term.loadAddon(searchAddon)
     term.loadAddon(new WebLinksAddon())
     term.open(containerRef.current)
     fitAddon.fit()
 
     terminalRef.current = term
     fitAddonRef.current = fitAddon
+    searchAddonRef.current = searchAddon
 
     void window.electronAPI.sessionLogPrepare(sessionId, hostId).then(() => {
       const banner = '\x1b[38;2;16;185;129mOh My CloudLink\x1b[0m — 正在连接...\r\n'
@@ -130,6 +154,7 @@ export function TerminalPanel({ sessionId, hostId, active, onStatusChange }: Ter
       term.dispose()
       terminalRef.current = null
       fitAddonRef.current = null
+      searchAddonRef.current = null
     }
   }, [sessionId, hostId, onStatusChange])
 
@@ -137,12 +162,19 @@ export function TerminalPanel({ sessionId, hostId, active, onStatusChange }: Ter
     if (active && fitAddonRef.current) {
       requestAnimationFrame(() => fitAddonRef.current?.fit())
     }
-  }, [active])
+  }, [active, searchOpen])
 
   return (
-    <div
-      ref={containerRef}
-      className={`absolute inset-0 p-2 bg-app ${active ? 'block' : 'hidden'}`}
-    />
+    <div className={`absolute inset-0 flex flex-col min-h-0 bg-app ${active ? 'block' : 'hidden'}`}>
+      <TerminalSearchBar
+        open={searchOpen}
+        query={query}
+        onQueryChange={setQuery}
+        onClose={closeSearch}
+        onSearch={runSearch}
+        placeholder="搜索终端输出…"
+      />
+      <div ref={containerRef} className="flex-1 min-h-0 p-2" tabIndex={0} />
+    </div>
   )
 }
