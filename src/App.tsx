@@ -117,6 +117,23 @@ export default function App() {
     setShowSession(true)
   }, [])
 
+  const connectSshConfigHost = useCallback((target: string, host?: SshConfigHost) => {
+    const sessionId = uuidv4()
+    const session: AppSession = {
+      id: sessionId,
+      hostId: `ssh-config:${host?.alias ?? target}`,
+      hostName: host?.alias ?? target,
+      hostname: host?.hostname ?? target,
+      protocol: 'ssh',
+      status: 'connecting',
+      sshConfigTarget: target,
+    }
+    setSessions((prev) => [...prev, session])
+    setActiveSessionId(sessionId)
+    setMountedSessions((prev) => new Set(prev).add(sessionId))
+    setShowSession(true)
+  }, [])
+
   const handleConnectFromPanel = useCallback(
     (host: Host) => {
       connectHost(host, browsePanel === 'sftp' ? 'sftp' : 'ssh')
