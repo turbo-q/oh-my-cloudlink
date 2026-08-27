@@ -18,10 +18,12 @@ interface TerminalPanelProps {
   hostName: string
   hostname: string
   sshConfigTarget?: string
+  pendingSnippet?: { command: string; run: boolean }
   active: boolean
   hosts: Host[]
   snippets: Snippet[]
   onStatusChange: (sessionId: string, status: 'connecting' | 'connected' | 'disconnected' | 'error', error?: string) => void
+  onPendingSnippetConsumed?: () => void
 }
 
 export function TerminalPanel({
@@ -30,10 +32,12 @@ export function TerminalPanel({
   hostName,
   hostname,
   sshConfigTarget,
+  pendingSnippet,
   active,
   hosts,
   snippets,
   onStatusChange,
+  onPendingSnippetConsumed,
 }: TerminalPanelProps) {
   const { t } = useI18n()
   const containerRef = useRef<HTMLDivElement>(null)
@@ -41,6 +45,11 @@ export function TerminalPanel({
   const fitAddonRef = useRef<FitAddon | null>(null)
   const searchAddonRef = useRef<SearchAddon | null>(null)
   const connectedRef = useRef(false)
+  const pendingSnippetRef = useRef(pendingSnippet)
+  pendingSnippetRef.current = pendingSnippet
+
+  const onPendingSnippetConsumedRef = useRef(onPendingSnippetConsumed)
+  onPendingSnippetConsumedRef.current = onPendingSnippetConsumed
 
   const [searchOpen, setSearchOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -146,6 +155,18 @@ export function TerminalPanel({
           fitAddon.fit()
           const { cols, rows } = term
           void window.electronAPI.sshResize(sessionId, cols, rows)
+
+          const pending = pendingSnippetRef.current
+          if (pending) {
+            const host = hosts.find((h) => h.id === hostId) ?? null
+            void insertSnippetToSession(sessionId, pending.command, {
+              run: pending.run,
+              session: { id: sessionId, hostId, hostName, hostname, protocol: 'ssh', status: 'connected' },
+              host,
+            }).finally(() => {
+              onPendingSnippetConsumedRef.current?.()
+            })
+          }
         })
         .catch((err: Error) => {
           if (disposed) return

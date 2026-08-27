@@ -61,15 +61,16 @@ export function SessionTabBar({
         {sessions.length > 0 && (
           <div className="flex items-stretch border-l border-app ml-1 h-full">
             {sessions.map((session) => {
-              const sameHostSessions = sessions.filter(
-                (s) => s.hostId === session.hostId && s.protocol === session.protocol,
+              const baseName = session.tabLabel ?? session.hostName
+              const sameLabelSessions = sessions.filter(
+                (s) =>
+                  (s.tabLabel ?? s.hostName) === baseName && s.protocol === session.protocol,
               )
               const dupIndex =
-                sameHostSessions.length > 1
-                  ? sameHostSessions.findIndex((s) => s.id === session.id) + 1
+                sameLabelSessions.length > 1
+                  ? sameLabelSessions.findIndex((s) => s.id === session.id) + 1
                   : 0
-              const label =
-                dupIndex > 0 ? `${session.hostName} #${dupIndex}` : session.hostName
+              const label = dupIndex > 0 ? `${baseName} #${dupIndex}` : baseName
 
               return (
                 <button

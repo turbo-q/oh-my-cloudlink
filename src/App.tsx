@@ -77,7 +77,11 @@ export default function App() {
     }
   }, [visibleHosts, selectedHostId])
 
-  const connectHost = useCallback((host: Host, mode: 'ssh' | 'sftp' = 'ssh') => {
+  const connectHost = useCallback((
+    host: Host,
+    mode: 'ssh' | 'sftp' = 'ssh',
+    options?: { tabLabel?: string; pendingSnippet?: { command: string; run: boolean } },
+  ) => {
     if (mode === 'ssh' && !isSshHost(host)) {
       alert(t('app.ftpUseSftp'))
       return
@@ -92,13 +96,31 @@ export default function App() {
       hostname: host.hostname,
       protocol: sessionProtocol,
       status: 'connecting',
+      tabLabel: options?.tabLabel,
+      pendingSnippet: options?.pendingSnippet,
     }
 
     setSessions((prev) => [...prev, session])
     setActiveSessionId(sessionId)
     setMountedSessions((prev) => new Set(prev).add(sessionId))
     setShowSession(true)
+  }, [t])
+
+  const clearPendingSnippet = useCallback((sessionId: string) => {
+    setSessions((prev) =>
+      prev.map((s) => (s.id === sessionId ? { ...s, pendingSnippet: undefined } : s)),
+    )
   }, [])
+
+  const handleRunSnippet = useCallback(
+    (opts: { host: Host; tabLabel: string; command: string }) => {
+      connectHost(opts.host, 'ssh', {
+        tabLabel: opts.tabLabel,
+        pendingSnippet: { command: opts.command, run: true },
+      })
+    },
+    [connectHost],
+  )
 
   const connectSshConfigHost = useCallback((target: string, host?: SshConfigHost) => {
     const sessionId = uuidv4()
@@ -321,9 +343,6 @@ export default function App() {
           <SnippetsPanel
             hosts={hosts}
             snippets={snippets}
-            sshSessions={sessions.filter((s) => s.protocol === 'ssh')}
-            activeSessionId={activeSessionId}
-            onSelectSession={handleSelectSession}
             onAdd={() => setModal({ type: 'snippet' })}
             onEdit={(s) => setModal({ type: 'snippet', snippet: s })}
             onDelete={handleDeleteSnippet}
@@ -369,10 +388,12 @@ export default function App() {
                   hostName={session.hostName}
                   hostname={session.hostname}
                   sshConfigTarget={session.sshConfigTarget}
+                  pendingSnippet={session.pendingSnippet}
                   active={showSession && activeSessionId === sessionId}
                   hosts={hosts}
                   snippets={snippets}
                   onStatusChange={updateSessionStatus}
+                  onPendingSnippetConsumed={() => clearPendingSnippet(sessionId)}
                 />
               )
             })}
@@ -419,8 +440,10 @@ export default function App() {
         open={modal.type === 'snippet'}
         snippet={modal.type === 'snippet' ? modal.snippet : null}
         hosts={hosts}
+        groups={groups}
         defaultHostId={selectedHostId}
         onSave={saveSnippet}
+        onRun={handleRunSnippet}
         onClose={() => setModal({ type: 'none' })}
       />
       <SshConfigConnectModal

@@ -77,6 +77,10 @@ export interface AppSession {
   errorMessage?: string
   /** Set for an ephemeral connection resolved from ~/.ssh/config. */
   sshConfigTarget?: string
+  /** Custom session tab label (e.g. snippet name when Run from snippet editor). */
+  tabLabel?: string
+  /** Insert snippet command once after SSH connects. */
+  pendingSnippet?: { command: string; run: boolean }
 }
 
 /** @deprecated 使用 AppSession */
