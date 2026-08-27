@@ -120,19 +120,7 @@ export function HostOverviewPanel({
         onConnectViaSshConfig={onConnectViaSshConfig}
       />
 
-      {!isSftp && (
-        <div className="px-8 pb-4">
-          <button
-            onClick={onAddHost}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-surface border border-app-strong text-sm font-medium text-app hover:bg-app-hover"
-          >
-            <span className="text-emerald-400">+</span>
-            {t('hosts.newHost')}
-          </button>
-        </div>
-      )}
-
-      <div className="flex-1 overflow-y-auto px-8 pb-8 space-y-8">
+      <div className="flex-1 overflow-y-auto px-8 pt-6 pb-8 space-y-8">
         {/* Groups — 与 Hosts 同区域，分组在上 */}
         {(groups.length > 0 || !isSftp) && (
           <section>
@@ -259,17 +247,28 @@ export function HostOverviewPanel({
 
         {/* Hosts — 分组筛选结果 */}
         <section>
-          <div className="flex items-center gap-3 mb-4">
-            <h3 className="text-base font-semibold text-app">Hosts</h3>
-            {groupFilter && groupFilter !== '__ungrouped__' && (
-              <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-400">
-                {groups.find((g) => g.id === groupFilter)?.name}
-              </span>
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <div className="flex items-center gap-3 min-w-0 flex-wrap">
+              <h3 className="text-base font-semibold text-app">Hosts</h3>
+              {groupFilter && groupFilter !== '__ungrouped__' && (
+                <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-400">
+                  {groups.find((g) => g.id === groupFilter)?.name}
+                </span>
+              )}
+              {groupFilter === '__ungrouped__' && (
+                <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-400">{t('hosts.ungrouped')}</span>
+              )}
+              <span className="text-xs text-app-faint">{t('hosts.hostsCount', { n: displayHosts.length })}</span>
+            </div>
+            {!isSftp && (
+              <button
+                onClick={onAddHost}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-surface border border-app-strong text-sm font-medium text-app hover:bg-app-hover shrink-0"
+              >
+                <span className="text-emerald-400">+</span>
+                {t('hosts.newHost')}
+              </button>
             )}
-            {groupFilter === '__ungrouped__' && (
-              <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-400">{t('hosts.ungrouped')}</span>
-            )}
-            <span className="text-xs text-app-faint">{t('hosts.hostsCount', { n: displayHosts.length })}</span>
           </div>
 
           {displayHosts.length === 0 ? (
@@ -388,7 +387,7 @@ function SearchBar({
 }) {
   const { t } = useI18n()
   return (
-    <div className="page-header px-8 pt-5 pb-4">
+    <div className="page-header px-8 py-5">
       <div className="flex gap-3 max-w-4xl">
         <div className="relative flex-1">
           <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-app-subtle" fill="none" stroke="currentColor" viewBox="0 0 24 24">
