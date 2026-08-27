@@ -104,7 +104,7 @@ function HostSelectPane({
     <div className="flex flex-col h-full border-l border-app page-shell">
       <div className="flex items-center justify-between px-5 py-4 border-b border-app page-header">
         <span className="text-sm font-semibold text-app">{t('sftp.selectHost')}</span>
-        <button onClick={() => setShowPicker(false)} className="text-xs text-app-subtle hover:text-app">
+        <button onClick={() => setShowPicker(false)} className="text-action">
           {t('common.back')}
         </button>
       </div>

@@ -231,13 +231,13 @@ export function SnippetsPanel({
                     </div>
                     <div className="flex items-center gap-1 shrink-0">
                       <button
-                        className="text-xs text-app-muted hover:text-app px-2 py-1.5"
+                        className="inline-action"
                         onClick={() => onEdit(s)}
                       >
                         {t('common.edit')}
                       </button>
                       <button
-                        className="text-xs text-red-400/70 hover:text-red-400 px-2 py-1.5"
+                        className="inline-action-danger"
                         onClick={() => onDelete(s)}
                       >
                         {t('common.delete')}

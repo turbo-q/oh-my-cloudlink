@@ -136,7 +136,7 @@ export function LogsPanel() {
                 type="button"
                 disabled={busy}
                 onClick={() => void refresh()}
-                className="text-xs text-app-subtle hover:text-app disabled:opacity-50"
+                className="text-action"
               >
                 {t('common.refresh')}
               </button>
@@ -144,7 +144,7 @@ export function LogsPanel() {
                 type="button"
                 disabled={busy || logs.length === 0}
                 onClick={() => void handleClear()}
-                className="text-xs text-app-subtle hover:text-red-400 disabled:opacity-50"
+                className="text-action-danger"
               >{t('logs.clear')}</button>
             </div>
           </div>
@@ -203,7 +203,7 @@ export function LogsPanel() {
                   type="button"
                   disabled={busy}
                   onClick={() => void handleDelete(selected.id)}
-                  className="text-xs text-app-subtle hover:text-red-400 disabled:opacity-50"
+                  className="text-action-danger"
                 >
                   {t('logs.deleteThis')}
                 </button>

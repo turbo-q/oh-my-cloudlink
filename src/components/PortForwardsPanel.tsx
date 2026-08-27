@@ -252,7 +252,7 @@ export function PortForwardsPanel({
                       </button>
                     )}
                     <button
-                      className="text-xs text-app-muted hover:text-app px-2 py-1.5"
+                      className="inline-action"
                       onClick={() => onEdit(f)}
                       disabled={running}
                       title={running ? t('forwards.editDisabled') : t('common.edit')}
@@ -260,7 +260,7 @@ export function PortForwardsPanel({
                       {t('common.edit')}
                     </button>
                     <button
-                      className="text-xs text-red-400/70 hover:text-red-400 px-2 py-1.5"
+                      className="inline-action-danger"
                       onClick={() => onDelete(f)}
                     >
                       {t('common.delete')}

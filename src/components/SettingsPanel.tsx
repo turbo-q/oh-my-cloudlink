@@ -216,7 +216,7 @@ export function SettingsPanel({ onExport, onImport, onDataRestored }: SettingsPa
                       type="button"
                       disabled={busy}
                       onClick={() => void refreshBackups()}
-                      className="text-xs text-app-subtle hover:text-app"
+                      className="text-action"
                     >
                       {t('common.refresh')}
                     </button>

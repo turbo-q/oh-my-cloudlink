@@ -141,7 +141,7 @@ export function HostOverviewPanel({
               {!isSftp && (
                 <button
                   onClick={onAddGroup}
-                  className="text-xs text-app-subtle hover:text-emerald-400 transition-colors"
+                  className="text-action-accent"
                 >
                   + {t('hosts.newGroup')}
                 </button>
@@ -213,7 +213,7 @@ export function HostOverviewPanel({
                             e.stopPropagation()
                             onEditGroup(group)
                           }}
-                          className="p-1 rounded text-app-muted hover:text-app text-xs"
+                          className="card-action"
                         >
                           {t('hosts.edit')}
                         </button>
@@ -222,7 +222,7 @@ export function HostOverviewPanel({
                             e.stopPropagation()
                             onDeleteGroup(group)
                           }}
-                          className="p-1 rounded text-red-400/70 hover:text-red-400 text-xs"
+                          className="card-action-danger"
                         >
                           {t('hosts.delete')}
                         </button>
@@ -351,7 +351,7 @@ function HostCard({
             e.stopPropagation()
             onEdit()
           }}
-          className="p-1.5 rounded-lg text-app-muted hover:text-app hover:bg-app-hover-strong text-xs"
+          className="card-action"
         >
           {t('hosts.edit')}
         </button>
@@ -360,7 +360,7 @@ function HostCard({
             e.stopPropagation()
             onDelete()
           }}
-          className="p-1.5 rounded-lg text-red-400/70 hover:text-red-400 hover:bg-red-500/10 text-xs"
+          className="card-action-danger"
         >
           {t('hosts.delete')}
         </button>
