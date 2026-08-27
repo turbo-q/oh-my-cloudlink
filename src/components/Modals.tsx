@@ -10,6 +10,7 @@ import type {
 } from '../types'
 import { GROUP_COLORS, isSshHost } from '../types'
 import { GroupCombobox } from './GroupCombobox'
+import { FormHint } from './FormHint'
 import { useI18n } from '../i18n/I18nProvider'
 
 export { SnippetFormModal } from './SnippetFormModal'
@@ -807,7 +808,7 @@ export function PortForwardFormModal({
 
           {type === 'local' && (
             <>
-              <p className="text-xs text-app-faint">{t('modal.localHint')}</p>
+              <FormHint>{t('modal.localHint')}</FormHint>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm text-app-muted mb-1">{t('modal.labelLocalHost')}</label>
@@ -823,7 +824,7 @@ export function PortForwardFormModal({
                     onChange={(e) => setLocalPort(Number(e.target.value))}
                     className="input-field"
                   />
-                  <p className="text-[10px] text-app-faint mt-1">{t('modal.portAutoHint')}</p>
+                  <FormHint compact>{t('modal.portAutoHint')}</FormHint>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
@@ -855,7 +856,7 @@ export function PortForwardFormModal({
 
           {type === 'remote' && (
             <>
-              <p className="text-xs text-app-faint">{t('modal.remoteHint')}</p>
+              <FormHint>{t('modal.remoteHint')}</FormHint>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm text-app-muted mb-1">{t('modal.labelRemoteListenHost')}</label>
@@ -902,7 +903,7 @@ export function PortForwardFormModal({
 
           {type === 'dynamic' && (
             <>
-              <p className="text-xs text-app-faint">{t('modal.dynamicHint')}</p>
+              <FormHint>{t('modal.dynamicHint')}</FormHint>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm text-app-muted mb-1">{t('modal.labelListenHost')}</label>
@@ -918,7 +919,7 @@ export function PortForwardFormModal({
                     onChange={(e) => setLocalPort(Number(e.target.value))}
                     className="input-field"
                   />
-                  <p className="text-[10px] text-app-faint mt-1">{t('modal.dynamicPortHint')}</p>
+                  <FormHint compact>{t('modal.dynamicPortHint')}</FormHint>
                 </div>
               </div>
             </>

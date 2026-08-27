@@ -3,6 +3,7 @@ import type { Group, Host, Snippet } from '../types'
 import { isSshHost } from '../types'
 import { SnippetTargetPicker } from './SnippetTargetPicker'
 import { HostOsIcon } from './HostOsIcon'
+import { FormHint } from './FormHint'
 import { useI18n } from '../i18n/I18nProvider'
 
 interface SnippetFormModalProps {
@@ -295,7 +296,7 @@ export function SnippetFormModal({
                       className="input-field font-mono text-sm flex-1 min-h-[180px] resize-y"
                       placeholder={'cd /var/log\ntail -f nginx/error.log'}
                     />
-                    <p className="text-[10px] text-app-faint mt-1.5">{t('modal.placeholdersHint')}</p>
+                    <FormHint>{t('modal.placeholdersHint')}</FormHint>
                   </div>
 
                   <div>
