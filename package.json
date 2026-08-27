@@ -2,7 +2,7 @@
   "name": "oh-my-cloudlink",
   "productName": "Oh My CloudLink",
   "private": true,
-  "version": "0.1.1",
+  "version": "0.1.2",
   "type": "module",
   "main": "main.cjs",
   "scripts": {
