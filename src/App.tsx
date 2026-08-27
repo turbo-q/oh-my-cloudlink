@@ -98,23 +98,6 @@ export default function App() {
     setActiveSessionId(sessionId)
     setMountedSessions((prev) => new Set(prev).add(sessionId))
     setShowSession(true)
-  }, [t])
-
-  const connectSshConfigHost = useCallback((target: string, host?: SshConfigHost) => {
-    const sessionId = uuidv4()
-    const session: AppSession = {
-      id: sessionId,
-      hostId: `ssh-config:${host?.alias ?? target}`,
-      hostName: host?.alias ?? target,
-      hostname: host?.hostname ?? target,
-      protocol: 'ssh',
-      status: 'connecting',
-      sshConfigTarget: target,
-    }
-    setSessions((prev) => [...prev, session])
-    setActiveSessionId(sessionId)
-    setMountedSessions((prev) => new Set(prev).add(sessionId))
-    setShowSession(true)
   }, [])
 
   const connectSshConfigHost = useCallback((target: string, host?: SshConfigHost) => {
