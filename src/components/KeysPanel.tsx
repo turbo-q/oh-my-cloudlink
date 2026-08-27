@@ -19,10 +19,10 @@ export function KeysPanel({
   const { t } = useI18n()
 
   return (
-    <div className="flex-1 flex flex-col bg-app min-h-0">
-      <div className="px-8 py-6 border-b border-app flex items-center justify-between">
+    <div className="flex-1 flex flex-col page-shell min-h-0">
+      <div className="page-header px-8 py-6 flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-semibold text-app">{t('keys.title')}</h2>
+          <h2 className="text-2xl font-bold tracking-tight text-app">{t('keys.title')}</h2>
           <p className="text-sm text-app-subtle mt-1">{t('keys.subtitle')}</p>
         </div>
         <div className="flex gap-2">
@@ -46,7 +46,7 @@ export function KeysPanel({
             {keys.map((k) => (
               <div
                 key={k.id}
-                className="group flex items-center gap-3 px-4 py-4 rounded-xl border border-app-strong bg-app-card hover:border-app-emphasis"
+                className="group panel-card flex items-center gap-3 px-4 py-4 rounded-xl hover:border-app-emphasis transition-all hover:-translate-y-0.5"
               >
                 <svg className="w-8 h-8 text-amber-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />

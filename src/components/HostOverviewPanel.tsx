@@ -79,7 +79,7 @@ export function HostOverviewPanel({
 
   if (allHosts.length === 0) {
     return (
-      <div className="flex-1 flex flex-col bg-app">
+      <div className="flex-1 flex flex-col page-shell">
         <SearchBar
           searchQuery={searchQuery}
           isSftp={isSftp}
@@ -109,7 +109,7 @@ export function HostOverviewPanel({
   }
 
   return (
-    <div className="flex-1 flex flex-col bg-app min-h-0">
+    <div className="flex-1 flex flex-col page-shell min-h-0">
       <SearchBar
         searchQuery={searchQuery}
         isSftp={isSftp}
@@ -121,7 +121,7 @@ export function HostOverviewPanel({
       />
 
       {!isSftp && (
-        <div className="px-8 pb-4">
+        <div className="px-8 pt-4 pb-4">
           <button
             onClick={onAddHost}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-surface border border-app-strong text-sm font-medium text-app hover:bg-app-hover"
@@ -141,7 +141,7 @@ export function HostOverviewPanel({
               {!isSftp && (
                 <button
                   onClick={onAddGroup}
-                  className="text-xs text-app-subtle hover:text-emerald-400 transition-colors"
+                  className="text-action-accent"
                 >
                   + {t('hosts.newGroup')}
                 </button>
@@ -213,7 +213,7 @@ export function HostOverviewPanel({
                             e.stopPropagation()
                             onEditGroup(group)
                           }}
-                          className="p-1 rounded text-app-muted hover:text-app text-xs"
+                          className="card-action"
                         >
                           {t('hosts.edit')}
                         </button>
@@ -222,7 +222,7 @@ export function HostOverviewPanel({
                             e.stopPropagation()
                             onDeleteGroup(group)
                           }}
-                          className="p-1 rounded text-red-400/70 hover:text-red-400 text-xs"
+                          className="card-action-danger"
                         >
                           {t('hosts.delete')}
                         </button>
@@ -351,7 +351,7 @@ function HostCard({
             e.stopPropagation()
             onEdit()
           }}
-          className="p-1.5 rounded-lg text-app-muted hover:text-app hover:bg-app-hover-strong text-xs"
+          className="card-action"
         >
           {t('hosts.edit')}
         </button>
@@ -360,7 +360,7 @@ function HostCard({
             e.stopPropagation()
             onDelete()
           }}
-          className="p-1.5 rounded-lg text-red-400/70 hover:text-red-400 hover:bg-red-500/10 text-xs"
+          className="card-action-danger"
         >
           {t('hosts.delete')}
         </button>
@@ -388,7 +388,7 @@ function SearchBar({
 }) {
   const { t } = useI18n()
   return (
-    <div className="px-8 pt-5 pb-4">
+    <div className="page-header px-8 pt-5 pb-4">
       <div className="flex gap-3 max-w-4xl">
         <div className="relative flex-1">
           <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-app-subtle" fill="none" stroke="currentColor" viewBox="0 0 24 24">

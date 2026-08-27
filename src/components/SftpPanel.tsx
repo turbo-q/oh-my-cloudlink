@@ -77,8 +77,8 @@ function HostSelectPane({
 
   if (!showPicker) {
     return (
-      <div className="flex flex-col h-full border-l border-app bg-app">
-        <div className="px-4 py-3 border-b border-app bg-surface">
+      <div className="flex flex-col h-full border-l border-app page-shell">
+        <div className="px-5 py-4 border-b border-app page-header">
           <span className="text-sm font-semibold text-app">{t('sftp.remote')}</span>
         </div>
         <div className="flex-1 flex flex-col items-center justify-center px-8 text-center">
@@ -101,10 +101,10 @@ function HostSelectPane({
   }
 
   return (
-    <div className="flex flex-col h-full border-l border-app bg-app">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-app bg-surface">
+    <div className="flex flex-col h-full border-l border-app page-shell">
+      <div className="flex items-center justify-between px-5 py-4 border-b border-app page-header">
         <span className="text-sm font-semibold text-app">{t('sftp.selectHost')}</span>
-        <button onClick={() => setShowPicker(false)} className="text-xs text-app-subtle hover:text-app">
+        <button onClick={() => setShowPicker(false)} className="text-action">
           {t('common.back')}
         </button>
       </div>

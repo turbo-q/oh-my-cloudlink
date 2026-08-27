@@ -77,6 +77,33 @@ body {
 .bg-surface-2 { background-color: var(--app-surface-2); }
 .bg-elevated { background-color: var(--app-elevated); }
 .bg-app-hover { background-color: var(--app-hover); }
+.bg-app-hover-strong { background-color: var(--app-hover-strong); }
+
+/* Shared depth system for workspace pages. */
+.page-shell {
+  background: linear-gradient(135deg, var(--app-bg) 0%, var(--app-surface-2) 100%);
+}
+
+.page-header {
+  background: color-mix(in srgb, var(--app-surface) 92%, transparent);
+  border-bottom: 1px solid var(--app-border-strong);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.08);
+  backdrop-filter: blur(14px);
+}
+
+.panel-card {
+  background: color-mix(in srgb, var(--app-surface) 88%, transparent);
+  border: 1px solid var(--app-border-strong);
+  box-shadow: 0 10px 24px rgb(0 0 0 / 0.08);
+}
+
+.section-label {
+  color: var(--app-text-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
 .bg-app-card { background-color: var(--app-card-bg); }
 
 .text-app { color: var(--app-text); }
@@ -117,6 +144,77 @@ body {
 
 .btn-secondary:hover {
   background-color: var(--app-hover-strong);
+}
+
+/* Lightweight text / icon actions */
+.text-action {
+  @apply px-2 py-1 rounded-md text-xs transition-colors disabled:opacity-50 disabled:pointer-events-none;
+  color: var(--app-text-subtle);
+}
+
+.text-action:hover {
+  color: var(--app-text);
+  background-color: var(--app-hover);
+}
+
+.text-action-danger {
+  @apply px-2 py-1 rounded-md text-xs transition-colors disabled:opacity-50 disabled:pointer-events-none;
+  color: var(--app-text-subtle);
+}
+
+.text-action-danger:hover {
+  color: rgb(248 113 113);
+  background-color: rgb(239 68 68 / 0.1);
+}
+
+.text-action-accent {
+  @apply px-2 py-1 rounded-md text-xs transition-colors;
+  color: var(--app-text-subtle);
+}
+
+.text-action-accent:hover {
+  color: rgb(52 211 153);
+  background-color: rgb(16 185 129 / 0.1);
+}
+
+.card-action {
+  @apply p-1.5 rounded-lg text-xs transition-colors;
+  color: var(--app-text-muted);
+}
+
+.card-action:hover {
+  color: var(--app-text);
+  background-color: var(--app-hover-strong);
+}
+
+.card-action-danger {
+  @apply p-1.5 rounded-lg text-xs transition-colors;
+  color: rgb(248 113 113 / 0.7);
+}
+
+.card-action-danger:hover {
+  color: rgb(248 113 113);
+  background-color: rgb(239 68 68 / 0.1);
+}
+
+.inline-action {
+  @apply px-2 py-1.5 rounded-lg text-xs transition-colors;
+  color: var(--app-text-muted);
+}
+
+.inline-action:hover {
+  color: var(--app-text);
+  background-color: var(--app-hover-strong);
+}
+
+.inline-action-danger {
+  @apply px-2 py-1.5 rounded-lg text-xs transition-colors;
+  color: rgb(248 113 113 / 0.7);
+}
+
+.inline-action-danger:hover {
+  color: rgb(248 113 113);
+  background-color: rgb(239 68 68 / 0.1);
 }
 
 .theme-option {

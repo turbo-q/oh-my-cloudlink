@@ -31,6 +31,13 @@ export function snippetAppliesToHost(snippet: Snippet, hostId: string): boolean 
   return isSnippetGlobal(snippet) || snippet.hostIds.includes(hostId)
 }
 
+/** Hosts a snippet applies to; global scope returns all given hosts. */
+export function snippetScopeHosts(snippet: Pick<Snippet, 'hostIds'>, hosts: Host[]): Host[] {
+  if (isSnippetGlobal(snippet as Snippet)) return hosts
+  const ids = new Set(snippet.hostIds)
+  return hosts.filter((h) => ids.has(h.id))
+}
+
 export function filterSnippetsForHost(snippets: Snippet[], hostId?: string | null): Snippet[] {
   if (!hostId) {
     return [...snippets].sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'))

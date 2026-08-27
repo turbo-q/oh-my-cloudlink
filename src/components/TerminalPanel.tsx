@@ -9,6 +9,7 @@ import { insertSnippetToSession } from '../utils/snippets'
 import { TerminalSearchBar, useTerminalSearchShortcut } from './TerminalSearchBar'
 import { TerminalSnippetPicker, useTerminalSnippetShortcut } from './TerminalSnippetPicker'
 import { useI18n } from '../i18n/I18nProvider'
+import { getStoredLocalePreference, resolveLocale, translate } from '../i18n'
 import 'xterm/css/xterm.css'
 
 interface TerminalPanelProps {
@@ -17,10 +18,12 @@ interface TerminalPanelProps {
   hostName: string
   hostname: string
   sshConfigTarget?: string
+  pendingSnippet?: { command: string; run: boolean }
   active: boolean
   hosts: Host[]
   snippets: Snippet[]
   onStatusChange: (sessionId: string, status: 'connecting' | 'connected' | 'disconnected' | 'error', error?: string) => void
+  onPendingSnippetConsumed?: () => void
 }
 
 export function TerminalPanel({
@@ -29,10 +32,12 @@ export function TerminalPanel({
   hostName,
   hostname,
   sshConfigTarget,
+  pendingSnippet,
   active,
   hosts,
   snippets,
   onStatusChange,
+  onPendingSnippetConsumed,
 }: TerminalPanelProps) {
   const { t } = useI18n()
   const containerRef = useRef<HTMLDivElement>(null)
@@ -40,6 +45,11 @@ export function TerminalPanel({
   const fitAddonRef = useRef<FitAddon | null>(null)
   const searchAddonRef = useRef<SearchAddon | null>(null)
   const connectedRef = useRef(false)
+  const pendingSnippetRef = useRef(pendingSnippet)
+  pendingSnippetRef.current = pendingSnippet
+
+  const onPendingSnippetConsumedRef = useRef(onPendingSnippetConsumed)
+  onPendingSnippetConsumedRef.current = onPendingSnippetConsumed
 
   const [searchOpen, setSearchOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -91,12 +101,16 @@ export function TerminalPanel({
   useEffect(() => {
     if (!containerRef.current || terminalRef.current) return
 
+    let disposed = false
+    const locale = resolveLocale(getStoredLocalePreference())
+    const msg = (key: string, params?: Record<string, string | number>) => translate(locale, key, params)
+
     const appendLog = (text: string) => {
       void window.electronAPI.sessionLogAppend(sessionId, text)
     }
 
-    const connectedText = t('terminal.connected')
-    const disconnectedText = t('terminal.disconnected')
+    const disconnectedText = msg('terminal.disconnected')
+    const connectingText = msg('terminal.connecting')
 
     const term = new Terminal({
       cursorBlink: true,
@@ -123,7 +137,9 @@ export function TerminalPanel({
       : window.electronAPI.sessionLogPrepare(sessionId, hostId)
 
     void prepareLog.then(() => {
-      const banner = '\x1b[38;2;16;185;129mOh My CloudLink\x1b[0m — 正在连接...\r\n'
+      if (disposed) return
+
+      const banner = `\x1b[38;2;16;185;129mOh My CloudLink\x1b[0m — ${connectingText}\r\n`
       term.writeln(banner)
       appendLog(banner)
       onStatusChange(sessionId, 'connecting')
@@ -133,24 +149,36 @@ export function TerminalPanel({
         : window.electronAPI.sshConnect(sessionId, hostId)
       void connect
         .then(() => {
+          if (disposed) return
           connectedRef.current = true
           onStatusChange(sessionId, 'connected')
-          const ok = `\x1b[90m${connectedText}\x1b[0m\r\n`
-          term.writeln(ok)
-          appendLog(ok)
           fitAddon.fit()
           const { cols, rows } = term
           void window.electronAPI.sshResize(sessionId, cols, rows)
+
+          const pending = pendingSnippetRef.current
+          if (pending) {
+            const host = hosts.find((h) => h.id === hostId) ?? null
+            void insertSnippetToSession(sessionId, pending.command, {
+              run: pending.run,
+              session: { id: sessionId, hostId, hostName, hostname, protocol: 'ssh', status: 'connected' },
+              host,
+            }).finally(() => {
+              onPendingSnippetConsumedRef.current?.()
+            })
+          }
         })
         .catch((err: Error) => {
-          const fail = `\r\n\x1b[31m${t('terminal.connectFail', { message: err.message })}\x1b[0m\r\n`
+          if (disposed) return
+          const fail = `\r\n\x1b[31m${msg('terminal.connectFail', { message: err.message })}\x1b[0m\r\n`
           term.writeln(fail)
           appendLog(fail)
           onStatusChange(sessionId, 'error', err.message)
         })
     }).catch((err: Error) => {
+      if (disposed) return
       const message = err instanceof Error ? err.message : String(err)
-      term.writeln(`\r\n\x1b[31m连接失败: ${message}\x1b[0m\r\n`)
+      term.writeln(`\r\n\x1b[31m${msg('terminal.connectFail', { message })}\x1b[0m\r\n`)
       onStatusChange(sessionId, 'error', message)
     })
 
@@ -178,7 +206,7 @@ export function TerminalPanel({
       if (sid === sessionId) {
         connectedRef.current = false
         onStatusChange(sessionId, 'error', error)
-        const msg = `\r\n\x1b[31m${t('terminal.error', { message: error })}\x1b[0m`
+        const msg = `\r\n\x1b[31m${translate(resolveLocale(getStoredLocalePreference()), 'terminal.error', { message: error })}\x1b[0m`
         term.writeln(msg)
         appendLog(`${msg}\r\n`)
       }
@@ -206,6 +234,8 @@ export function TerminalPanel({
     observer.observe(containerRef.current)
 
     return () => {
+      disposed = true
+      connectedRef.current = false
       window.removeEventListener(THEME_CHANGE_EVENT, handleThemeChange)
       window.removeEventListener('resize', handleResize)
       observer.disconnect()

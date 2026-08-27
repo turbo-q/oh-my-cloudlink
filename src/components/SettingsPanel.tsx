@@ -128,9 +128,9 @@ export function SettingsPanel({ onExport, onImport, onDataRestored }: SettingsPa
         : t('settings.langEn')
 
   return (
-    <div className="flex-1 flex flex-col bg-app min-h-0 w-full">
-      <div className="px-8 py-6 border-b border-app shrink-0">
-        <h2 className="text-xl font-semibold text-app">{t('settings.title')}</h2>
+    <div className="flex-1 flex flex-col page-shell min-h-0 w-full">
+      <div className="page-header px-8 py-6 shrink-0">
+        <h2 className="text-2xl font-bold tracking-tight text-app">{t('settings.title')}</h2>
         <p className="text-sm text-app-subtle mt-1">{t('settings.subtitle')}</p>
       </div>
 
@@ -216,7 +216,7 @@ export function SettingsPanel({ onExport, onImport, onDataRestored }: SettingsPa
                       type="button"
                       disabled={busy}
                       onClick={() => void refreshBackups()}
-                      className="text-xs text-app-subtle hover:text-app"
+                      className="text-action"
                     >
                       {t('common.refresh')}
                     </button>

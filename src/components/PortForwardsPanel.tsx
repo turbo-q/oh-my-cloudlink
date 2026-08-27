@@ -154,10 +154,10 @@ export function PortForwardsPanel({
   const runningCount = Object.values(runtime).filter((r) => r.status === 'running').length
 
   return (
-    <div className="flex-1 flex flex-col bg-app min-h-0">
-      <div className="px-8 py-6 border-b border-app flex items-center justify-between gap-4">
+    <div className="flex-1 flex flex-col page-shell min-h-0">
+      <div className="page-header px-8 py-6 flex items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl font-semibold text-app">{t('forwards.title')}</h2>
+          <h2 className="text-2xl font-bold tracking-tight text-app">{t('forwards.title')}</h2>
           <p className="text-sm text-app-subtle mt-1">
             {t('forwards.subtitle')}
             {runningCount > 0 ? t('forwards.runningCount', { n: runningCount }) : ''}
@@ -207,7 +207,7 @@ export function PortForwardsPanel({
               return (
                 <div
                   key={f.id}
-                  className="rounded-xl border border-app-strong bg-app-card px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-4"
+                  className="panel-card rounded-xl px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-4 transition-all hover:-translate-y-0.5 hover:border-app-emphasis"
                 >
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center flex-wrap gap-2 mb-1">
@@ -252,7 +252,7 @@ export function PortForwardsPanel({
                       </button>
                     )}
                     <button
-                      className="text-xs text-app-muted hover:text-app px-2 py-1.5"
+                      className="inline-action"
                       onClick={() => onEdit(f)}
                       disabled={running}
                       title={running ? t('forwards.editDisabled') : t('common.edit')}
@@ -260,7 +260,7 @@ export function PortForwardsPanel({
                       {t('common.edit')}
                     </button>
                     <button
-                      className="text-xs text-red-400/70 hover:text-red-400 px-2 py-1.5"
+                      className="inline-action-danger"
                       onClick={() => onDelete(f)}
                     >
                       {t('common.delete')}
