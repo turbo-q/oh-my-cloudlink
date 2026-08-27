@@ -124,10 +124,10 @@ export function SnippetsPanel({
   }
 
   return (
-    <div className="flex-1 flex flex-col bg-app min-h-0">
-      <div className="px-8 py-6 border-b border-app flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className="flex-1 flex flex-col page-shell min-h-0">
+      <div className="page-header px-8 py-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-xl font-semibold text-app">{t('snippets.title')}</h2>
+          <h2 className="text-2xl font-bold tracking-tight text-app">{t('snippets.title')}</h2>
           <p className="text-sm text-app-subtle mt-1">
             {t('snippets.subtitle')}
           </p>
@@ -145,7 +145,7 @@ export function SnippetsPanel({
           className="input-field w-full"
         />
 
-        <div className="flex flex-col sm:flex-row sm:items-center gap-2 rounded-xl border border-app-strong bg-app-card px-4 py-3">
+        <div className="panel-card flex flex-col sm:flex-row sm:items-center gap-2 rounded-xl px-4 py-3">
           <span className="text-xs text-app-muted shrink-0 sm:w-24">{t('snippets.filterScope')}</span>
           <select
             value={filterHostId}
@@ -162,7 +162,7 @@ export function SnippetsPanel({
           </select>
         </div>
 
-        <div className="flex flex-col sm:flex-row sm:items-center gap-2 rounded-xl border border-app-strong bg-app-card px-4 py-3">
+        <div className="panel-card flex flex-col sm:flex-row sm:items-center gap-2 rounded-xl px-4 py-3">
           <span className="text-xs text-app-muted shrink-0 sm:w-24">{t('snippets.insertTarget')}</span>
           {connectedSessions.length === 0 ? (
             <span className="text-sm text-amber-400/90">{t('snippets.noSession')}</span>
@@ -203,7 +203,7 @@ export function SnippetsPanel({
               return (
                 <div
                   key={s.id}
-                  className="rounded-xl border border-app-strong bg-app-card px-5 py-4 flex flex-col gap-3"
+                  className="panel-card rounded-xl px-5 py-4 flex flex-col gap-3 transition-all hover:-translate-y-0.5 hover:border-app-emphasis"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">

@@ -121,15 +121,15 @@ export function LogsPanel() {
   }
 
   return (
-    <div className="flex-1 flex flex-col bg-app min-h-0 w-full">
-      <div className="px-8 py-6 border-b border-app shrink-0">
-        <h2 className="text-xl font-semibold text-app">{t('logs.title')}</h2>
+    <div className="flex-1 flex flex-col page-shell min-h-0 w-full">
+      <div className="page-header px-8 py-6 shrink-0">
+        <h2 className="text-2xl font-bold tracking-tight text-app">{t('logs.title')}</h2>
         <p className="text-sm text-app-subtle mt-1">{t('logs.subtitle')}</p>
       </div>
 
       <div className="flex-1 flex min-h-0">
         <aside className="w-80 shrink-0 border-r border-app flex flex-col min-h-0">
-          <div className="shrink-0 flex items-center justify-between gap-2 px-4 py-3 border-b border-app">
+          <div className="shrink-0 flex items-center justify-between gap-2 px-4 py-3 border-b border-app bg-surface/80">
             <span className="text-sm text-app-muted">{t('logs.recentCount', { n: logs.length })}</span>
             <div className="flex gap-2">
               <button

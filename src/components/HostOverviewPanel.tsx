@@ -79,7 +79,7 @@ export function HostOverviewPanel({
 
   if (allHosts.length === 0) {
     return (
-      <div className="flex-1 flex flex-col bg-app">
+      <div className="flex-1 flex flex-col page-shell">
         <SearchBar
           searchQuery={searchQuery}
           isSftp={isSftp}
@@ -109,7 +109,7 @@ export function HostOverviewPanel({
   }
 
   return (
-    <div className="flex-1 flex flex-col bg-app min-h-0">
+    <div className="flex-1 flex flex-col page-shell min-h-0">
       <SearchBar
         searchQuery={searchQuery}
         isSftp={isSftp}
@@ -388,7 +388,7 @@ function SearchBar({
 }) {
   const { t } = useI18n()
   return (
-    <div className="px-8 pt-5 pb-4">
+    <div className="page-header px-8 pt-5 pb-4">
       <div className="flex gap-3 max-w-4xl">
         <div className="relative flex-1">
           <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-app-subtle" fill="none" stroke="currentColor" viewBox="0 0 24 24">
