@@ -212,6 +212,13 @@ function registerIpcHandlers(): void {
         sessionLogStore.append(sessionId, `\r\n\x1b[31m[错误] ${message}\x1b[0m\r\n`)
         sessionLogStore.endSession(sessionId, 'error')
       },
+      onOsDetected: (osId: string) => {
+        if (host.osId === osId) return
+        const updated = dataStore.updateHostOsId(host.id, osId)
+        if (updated) {
+          mainWindow?.webContents.send('host:osUpdated', host.id, osId)
+        }
+      },
     }
 
     try {

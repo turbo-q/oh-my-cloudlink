@@ -3,6 +3,7 @@ import type { Host, Group } from '../types'
 import { useI18n } from '../i18n/I18nProvider'
 import { LocalFilePane } from './LocalFilePane'
 import { RemoteFilePane } from './RemoteFilePane'
+import { HostOsIcon } from './HostOsIcon'
 
 interface SftpPanelProps {
   sessionId?: string | null
@@ -170,15 +171,12 @@ function HostRow({
       onClick={() => onConnect(host)}
       className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-app-hover text-left transition-colors group"
     >
-      <div
-        className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 text-sm font-bold"
-        style={{
-          background: `${group?.color ?? '#f97316'}25`,
-          color: group?.color ?? '#f97316',
-        }}
-      >
-        {host.name.charAt(0).toUpperCase()}
-      </div>
+      <HostOsIcon
+        name={host.name}
+        osId={host.osId}
+        accentColor={group?.color ?? '#f97316'}
+        size="sm"
+      />
       <div className="flex-1 min-w-0">
         <div className="text-sm font-medium text-app truncate">{host.name}</div>
         <div className="text-xs text-app-subtle truncate">

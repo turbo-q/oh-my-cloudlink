@@ -405,4 +405,13 @@ export const zh = {
     sftp: 'SFTP 文件',
     ftp: 'FTP 文件',
   },
+  sessionTab: {
+    openNew: '新开',
+    rename: '重命名',
+    renamePrompt: '输入标签名称',
+    close: '关闭',
+    closeOthers: '关闭其他',
+    closeToRight: '关闭右侧',
+    closeAll: '关闭全部',
+  },
 } as const

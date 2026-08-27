@@ -3,6 +3,7 @@ import { useI18n } from '../i18n/I18nProvider'
 import type { Host, Group } from '../types'
 import type { AppPanel } from '../types/app'
 import { filterHosts, type GroupFilter } from '../utils/filterHosts'
+import { HostOsIcon } from './HostOsIcon'
 
 interface HostOverviewPanelProps {
   panel: AppPanel
@@ -329,15 +330,12 @@ function HostCard({
       }`}
     >
       <div className="flex items-start gap-3 pr-14">
-        <div
-          className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 text-lg font-bold"
-          style={{
-            background: `${group?.color ?? '#f97316'}25`,
-            color: group?.color ?? '#f97316',
-          }}
-        >
-          {host.name.charAt(0).toUpperCase()}
-        </div>
+        <HostOsIcon
+          name={host.name}
+          osId={host.osId}
+          accentColor={group?.color ?? '#f97316'}
+          size="md"
+        />
         <div className="flex-1 min-w-0 pt-0.5">
           <h3 className="font-semibold text-app truncate leading-tight" title={host.name}>{host.name}</h3>
           <p className="text-xs text-app-subtle mt-1.5 truncate" title={subtitle || `${host.username}@${host.hostname}`}>

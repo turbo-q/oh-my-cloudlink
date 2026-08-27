@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { Group, Host, PortForward, Snippet, SSHKey } from '../types'
+import type { Group, Host, PortForward, Snippet, SSHKey, HostOsId } from '../types'
 
 export function useAppData() {
   const [hosts, setHosts] = useState<Host[]>([])
@@ -29,6 +29,15 @@ export function useAppData() {
   useEffect(() => {
     void refresh()
   }, [refresh])
+
+  useEffect(() => {
+    if (!window.electronAPI?.onHostOsUpdated) return
+    return window.electronAPI.onHostOsUpdated((hostId, osId) => {
+      setHosts((prev) =>
+        prev.map((h) => (h.id === hostId ? { ...h, osId: osId as HostOsId } : h)),
+      )
+    })
+  }, [])
 
   const saveHost = async (host: Partial<Host> & { name: string; hostname: string; username: string }) => {
     const saved = (await window.electronAPI.saveHost(host)) as Host

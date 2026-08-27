@@ -112,6 +112,50 @@ body {
 .text-app-subtle { color: var(--app-text-subtle); }
 .text-app-faint { color: var(--app-text-faint); }
 
+.form-hint {
+  margin-top: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+  font-size: 0.75rem;
+  line-height: 1.55;
+  color: var(--app-text-muted);
+  background: color-mix(in srgb, var(--app-text-muted) 6%, var(--app-surface));
+  border: 1px solid var(--app-border-strong);
+}
+
+html.light .form-hint {
+  color: var(--app-text-secondary);
+  background: color-mix(in srgb, rgb(16 185 129) 7%, var(--app-surface));
+  border-color: rgb(16 185 129 / 0.22);
+}
+
+.form-hint-compact {
+  margin-top: 0.375rem;
+  padding: 0.375rem 0.5rem;
+  font-size: 0.6875rem;
+  line-height: 1.45;
+}
+
+.form-hint-token {
+  display: inline-block;
+  margin: 0 0.1rem;
+  padding: 0.05rem 0.35rem;
+  border-radius: 0.25rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.85em;
+  font-weight: 600;
+  vertical-align: baseline;
+  color: rgb(5 150 105);
+  background: rgb(16 185 129 / 0.14);
+  border: 1px solid rgb(16 185 129 / 0.28);
+}
+
+html.dark .form-hint-token {
+  color: rgb(110 231 183);
+  background: rgb(16 185 129 / 0.16);
+  border-color: rgb(16 185 129 / 0.32);
+}
+
 .border-app { border-color: var(--app-border); }
 .border-app-strong { border-color: var(--app-border-strong); }
 .border-app-emphasis { border-color: var(--app-border-emphasis); }

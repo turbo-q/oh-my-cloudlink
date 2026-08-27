@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import type { Group, Host, Snippet } from '../types'
 import { isSshHost } from '../types'
 import { SnippetTargetPicker } from './SnippetTargetPicker'
+import { HostOsIcon } from './HostOsIcon'
+import { FormHint } from './FormHint'
 import { useI18n } from '../i18n/I18nProvider'
 
 interface SnippetFormModalProps {
@@ -17,14 +19,6 @@ interface SnippetFormModalProps {
     command: string
   }) => void
   onClose: () => void
-}
-
-function HostIcon({ className = 'w-4 h-4' }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
-      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z" />
-    </svg>
-  )
 }
 
 export function SnippetFormModal({
@@ -214,9 +208,12 @@ export function SnippetFormModal({
                         : 'hover:bg-app-hover'
                     }`}
                   >
-                    <div className="w-8 h-8 rounded-lg bg-orange-500/15 text-orange-400 flex items-center justify-center shrink-0">
-                      <HostIcon />
-                    </div>
+                    <HostOsIcon
+                      name={h.name}
+                      osId={h.osId}
+                      accentColor={group?.color ?? '#f97316'}
+                      size="sm"
+                    />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5">
                         <span className="text-sm font-medium text-app truncate">{h.name}</span>
@@ -299,7 +296,7 @@ export function SnippetFormModal({
                       className="input-field font-mono text-sm flex-1 min-h-[180px] resize-y"
                       placeholder={'cd /var/log\ntail -f nginx/error.log'}
                     />
-                    <p className="text-[10px] text-app-faint mt-1.5">{t('modal.placeholdersHint')}</p>
+                    <FormHint>{t('modal.placeholdersHint')}</FormHint>
                   </div>
 
                   <div>
