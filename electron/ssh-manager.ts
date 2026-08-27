@@ -32,6 +32,18 @@ export class SshManager {
     }
 
     const config: ConnectConfig = buildSshConnectConfig(options.host, options.keys)
+    return this.connectWithConfig(sessionId, config, win, hooks)
+  }
+
+  async connectWithConfig(
+    sessionId: string,
+    config: ConnectConfig,
+    win: BrowserWindow,
+    hooks?: SshSessionHooks,
+  ): Promise<void> {
+    if (this.sessions.has(sessionId)) {
+      await this.disconnect(sessionId)
+    }
 
     return new Promise((resolve, reject) => {
       const client = new Client()

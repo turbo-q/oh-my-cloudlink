@@ -1,4 +1,5 @@
-import { app, BrowserWindow, ipcMain, dialog, nativeTheme, type IpcMainInvokeEvent } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog, nativeTheme, shell, type IpcMainInvokeEvent } from 'electron'
+import fs from 'fs'
 import path from 'path'
 import { ensureAppPaths } from './app-paths'
 import { DataStore } from './data-store'
@@ -8,6 +9,7 @@ import { LocalFileManager } from './local-file-manager'
 import { PortForwardManager } from './port-forward-manager'
 import { discoverLocalKeys, readKeyFromFile } from './key-discovery'
 import { SessionLogStore } from './session-log-store'
+import { getSshConfigPath, listSshConfigHosts, resolveSshConnectConfig } from './ssh-config'
 
 // Must run before DataStore reads userData (keep path ASCII-only)
 ensureAppPaths()
@@ -116,6 +118,17 @@ function registerIpcHandlers(): void {
   safeHandle('keys:discover', () => discoverLocalKeys())
   safeHandle('keys:readFile', (_e, filePath: string) => readKeyFromFile(filePath))
 
+  // ~/.ssh/config 快速连接
+  safeHandle('sshConfig:list', () => listSshConfigHosts())
+  safeHandle('sshConfig:open', async () => {
+    const configPath = getSshConfigPath()
+    fs.mkdirSync(path.dirname(configPath), { recursive: true })
+    if (!fs.existsSync(configPath)) fs.writeFileSync(configPath, '', { mode: 0o600 })
+    const error = await shell.openPath(configPath)
+    if (error) throw new Error(error)
+    return true
+  })
+
   // 导入导出 / 备份
   safeHandle('data:export', () => dataStore.exportData())
   safeHandle('data:import', async (_e, data) => {
@@ -215,6 +228,29 @@ function registerIpcHandlers(): void {
     }
   })
 
+  safeHandle('ssh:connectConfig', async (_e, sessionId: string, target: string) => {
+    if (!mainWindow) throw new Error('窗口未就绪')
+    const { config } = resolveSshConnectConfig(target)
+    const logHooks = {
+      onOutput: (data: string) => {
+        sessionLogStore.append(sessionId, data)
+        mainWindow?.webContents.send('log:append', sessionId, data)
+      },
+      onClose: () => sessionLogStore.endSession(sessionId, 'disconnected'),
+      onError: (message: string) => {
+        sessionLogStore.append(sessionId, `\r\n\x1b[31m[错误] ${message}\x1b[0m\r\n`)
+        sessionLogStore.endSession(sessionId, 'error')
+      },
+    }
+    try {
+      await sshManager.connectWithConfig(sessionId, config, mainWindow, logHooks)
+      sessionLogStore.updateStatus(sessionId, 'connected')
+    } catch (err) {
+      sessionLogStore.endSession(sessionId, 'error')
+      throw err
+    }
+  })
+
   safeHandle('ssh:write', (_e, sessionId: string, data: string) => {
     // Do not log input here — remote PTY echo already arrives via ssh:data / onOutput.
     // Logging both doubles every typed character (ps → psps).
@@ -245,6 +281,16 @@ function registerIpcHandlers(): void {
     sessionLogStore.startSession(sessionId, {
       hostId: host.id,
       hostName: host.name,
+      hostname: host.hostname,
+      username: host.username,
+    })
+    return true
+  })
+  safeHandle('sessionLog:prepareConfig', (_e, sessionId: string, target: string) => {
+    const { host } = resolveSshConnectConfig(target)
+    sessionLogStore.startSession(sessionId, {
+      hostId: `ssh-config:${host.alias}`,
+      hostName: host.alias,
       hostname: host.hostname,
       username: host.username,
     })
