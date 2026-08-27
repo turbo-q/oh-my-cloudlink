@@ -95,7 +95,6 @@ export function TerminalPanel({
       void window.electronAPI.sessionLogAppend(sessionId, text)
     }
 
-    const connectingText = t('terminal.connecting')
     const connectedText = t('terminal.connected')
     const disconnectedText = t('terminal.disconnected')
 
