@@ -17,6 +17,7 @@ interface HostOverviewPanelProps {
   onEditHost: (host: Host) => void
   onDeleteHost: (host: Host) => void
   onAddHost: () => void
+  onConnectViaSshConfig: () => void
   onAddGroup: () => void
   onEditGroup: (group: Group) => void
   onDeleteGroup: (group: Group) => void
@@ -36,6 +37,7 @@ export function HostOverviewPanel({
   onEditHost,
   onDeleteHost,
   onAddHost,
+  onConnectViaSshConfig,
   onAddGroup,
   onEditGroup,
   onDeleteGroup,
@@ -83,6 +85,7 @@ export function HostOverviewPanel({
           onSearchChange={onSearchChange}
           onSearchKeyDown={handleSearchKeyDown}
           onConnect={handleConnect}
+          onConnectViaSshConfig={onConnectViaSshConfig}
         />
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center max-w-md px-6">
@@ -112,6 +115,7 @@ export function HostOverviewPanel({
         onSearchChange={onSearchChange}
         onSearchKeyDown={handleSearchKeyDown}
         onConnect={handleConnect}
+        onConnectViaSshConfig={onConnectViaSshConfig}
       />
 
       {!isSftp && (
@@ -369,6 +373,7 @@ function SearchBar({
   onSearchChange,
   onSearchKeyDown,
   onConnect,
+  onConnectViaSshConfig,
 }: {
   searchQuery: string
   isSftp: boolean
@@ -376,10 +381,11 @@ function SearchBar({
   onSearchChange: (q: string) => void
   onSearchKeyDown: (e: React.KeyboardEvent) => void
   onConnect: () => void
+  onConnectViaSshConfig: () => void
 }) {
   return (
     <div className="px-8 pt-5 pb-4">
-      <div className="flex gap-3 max-w-3xl">
+      <div className="flex gap-3 max-w-4xl">
         <div className="relative flex-1">
           <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-app-subtle" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -399,6 +405,14 @@ function SearchBar({
         >
           {isSftp ? 'SFTP' : 'CONNECT'}
         </button>
+        {!isSftp && (
+          <button
+            onClick={onConnectViaSshConfig}
+            className="btn-primary px-5 py-3 rounded-xl text-sm font-semibold shrink-0"
+          >
+            Connect via SSH
+          </button>
+        )}
       </div>
     </div>
   )

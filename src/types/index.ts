@@ -12,6 +12,14 @@ export interface DiscoveredKey {
   publicKey?: string
 }
 
+export interface SshConfigHost {
+  alias: string
+  hostname: string
+  username: string
+  port: number
+  identityFile?: string
+}
+
 /** SSH 密钥 */
 export interface SSHKey {
   id: string
@@ -67,6 +75,8 @@ export interface AppSession {
   protocol: ConnectionProtocol
   status: 'connecting' | 'connected' | 'disconnected' | 'error'
   errorMessage?: string
+  /** Set for an ephemeral connection resolved from ~/.ssh/config. */
+  sshConfigTarget?: string
 }
 
 /** @deprecated 使用 AppSession */

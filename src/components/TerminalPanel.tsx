@@ -15,6 +15,7 @@ interface TerminalPanelProps {
   hostId: string
   hostName: string
   hostname: string
+  sshConfigTarget?: string
   active: boolean
   hosts: Host[]
   snippets: Snippet[]
@@ -26,6 +27,7 @@ export function TerminalPanel({
   hostId,
   hostName,
   hostname,
+  sshConfigTarget,
   active,
   hosts,
   snippets,
@@ -111,14 +113,20 @@ export function TerminalPanel({
     fitAddonRef.current = fitAddon
     searchAddonRef.current = searchAddon
 
-    void window.electronAPI.sessionLogPrepare(sessionId, hostId).then(() => {
+    const prepareLog = sshConfigTarget
+      ? window.electronAPI.sessionLogPrepareConfig(sessionId, sshConfigTarget)
+      : window.electronAPI.sessionLogPrepare(sessionId, hostId)
+
+    void prepareLog.then(() => {
       const banner = '\x1b[38;2;16;185;129mOh My CloudLink\x1b[0m — 正在连接...\r\n'
       term.writeln(banner)
       appendLog(banner)
       onStatusChange(sessionId, 'connecting')
 
-      void window.electronAPI
-        .sshConnect(sessionId, hostId)
+      const connect = sshConfigTarget
+        ? window.electronAPI.sshConnectConfig(sessionId, sshConfigTarget)
+        : window.electronAPI.sshConnect(sessionId, hostId)
+      void connect
         .then(() => {
           connectedRef.current = true
           onStatusChange(sessionId, 'connected')
@@ -135,6 +143,10 @@ export function TerminalPanel({
           appendLog(fail)
           onStatusChange(sessionId, 'error', err.message)
         })
+    }).catch((err: Error) => {
+      const message = err instanceof Error ? err.message : String(err)
+      term.writeln(`\r\n\x1b[31m连接失败: ${message}\x1b[0m\r\n`)
+      onStatusChange(sessionId, 'error', message)
     })
 
     term.onData((data) => {
@@ -201,7 +213,7 @@ export function TerminalPanel({
       fitAddonRef.current = null
       searchAddonRef.current = null
     }
-  }, [sessionId, hostId, onStatusChange])
+  }, [sessionId, hostId, sshConfigTarget, onStatusChange])
 
   useEffect(() => {
     if (active && fitAddonRef.current) {
