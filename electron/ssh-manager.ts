@@ -16,6 +16,9 @@ export interface SshSessionHooks {
 
 export class SshManager {
   private sessions = new Map<string, ActiveSession>()
+  /** Bumped on each connect/disconnect to drop stale in-flight handshakes. */
+  private connectGeneration = new Map<string, number>()
+  private pendingClients = new Map<string, Client>()
 
   async connect(
     sessionId: string,
@@ -25,10 +28,6 @@ export class SshManager {
   ): Promise<void> {
     if (options.host.protocol === 'ftp') {
       throw new Error('FTP 主机请使用 SFTP 菜单进行文件传输')
-    }
-
-    if (this.sessions.has(sessionId)) {
-      await this.disconnect(sessionId)
     }
 
     const config: ConnectConfig = buildSshConnectConfig(options.host, options.keys)
@@ -42,20 +41,46 @@ export class SshManager {
     hooks?: SshSessionHooks,
   ): Promise<void> {
     if (this.sessions.has(sessionId)) {
-      await this.disconnect(sessionId)
+      return
     }
+
+    await this.cancelPending(sessionId)
+    const gen = this.bumpGeneration(sessionId)
 
     return new Promise((resolve, reject) => {
       const client = new Client()
+      this.pendingClients.set(sessionId, client)
+
+      const stale = () => !this.isCurrentGeneration(sessionId, gen)
+
+      const dropPending = () => {
+        if (this.pendingClients.get(sessionId) === client) {
+          this.pendingClients.delete(sessionId)
+        }
+      }
 
       client.on('ready', () => {
+        if (stale()) {
+          client.end()
+          dropPending()
+          return
+        }
+
         client.shell({ term: 'xterm-256color' }, (err, stream) => {
+          if (stale()) {
+            client.end()
+            dropPending()
+            return
+          }
+
           if (err) {
             client.end()
+            dropPending()
             reject(err)
             return
           }
 
+          dropPending()
           this.sessions.set(sessionId, { client, stream })
 
           stream.on('data', (data: Buffer) => {
@@ -81,6 +106,11 @@ export class SshManager {
       })
 
       client.on('error', (err) => {
+        dropPending()
+        if (stale()) {
+          client.end()
+          return
+        }
         this.cleanup(sessionId)
         hooks?.onError?.(err.message)
         win.webContents.send('ssh:error', sessionId, err.message)
@@ -88,6 +118,7 @@ export class SshManager {
       })
 
       client.on('close', () => {
+        dropPending()
         if (this.sessions.has(sessionId)) {
           this.cleanup(sessionId)
           hooks?.onClose?.()
@@ -115,6 +146,9 @@ export class SshManager {
   }
 
   async disconnect(sessionId: string, hooks?: Pick<SshSessionHooks, 'onClose'>): Promise<void> {
+    this.bumpGeneration(sessionId)
+    await this.cancelPending(sessionId)
+
     const session = this.sessions.get(sessionId)
     if (!session) return
 
@@ -134,9 +168,26 @@ export class SshManager {
   }
 
   disconnectAll(): void {
-    for (const sessionId of this.sessions.keys()) {
+    for (const sessionId of [...this.sessions.keys(), ...this.pendingClients.keys()]) {
       void this.disconnect(sessionId)
     }
+  }
+
+  private bumpGeneration(sessionId: string): number {
+    const next = (this.connectGeneration.get(sessionId) ?? 0) + 1
+    this.connectGeneration.set(sessionId, next)
+    return next
+  }
+
+  private isCurrentGeneration(sessionId: string, gen: number): boolean {
+    return this.connectGeneration.get(sessionId) === gen
+  }
+
+  private async cancelPending(sessionId: string): Promise<void> {
+    const pending = this.pendingClients.get(sessionId)
+    if (!pending) return
+    this.pendingClients.delete(sessionId)
+    pending.end()
   }
 
   private cleanup(sessionId: string): void {
