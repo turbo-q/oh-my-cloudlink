@@ -146,32 +146,90 @@ export default function App() {
     [browsePanel, connectHost],
   )
 
-  const closeSession = useCallback((sessionId: string) => {
-    const session = sessions.find((s) => s.id === sessionId)
-    if (session) {
+  const disconnectSessions = useCallback((toClose: AppSession[]) => {
+    for (const session of toClose) {
       if (isFileProtocol(session.protocol)) {
-        void window.electronAPI.fileDisconnect(sessionId)
+        void window.electronAPI.fileDisconnect(session.id)
       } else {
-        void window.electronAPI.sshDisconnect(sessionId)
+        void window.electronAPI.sshDisconnect(session.id)
       }
     }
+  }, [])
 
-    setSessions((prev) => prev.filter((s) => s.id !== sessionId))
+  const closeSessionsByIds = useCallback((sessionIds: string[]) => {
+    if (sessionIds.length === 0) return
+    const idSet = new Set(sessionIds)
+
+    setSessions((prev) => {
+      const toClose = prev.filter((s) => idSet.has(s.id))
+      disconnectSessions(toClose)
+      return prev.filter((s) => !idSet.has(s.id))
+    })
+
     setMountedSessions((prev) => {
       const next = new Set(prev)
-      next.delete(sessionId)
+      for (const id of sessionIds) next.delete(id)
       return next
     })
+
     setActiveSessionId((current) => {
-      if (current !== sessionId) return current
-      const remaining = sessions.filter((s) => s.id !== sessionId)
+      if (!current || !idSet.has(current)) return current
+      const remaining = sessions.filter((s) => !idSet.has(s.id))
       if (remaining.length === 0) {
         setShowSession(false)
         return null
       }
       return remaining[remaining.length - 1].id
     })
-  }, [sessions])
+  }, [disconnectSessions, sessions])
+
+  const closeSession = useCallback((sessionId: string) => {
+    closeSessionsByIds([sessionId])
+  }, [closeSessionsByIds])
+
+  const closeOtherSessions = useCallback((sessionId: string) => {
+    closeSessionsByIds(sessions.filter((s) => s.id !== sessionId).map((s) => s.id))
+  }, [closeSessionsByIds, sessions])
+
+  const closeSessionsToRight = useCallback((sessionId: string) => {
+    const index = sessions.findIndex((s) => s.id === sessionId)
+    if (index < 0 || index >= sessions.length - 1) return
+    closeSessionsByIds(sessions.slice(index + 1).map((s) => s.id))
+  }, [closeSessionsByIds, sessions])
+
+  const closeAllSessions = useCallback(() => {
+    closeSessionsByIds(sessions.map((s) => s.id))
+  }, [closeSessionsByIds, sessions])
+
+  const duplicateSession = useCallback((sessionId: string) => {
+    const session = sessions.find((s) => s.id === sessionId)
+    if (!session) return
+
+    if (session.sshConfigTarget) {
+      connectSshConfigHost(session.sshConfigTarget, {
+        alias: session.hostName,
+        hostname: session.hostname,
+        username: '',
+        port: 22,
+      })
+      return
+    }
+
+    const host = hosts.find((h) => h.id === session.hostId)
+    if (!host) {
+      alert(t('common.unknownHost'))
+      return
+    }
+
+    const mode = isFileProtocol(session.protocol) ? 'sftp' : 'ssh'
+    connectHost(host, mode)
+  }, [sessions, hosts, connectHost, connectSshConfigHost, t])
+
+  const renameSession = useCallback((sessionId: string, tabLabel: string) => {
+    setSessions((prev) =>
+      prev.map((s) => (s.id === sessionId ? { ...s, tabLabel } : s)),
+    )
+  }, [])
 
   const updateSessionStatus = useCallback(
     (sessionId: string, status: AppSession['status'], errorMessage?: string) => {
@@ -286,6 +344,11 @@ export default function App() {
         onBrowsePanelChange={handleBrowsePanelChange}
         onSelectSession={handleSelectSession}
         onCloseSession={closeSession}
+        onCloseOtherSessions={closeOtherSessions}
+        onCloseSessionsToRight={closeSessionsToRight}
+        onCloseAllSessions={closeAllSessions}
+        onDuplicateSession={duplicateSession}
+        onRenameSession={renameSession}
       />
 
       <main className="flex-1 flex flex-col min-h-0">

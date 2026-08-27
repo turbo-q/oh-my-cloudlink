@@ -407,4 +407,13 @@ export const en: Messages = {
     sftp: 'SFTP',
     ftp: 'FTP',
   },
+  sessionTab: {
+    openNew: 'Open New',
+    rename: 'Rename',
+    renamePrompt: 'Enter tab name',
+    close: 'Close',
+    closeOthers: 'Close Others',
+    closeToRight: 'Close to the Right',
+    closeAll: 'Close All',
+  },
 }
