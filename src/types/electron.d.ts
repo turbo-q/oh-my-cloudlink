@@ -99,6 +99,7 @@ export interface ElectronAPI {
   onSshData: (callback: (sessionId: string, data: string) => void) => () => void
   onSshClose: (callback: (sessionId: string) => void) => () => void
   onSshError: (callback: (sessionId: string, error: string) => void) => () => void
+  onHostOsUpdated: (callback: (hostId: string, osId: string) => void) => () => void
 
   logsList: () => Promise<
     {

@@ -18,6 +18,7 @@ export interface StoredHost {
   groupId?: string
   tags: string[]
   notes?: string
+  osId?: string
   createdAt: string
   updatedAt: string
 }
@@ -104,8 +105,9 @@ interface HostRow {
   password: string | null
   key_id: string | null
   group_id: string | null
-  tags: string
+  tags: string | null
   notes: string | null
+  os_id: string | null
   created_at: string
   updated_at: string
 }
@@ -287,6 +289,18 @@ export class DataStore {
       CREATE INDEX IF NOT EXISTS idx_snippets_name ON snippets(name);
     `)
     this.migrateSnippetsHostIdsColumn()
+    this.migrateHostOsIdColumn()
+  }
+
+  private migrateHostOsIdColumn(): void {
+    try {
+      const cols = this.db.prepare(`PRAGMA table_info(hosts)`).all() as unknown as { name: string }[]
+      if (!cols.some((c) => c.name === 'os_id')) {
+        this.db.exec(`ALTER TABLE hosts ADD COLUMN os_id TEXT`)
+      }
+    } catch (err) {
+      console.error('[data-store] migrate hosts os_id failed:', err)
+    }
   }
 
   /** host_id (单选) → host_ids JSON 数组 */
@@ -604,8 +618,9 @@ export class DataStore {
       password: row.password ?? undefined,
       keyId: row.key_id ?? undefined,
       groupId: row.group_id ?? undefined,
-      tags: this.parseTags(row.tags),
+      tags: this.parseTags(row.tags ?? '[]'),
       notes: row.notes ?? undefined,
+      osId: row.os_id ?? undefined,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     }
@@ -693,8 +708,8 @@ export class DataStore {
       const insertHost = this.db.prepare(
         `INSERT INTO hosts (
           id, name, hostname, port, username, protocol, auth_type,
-          password, key_id, group_id, tags, notes, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          password, key_id, group_id, tags, notes, os_id, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       for (const h of data.hosts) {
         insertHost.run(
@@ -710,6 +725,7 @@ export class DataStore {
           h.groupId ?? null,
           JSON.stringify(h.tags ?? []),
           h.notes ?? null,
+          h.osId ?? null,
           h.createdAt,
           h.updatedAt,
         )
@@ -777,7 +793,7 @@ export class DataStore {
           .prepare(
             `UPDATE hosts SET
               name = ?, hostname = ?, port = ?, username = ?, protocol = ?, auth_type = ?,
-              password = ?, key_id = ?, group_id = ?, tags = ?, notes = ?, updated_at = ?
+              password = ?, key_id = ?, group_id = ?, tags = ?, notes = ?, os_id = ?, updated_at = ?
              WHERE id = ?`,
           )
           .run(
@@ -792,6 +808,7 @@ export class DataStore {
             host.groupId ?? null,
             JSON.stringify(host.tags ?? []),
             host.notes ?? null,
+            host.osId ?? existing.os_id ?? null,
             now,
             host.id,
           )
@@ -812,8 +829,8 @@ export class DataStore {
       .prepare(
         `INSERT INTO hosts (
           id, name, hostname, port, username, protocol, auth_type,
-          password, key_id, group_id, tags, notes, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          password, key_id, group_id, tags, notes, os_id, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         created.id,
@@ -828,11 +845,23 @@ export class DataStore {
         created.groupId ?? null,
         JSON.stringify(created.tags),
         created.notes ?? null,
+        created.osId ?? null,
         created.createdAt,
         created.updatedAt,
       )
     this.createTimedBackup()
     return created
+  }
+
+  updateHostOsId(id: string, osId: string): StoredHost | null {
+    const existing = this.db.prepare('SELECT * FROM hosts WHERE id = ?').get(id) as unknown as HostRow | undefined
+    if (!existing) return null
+    if (existing.os_id === osId) return this.mapHost(existing)
+    const now = new Date().toISOString()
+    this.db.prepare('UPDATE hosts SET os_id = ?, updated_at = ? WHERE id = ?').run(osId, now, id)
+    const updated = this.db.prepare('SELECT * FROM hosts WHERE id = ?').get(id) as unknown as HostRow
+    this.createTimedBackup()
+    return this.mapHost(updated)
   }
 
   deleteHost(id: string): boolean {

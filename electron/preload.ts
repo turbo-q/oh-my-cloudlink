@@ -125,6 +125,13 @@ const electronAPI = {
     return () => ipcRenderer.removeListener('ssh:error', handler)
   },
 
+  onHostOsUpdated: (callback: (hostId: string, osId: string) => void) => {
+    const handler = (_: Electron.IpcRendererEvent, hostId: string, osId: string) =>
+      callback(hostId, osId)
+    ipcRenderer.on('host:osUpdated', handler)
+    return () => ipcRenderer.removeListener('host:osUpdated', handler)
+  },
+
   // 文件传输
   fileConnect: (sessionId: string, hostId: string, fileProtocol?: 'sftp' | 'ftp') =>
     ipcRenderer.invoke('file:connect', sessionId, hostId, fileProtocol) as Promise<string>,

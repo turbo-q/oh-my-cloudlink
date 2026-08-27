@@ -1,6 +1,7 @@
 import { BrowserWindow } from 'electron'
 import { Client, type ConnectConfig, type ClientChannel } from 'ssh2'
 import { buildSshConnectConfig, type ConnectOptions } from './auth-config'
+import { detectRemoteOs } from './os-detect'
 
 interface ActiveSession {
   client: Client
@@ -12,6 +13,7 @@ export interface SshSessionHooks {
   onInput?: (data: string) => void
   onClose?: () => void
   onError?: (message: string) => void
+  onOsDetected?: (osId: string) => void
 }
 
 export class SshManager {
@@ -65,6 +67,10 @@ export class SshManager {
           dropPending()
           return
         }
+
+        void detectRemoteOs(client).then((osId) => {
+          if (osId) hooks?.onOsDetected?.(osId)
+        })
 
         client.shell({ term: 'xterm-256color' }, (err, stream) => {
           if (stale()) {

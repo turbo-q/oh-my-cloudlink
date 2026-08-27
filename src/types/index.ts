@@ -4,6 +4,20 @@ export type ConnectionProtocol = 'ssh' | 'sftp' | 'ftp'
 /** 认证方式 */
 export type AuthType = 'password' | 'key'
 
+/** 远程系统标识（SSH 连接后自动探测并缓存） */
+export type HostOsId =
+  | 'ubuntu'
+  | 'debian'
+  | 'centos'
+  | 'rhel'
+  | 'fedora'
+  | 'arch'
+  | 'alpine'
+  | 'opensuse'
+  | 'macos'
+  | 'freebsd'
+  | 'windows'
+
 /** 本机发现的 SSH 密钥 */
 export interface DiscoveredKey {
   name: string
@@ -53,6 +67,8 @@ export interface Host {
   groupId?: string
   tags: string[]
   notes?: string
+  /** 自动探测的远程 OS；未连接过则为空 */
+  osId?: HostOsId
   createdAt: string
   updatedAt: string
 }
