@@ -7,6 +7,7 @@ import type {
   PortForward,
   PortForwardRuntime,
   Snippet,
+  SshConfigHost,
 } from './index'
 
 export interface ElectronAPI {
@@ -21,6 +22,8 @@ export interface ElectronAPI {
   deleteKey: (id: string) => Promise<boolean>
   discoverLocalKeys: () => Promise<DiscoveredKey[]>
   readKeyFile: (filePath: string) => Promise<DiscoveredKey>
+  sshConfigList: () => Promise<SshConfigHost[]>
+  sshConfigOpen: () => Promise<boolean>
 
   getPortForwards: (hostId?: string) => Promise<PortForward[]>
   savePortForward: (
@@ -89,6 +92,7 @@ export interface ElectronAPI {
   saveFileDialog: (options?: { title?: string; defaultPath?: string }) => Promise<string | null>
 
   sshConnect: (sessionId: string, hostId: string) => Promise<void>
+  sshConnectConfig: (sessionId: string, target: string) => Promise<void>
   sshWrite: (sessionId: string, data: string) => Promise<void>
   sshResize: (sessionId: string, cols: number, rows: number) => Promise<void>
   sshDisconnect: (sessionId: string) => Promise<void>
@@ -114,6 +118,7 @@ export interface ElectronAPI {
   logsDelete: (id: string) => Promise<boolean>
   logsClear: () => Promise<boolean>
   sessionLogPrepare: (sessionId: string, hostId: string) => Promise<boolean>
+  sessionLogPrepareConfig: (sessionId: string, target: string) => Promise<boolean>
   sessionLogAppend: (sessionId: string, text: string) => Promise<boolean>
   onLogAppend: (callback: (sessionId: string, chunk: string) => void) => () => void
 

@@ -11,7 +11,8 @@ import { TerminalPanel } from './components/TerminalPanel'
 import { HostFormModal, GroupFormModal, KeyFormModal, DiscoverKeysModal, PortForwardFormModal, SnippetFormModal } from './components/Modals'
 import { PortForwardsPanel } from './components/PortForwardsPanel'
 import { SnippetsPanel } from './components/SnippetsPanel'
-import type { Host, Group, SSHKey, AppSession, DiscoveredKey, PortForward, Snippet } from './types'
+import { SshConfigConnectModal } from './components/SshConfigConnectModal'
+import type { Host, Group, SSHKey, AppSession, DiscoveredKey, PortForward, Snippet, SshConfigHost } from './types'
 import type { AppPanel } from './types/app'
 import { isFileProtocol, isSshHost, getHostFileProtocol, GROUP_COLORS } from './types'
 import { filterHosts, type GroupFilter } from './utils/filterHosts'
@@ -25,6 +26,7 @@ type ModalState =
   | { type: 'discoverKeys' }
   | { type: 'forward'; forward?: PortForward }
   | { type: 'snippet'; snippet?: Snippet }
+  | { type: 'sshConfig' }
 
 export default function App() {
   const { t } = useI18n()
@@ -97,6 +99,40 @@ export default function App() {
     setMountedSessions((prev) => new Set(prev).add(sessionId))
     setShowSession(true)
   }, [t])
+
+  const connectSshConfigHost = useCallback((target: string, host?: SshConfigHost) => {
+    const sessionId = uuidv4()
+    const session: AppSession = {
+      id: sessionId,
+      hostId: `ssh-config:${host?.alias ?? target}`,
+      hostName: host?.alias ?? target,
+      hostname: host?.hostname ?? target,
+      protocol: 'ssh',
+      status: 'connecting',
+      sshConfigTarget: target,
+    }
+    setSessions((prev) => [...prev, session])
+    setActiveSessionId(sessionId)
+    setMountedSessions((prev) => new Set(prev).add(sessionId))
+    setShowSession(true)
+  }, [])
+
+  const connectSshConfigHost = useCallback((target: string, host?: SshConfigHost) => {
+    const sessionId = uuidv4()
+    const session: AppSession = {
+      id: sessionId,
+      hostId: `ssh-config:${host?.alias ?? target}`,
+      hostName: host?.alias ?? target,
+      hostname: host?.hostname ?? target,
+      protocol: 'ssh',
+      status: 'connecting',
+      sshConfigTarget: target,
+    }
+    setSessions((prev) => [...prev, session])
+    setActiveSessionId(sessionId)
+    setMountedSessions((prev) => new Set(prev).add(sessionId))
+    setShowSession(true)
+  }, [])
 
   const handleConnectFromPanel = useCallback(
     (host: Host) => {
@@ -263,6 +299,7 @@ export default function App() {
             onEditHost={(h) => setModal({ type: 'host', host: h })}
             onDeleteHost={handleDeleteHost}
             onAddHost={() => setModal({ type: 'host' })}
+            onConnectViaSshConfig={() => setModal({ type: 'sshConfig' })}
             onAddGroup={() => setModal({ type: 'group' })}
             onEditGroup={(g) => setModal({ type: 'group', group: g })}
             onDeleteGroup={handleDeleteGroup}
@@ -348,6 +385,7 @@ export default function App() {
                   hostId={session.hostId}
                   hostName={session.hostName}
                   hostname={session.hostname}
+                  sshConfigTarget={session.sshConfigTarget}
                   active={showSession && activeSessionId === sessionId}
                   hosts={hosts}
                   snippets={snippets}
@@ -400,6 +438,11 @@ export default function App() {
         hosts={hosts}
         defaultHostId={selectedHostId}
         onSave={saveSnippet}
+        onClose={() => setModal({ type: 'none' })}
+      />
+      <SshConfigConnectModal
+        open={modal.type === 'sshConfig'}
+        onConnect={connectSshConfigHost}
         onClose={() => setModal({ type: 'none' })}
       />
     </div>

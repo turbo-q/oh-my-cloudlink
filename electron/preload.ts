@@ -58,6 +58,8 @@ const electronAPI = {
 
   discoverLocalKeys: () => ipcRenderer.invoke('keys:discover'),
   readKeyFile: (filePath: string) => ipcRenderer.invoke('keys:readFile', filePath),
+  sshConfigList: () => ipcRenderer.invoke('sshConfig:list'),
+  sshConfigOpen: () => ipcRenderer.invoke('sshConfig:open'),
 
   // 数据导入导出 / 备份恢复
   exportData: () => ipcRenderer.invoke('data:export'),
@@ -78,6 +80,8 @@ const electronAPI = {
   // SSH
   sshConnect: (sessionId: string, hostId: string) =>
     ipcRenderer.invoke('ssh:connect', sessionId, hostId),
+  sshConnectConfig: (sessionId: string, target: string) =>
+    ipcRenderer.invoke('ssh:connectConfig', sessionId, target),
   sshWrite: (sessionId: string, data: string) =>
     ipcRenderer.invoke('ssh:write', sessionId, data),
   sshResize: (sessionId: string, cols: number, rows: number) =>
@@ -91,6 +95,8 @@ const electronAPI = {
   logsClear: () => ipcRenderer.invoke('logs:clear'),
   sessionLogPrepare: (sessionId: string, hostId: string) =>
     ipcRenderer.invoke('sessionLog:prepare', sessionId, hostId),
+  sessionLogPrepareConfig: (sessionId: string, target: string) =>
+    ipcRenderer.invoke('sessionLog:prepareConfig', sessionId, target),
   sessionLogAppend: (sessionId: string, text: string) =>
     ipcRenderer.invoke('sessionLog:append', sessionId, text),
 
