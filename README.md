@@ -1,5 +1,7 @@
 # Oh My CloudLink
 
+**简体中文** | [English](README_EN.md)
+
 一款类 [Termius](https://termius.com) 的 SSH / SFTP / FTP 连接管理桌面应用（原「云连 SSH」），支持主机管理、分组、SSH 密钥、终端、文件传输、端口转发与命令片段。
 
 ## 功能特性
