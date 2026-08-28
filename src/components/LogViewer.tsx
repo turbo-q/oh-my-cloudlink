@@ -138,7 +138,7 @@ export function LogViewer({ logId, title, live = false }: LogViewerProps) {
   }, [searchOpen])
 
   return (
-    <div className="flex flex-col h-full min-h-0 bg-app">
+    <div className="flex flex-col h-full min-h-0">
       <div className="shrink-0 flex items-center justify-between gap-3 px-4 py-2 border-b border-app bg-surface">
         <div className="min-w-0">
           <p className="text-sm font-medium text-app truncate">{title ?? t('logs.sessionLog')}</p>
