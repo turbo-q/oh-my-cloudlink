@@ -15,6 +15,7 @@ A Termius-like desktop app for SSH / SFTP / FTP connection management (formerly 
 - **Command snippets** — Save common commands; quick insert in the terminal (per-host scope)
 - **Connection logs** — Session output recording and read-only replay
 - **Import / export & backup** — JSON backups; persistence via SQLite
+- **Encrypted storage** — Passwords, private keys, and export backups are app-bound encrypted (only this app can decrypt)
 - **i18n** — Chinese and English UI (optional system locale)
 
 ## Tech Stack
@@ -100,7 +101,7 @@ interface Host {
 - [x] Port forwarding
 - [x] Snippets / command snippets
 - [x] Chinese / English i18n
-- [ ] Encrypted data storage
+- [x] Encrypted data storage
 
 ## License
 

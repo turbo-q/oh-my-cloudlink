@@ -403,16 +403,16 @@ function SearchBar({
         <button
           onClick={onConnect}
           disabled={!canConnect}
-          className="px-8 py-3 rounded-xl text-sm font-semibold tracking-wide bg-emerald-500 text-white hover:bg-emerald-400 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0"
+          className="px-8 py-3 rounded-xl text-sm font-semibold bg-emerald-500 text-white hover:bg-emerald-400 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0"
         >
           {isSftp ? t('hosts.sftp') : t('hosts.connect')}
         </button>
         {!isSftp && (
           <button
             onClick={onConnectViaSshConfig}
-            className="btn-primary px-5 py-3 rounded-xl text-sm font-semibold shrink-0"
+            className="px-8 py-3 rounded-xl text-sm font-semibold bg-emerald-500 text-white hover:bg-emerald-400 transition-colors shrink-0"
           >
-            Connect via SSH
+            {t('hosts.connectViaSsh')}
           </button>
         )}
       </div>

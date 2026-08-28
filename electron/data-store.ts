@@ -4,6 +4,15 @@ import path from 'path'
 import { randomUUID } from 'crypto'
 import { DatabaseSync } from 'node:sqlite'
 import { LEGACY_USER_DATA_NAMES } from './app-paths'
+import {
+  CryptoVaultError,
+  decryptSecret,
+  encryptSecret,
+  isEncryptedSecret,
+  sealDataFile,
+  unsealDataFile,
+  type EncryptedBackup,
+} from './crypto-vault'
 
 export interface StoredHost {
   id: string
@@ -179,6 +188,7 @@ export class DataStore {
     this.db.exec('PRAGMA foreign_keys = ON')
     this.initSchema()
     this.migrateFromJsonIfNeeded(userData)
+    this.migrateSecretsIfNeeded()
     this.seedLegacyBackupIntoTimed()
     this.createTimedBackup({ force: true })
   }
@@ -202,7 +212,7 @@ export class DataStore {
       }
       const fileName = this.formatBackupFileName()
       const filePath = path.join(this.backupsDir, fileName)
-      fs.copyFileSync(this.legacyBackupPath, filePath)
+      this.writeSealedBackup(filePath, data)
     } catch (err) {
       console.error('[data-store] seed legacy backup failed:', err)
     }
@@ -282,6 +292,11 @@ export class DataStore {
         updated_at TEXT NOT NULL
       );
 
+      CREATE TABLE IF NOT EXISTS app_meta (
+        key TEXT PRIMARY KEY NOT NULL,
+        value TEXT NOT NULL
+      );
+
       CREATE INDEX IF NOT EXISTS idx_hosts_group_id ON hosts(group_id);
       CREATE INDEX IF NOT EXISTS idx_hosts_name ON hosts(name);
       CREATE INDEX IF NOT EXISTS idx_groups_name ON groups(name);
@@ -290,6 +305,75 @@ export class DataStore {
     `)
     this.migrateSnippetsHostIdsColumn()
     this.migrateHostOsIdColumn()
+  }
+
+  private getMeta(key: string): string | null {
+    const row = this.db.prepare('SELECT value FROM app_meta WHERE key = ?').get(key) as
+      | { value: string }
+      | undefined
+    return row?.value ?? null
+  }
+
+  private setMeta(key: string, value: string): void {
+    this.db
+      .prepare(
+        `INSERT INTO app_meta (key, value) VALUES (?, ?)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+      )
+      .run(key, value)
+  }
+
+  /** One-time: encrypt plaintext password / private_key / passphrase columns. */
+  private migrateSecretsIfNeeded(): void {
+    if (this.getMeta('secrets_encrypted') === '1') return
+
+    try {
+      this.db.exec('BEGIN')
+
+      const hosts = this.db.prepare('SELECT id, password FROM hosts').all() as unknown as {
+        id: string
+        password: string | null
+      }[]
+      const updateHost = this.db.prepare('UPDATE hosts SET password = ? WHERE id = ?')
+      for (const row of hosts) {
+        if (row.password && !isEncryptedSecret(row.password)) {
+          updateHost.run(encryptSecret(row.password), row.id)
+        }
+      }
+
+      const keys = this.db
+        .prepare('SELECT id, private_key, passphrase FROM keys')
+        .all() as unknown as {
+        id: string
+        private_key: string
+        passphrase: string | null
+      }[]
+      const updateKey = this.db.prepare(
+        'UPDATE keys SET private_key = ?, passphrase = ? WHERE id = ?',
+      )
+      for (const row of keys) {
+        const privateKey = isEncryptedSecret(row.private_key)
+          ? row.private_key
+          : encryptSecret(row.private_key)
+        const passphrase =
+          row.passphrase && !isEncryptedSecret(row.passphrase)
+            ? encryptSecret(row.passphrase)
+            : row.passphrase
+        if (privateKey !== row.private_key || passphrase !== row.passphrase) {
+          updateKey.run(privateKey, passphrase, row.id)
+        }
+      }
+
+      this.setMeta('secrets_encrypted', '1')
+      this.db.exec('COMMIT')
+    } catch (err) {
+      try {
+        this.db.exec('ROLLBACK')
+      } catch {
+        /* ignore */
+      }
+      console.error('[data-store] migrate secrets failed:', err)
+    }
   }
 
   private migrateHostOsIdColumn(): void {
@@ -408,26 +492,20 @@ export class DataStore {
   }
 
   private readDataFile(jsonPath: string): DataFile | null {
-    const raw = fs.readFileSync(jsonPath, 'utf-8')
-    const parsed = JSON.parse(raw) as Partial<DataFile>
-    if (!parsed || typeof parsed !== 'object') return null
-    return {
-      hosts: Array.isArray(parsed.hosts) ? parsed.hosts : [],
-      groups: Array.isArray(parsed.groups) ? parsed.groups : [],
-      keys: Array.isArray(parsed.keys) ? parsed.keys : [],
-      portForwards: Array.isArray(parsed.portForwards) ? parsed.portForwards : [],
-      snippets: Array.isArray(parsed.snippets)
-        ? parsed.snippets.map((s) => {
-            const raw = s as StoredSnippet & { hostId?: string }
-            const hostIds = Array.isArray(raw.hostIds)
-              ? raw.hostIds
-              : raw.hostId
-                ? [raw.hostId]
-                : []
-            return { ...raw, hostIds, tags: Array.isArray(raw.tags) ? raw.tags : [] }
-          })
-        : [],
+    try {
+      const raw = fs.readFileSync(jsonPath, 'utf-8')
+      const parsed = JSON.parse(raw) as unknown
+      return unsealDataFile(parsed)
+    } catch (err) {
+      if (err instanceof CryptoVaultError) throw err
+      console.error('[data-store] readDataFile failed:', jsonPath, err)
+      return null
     }
+  }
+
+  private writeSealedBackup(filePath: string, data: DataFile): void {
+    const sealed = sealDataFile(data)
+    fs.writeFileSync(filePath, JSON.stringify(sealed, null, 2), 'utf-8')
   }
 
   private formatBackupFileName(date = new Date()): string {
@@ -480,10 +558,9 @@ export class DataStore {
 
       const fileName = this.formatBackupFileName()
       const filePath = path.join(this.backupsDir, fileName)
-      const payload = JSON.stringify(data, null, 2)
-      fs.writeFileSync(filePath, payload, 'utf-8')
-      // Keep legacy single-file copy for older recovery paths
-      fs.writeFileSync(this.legacyBackupPath, payload, 'utf-8')
+      this.writeSealedBackup(filePath, data)
+      // Keep legacy single-file copy for older recovery paths (also sealed)
+      this.writeSealedBackup(this.legacyBackupPath, data)
       this.pruneBackups()
       this.lastAutoBackupAt = now
 
@@ -615,7 +692,7 @@ export class DataStore {
       username: row.username,
       protocol: row.protocol as StoredHost['protocol'],
       authType: row.auth_type as StoredHost['authType'],
-      password: row.password ?? undefined,
+      password: decryptSecret(row.password) ?? undefined,
       keyId: row.key_id ?? undefined,
       groupId: row.group_id ?? undefined,
       tags: this.parseTags(row.tags ?? '[]'),
@@ -640,9 +717,9 @@ export class DataStore {
     return {
       id: row.id,
       name: row.name,
-      privateKey: row.private_key,
+      privateKey: decryptSecret(row.private_key) ?? '',
       publicKey: row.public_key ?? undefined,
-      passphrase: row.passphrase ?? undefined,
+      passphrase: decryptSecret(row.passphrase) ?? undefined,
       createdAt: row.created_at,
     }
   }
@@ -698,9 +775,9 @@ export class DataStore {
         insertKey.run(
           k.id,
           k.name,
-          k.privateKey,
+          encryptSecret(k.privateKey) ?? '',
           k.publicKey ?? null,
-          k.passphrase ?? null,
+          encryptSecret(k.passphrase ?? null),
           k.createdAt,
         )
       }
@@ -720,7 +797,7 @@ export class DataStore {
           h.username,
           h.protocol,
           h.authType,
-          h.password ?? null,
+          encryptSecret(h.password ?? null),
           h.keyId ?? null,
           h.groupId ?? null,
           JSON.stringify(h.tags ?? []),
@@ -770,6 +847,7 @@ export class DataStore {
       }
 
       this.db.exec('COMMIT')
+      this.setMeta('secrets_encrypted', '1')
       if (!options?.skipBackup) this.createTimedBackup({ force: true })
     } catch (err) {
       this.db.exec('ROLLBACK')
@@ -803,7 +881,7 @@ export class DataStore {
             host.username,
             host.protocol,
             host.authType,
-            host.password ?? null,
+            encryptSecret(host.password ?? null),
             host.keyId ?? null,
             host.groupId ?? null,
             JSON.stringify(host.tags ?? []),
@@ -840,7 +918,7 @@ export class DataStore {
         created.username,
         created.protocol,
         created.authType,
-        created.password ?? null,
+        encryptSecret(created.password ?? null),
         created.keyId ?? null,
         created.groupId ?? null,
         JSON.stringify(created.tags),
@@ -960,9 +1038,9 @@ export class DataStore {
           )
           .run(
             key.name,
-            key.privateKey,
+            encryptSecret(key.privateKey) ?? '',
             key.publicKey ?? null,
-            key.passphrase ?? null,
+            encryptSecret(key.passphrase ?? null),
             key.id,
           )
         const updated = this.db.prepare('SELECT * FROM keys WHERE id = ?').get(key.id) as unknown as KeyRow
@@ -984,9 +1062,9 @@ export class DataStore {
       .run(
         created.id,
         created.name,
-        created.privateKey,
+        encryptSecret(created.privateKey) ?? '',
         created.publicKey ?? null,
-        created.passphrase ?? null,
+        encryptSecret(created.passphrase ?? null),
         created.createdAt,
       )
     this.createTimedBackup()
@@ -1191,13 +1269,20 @@ export class DataStore {
     }
   }
 
-  importData(data: DataFile): void {
+  /** Sealed backup envelope for export / timed backups (app-bound ciphertext). */
+  exportSealedBackup(): EncryptedBackup {
+    return sealDataFile(this.exportData())
+  }
+
+  importData(data: unknown): void {
+    const plain = unsealDataFile(data)
     this.replaceAll({
-      hosts: data.hosts ?? [],
-      groups: data.groups ?? [],
-      keys: data.keys ?? [],
-      portForwards: data.portForwards ?? [],
-      snippets: data.snippets ?? [],
+      hosts: plain.hosts ?? [],
+      groups: plain.groups ?? [],
+      keys: plain.keys ?? [],
+      portForwards: plain.portForwards ?? [],
+      snippets: plain.snippets ?? [],
     })
+    this.setMeta('secrets_encrypted', '1')
   }
 }

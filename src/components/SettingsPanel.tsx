@@ -49,6 +49,18 @@ export function SettingsPanel({ onExport, onImport, onDataRestored }: SettingsPa
     }
   }
 
+  const restoreErrorMessage = (err: unknown, fallback: string) => {
+    const msg = err instanceof Error ? err.message : ''
+    if (
+      msg.includes('BACKUP_DECRYPT_FAILED') ||
+      msg.includes('BACKUP_INVALID') ||
+      msg.includes('SECRET_CORRUPT')
+    ) {
+      return t('settings.restoreFailDecrypt')
+    }
+    return err instanceof Error && err.message ? err.message : fallback
+  }
+
   const refreshBackups = useCallback(async () => {
     try {
       const list = await window.electronAPI.listBackups()
@@ -87,7 +99,7 @@ export function SettingsPanel({ onExport, onImport, onDataRestored }: SettingsPa
       setMessage(t('settings.restoreOk'))
       await refreshBackups()
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : t('settings.restoreFail'))
+      setMessage(restoreErrorMessage(err, t('settings.restoreFail')))
     } finally {
       setBusy(false)
     }
@@ -107,7 +119,7 @@ export function SettingsPanel({ onExport, onImport, onDataRestored }: SettingsPa
       setMessage(t('settings.restoreFileOk'))
       await refreshBackups()
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : t('settings.restoreFileFail'))
+      setMessage(restoreErrorMessage(err, t('settings.restoreFileFail')))
     } finally {
       setBusy(false)
     }
@@ -118,6 +130,7 @@ export function SettingsPanel({ onExport, onImport, onDataRestored }: SettingsPa
     t('settings.roadmapItems.sftp'),
     t('settings.roadmapItems.forward'),
     t('settings.roadmapItems.snippets'),
+    t('settings.roadmapItems.encryption'),
   ]
 
   const langLabel =
@@ -285,7 +298,7 @@ export function SettingsPanel({ onExport, onImport, onDataRestored }: SettingsPa
                 {t('settings.about')}
               </h3>
               <div className="text-sm text-app-muted space-y-1 rounded-xl border border-app-strong bg-app-card p-5">
-                <p className="text-app font-medium">Oh My CloudLink v0.1.2</p>
+                <p className="text-app font-medium">Oh My CloudLink v0.2.0</p>
                 <p className="text-app-subtle">{t('settings.aboutBlurb')}</p>
               </div>
             </section>

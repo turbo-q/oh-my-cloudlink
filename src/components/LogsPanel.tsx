@@ -127,9 +127,9 @@ export function LogsPanel() {
         <p className="text-sm text-app-subtle mt-1">{t('logs.subtitle')}</p>
       </div>
 
-      <div className="flex-1 flex min-h-0">
-        <aside className="w-80 shrink-0 border-r border-app flex flex-col min-h-0">
-          <div className="shrink-0 flex items-center justify-between gap-2 px-4 py-3 border-b border-app bg-surface/80">
+      <div className="flex-1 flex min-h-0 gap-4 p-4 lg:p-6">
+        <aside className="panel-card w-80 shrink-0 rounded-xl flex flex-col min-h-0 overflow-hidden">
+          <div className="shrink-0 flex items-center justify-between gap-2 px-4 py-3 border-b border-app">
             <span className="text-sm text-app-muted">{t('logs.recentCount', { n: logs.length })}</span>
             <div className="flex gap-2">
               <button
@@ -151,17 +151,17 @@ export function LogsPanel() {
 
           {message && <p className="px-4 py-2 text-xs text-emerald-400 shrink-0">{message}</p>}
 
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto p-2">
             {logs.length === 0 ? (
-              <p className="px-4 py-8 text-sm text-app-subtle">{t('logs.emptyList')}</p>
+              <p className="px-2 py-8 text-sm text-app-subtle text-center">{t('logs.emptyList')}</p>
             ) : (
-              <ul className="divide-y divide-app">
+              <ul className="space-y-1">
                 {logs.map((log) => (
                   <li key={log.id}>
                     <button
                       type="button"
                       onClick={() => setSelectedId(log.id)}
-                      className={`w-full text-left px-4 py-3 transition-colors hover:bg-app-hover ${
+                      className={`w-full text-left px-3 py-3 rounded-lg transition-colors hover:bg-app-hover ${
                         selectedId === log.id ? 'bg-app-hover-strong' : ''
                       }`}
                     >
@@ -195,7 +195,7 @@ export function LogsPanel() {
           </div>
         </aside>
 
-        <div className="flex-1 min-w-0 min-h-0 flex flex-col">
+        <div className="panel-card flex-1 min-w-0 min-h-0 rounded-xl overflow-hidden flex flex-col">
           {selected ? (
             <>
               <div className="shrink-0 flex items-center justify-end px-4 py-2 border-b border-app">
