@@ -49,11 +49,12 @@ export interface ElectronAPI {
   deleteSnippet: (id: string) => Promise<boolean>
 
   exportData: () => Promise<{
-    hosts: Host[]
-    groups: Group[]
-    keys: SSHKey[]
-    portForwards: PortForward[]
-    snippets: Snippet[]
+    format: 'oh-my-cloudlink-backup'
+    version: 2
+    alg: 'aes-256-gcm'
+    iv: string
+    tag: string
+    ciphertext: string
   }>
   importData: (data: unknown) => Promise<boolean>
   listBackups: () => Promise<

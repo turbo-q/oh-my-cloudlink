@@ -51,6 +51,7 @@ export const en: Messages = {
     importOverwrite: 'Import will overwrite all current data. Continue?',
     importOk: 'Import successful',
     importFail: 'Import failed: invalid file format',
+    importFailDecrypt: 'Import failed: not an Oh My CloudLink backup, or the file is corrupted',
     localKeySuffix: ' (Local)',
   },
   settings: {
@@ -92,12 +93,14 @@ export const en: Messages = {
     restoreConfirm: 'Restore from "{fileName}" and overwrite all data?',
     restoreOk: 'Restored successfully',
     restoreFail: 'Restore failed',
+    restoreFailDecrypt: 'Restore failed: not an Oh My CloudLink backup, or the file is corrupted',
     restoreFileConfirm: 'Overwrite all data with the selected file?',
     restoreCancelled: 'File selection cancelled',
     restoreFileOk: 'Restored from file',
     restoreFileFail: 'Restore from file failed',
     data: 'Data',
-    dataHelp: 'Export anywhere, or import a JSON file (same as restore — overwrites current data).',
+    dataHelp:
+      'Export an encrypted backup only this app can decrypt. Import the same format or a legacy plaintext JSON (overwrites current data).',
     export: 'Export',
     import: 'Import',
     about: 'About',
@@ -108,6 +111,7 @@ export const en: Messages = {
       sftp: 'SFTP / FTP file transfer',
       forward: 'Port forwarding',
       snippets: 'Command snippets',
+      encryption: 'Encrypted data storage',
     },
   },
   hosts: {

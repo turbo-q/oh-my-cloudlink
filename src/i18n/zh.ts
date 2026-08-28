@@ -49,6 +49,7 @@ export const zh = {
     importOverwrite: '导入将覆盖当前所有数据，确定继续？',
     importOk: '导入成功',
     importFail: '导入失败：文件格式不正确',
+    importFailDecrypt: '导入失败：非本应用备份或文件已损坏',
     localKeySuffix: ' (本机)',
   },
   settings: {
@@ -90,12 +91,14 @@ export const zh = {
     restoreConfirm: '将用备份「{fileName}」覆盖当前所有数据，确定继续？',
     restoreOk: '恢复成功',
     restoreFail: '恢复失败',
+    restoreFailDecrypt: '恢复失败：非本应用备份或文件已损坏',
     restoreFileConfirm: '将用所选文件覆盖当前所有数据，确定继续？',
     restoreCancelled: '已取消选择文件',
     restoreFileOk: '从文件恢复成功',
     restoreFileFail: '从文件恢复失败',
     data: '数据管理',
-    dataHelp: '导出到任意位置，或导入外部 JSON（与「选择文件恢复」相同，会覆盖当前数据）。',
+    dataHelp:
+      '导出为仅本应用可解密的加密备份；导入同样格式或旧版明文 JSON（会覆盖当前数据）。',
     export: '导出配置',
     import: '导入配置',
     about: '关于',
@@ -106,6 +109,7 @@ export const zh = {
       sftp: 'SFTP / FTP 文件传输',
       forward: '端口转发',
       snippets: '命令片段',
+      encryption: '数据加密存储',
     },
   },
   hosts: {

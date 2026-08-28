@@ -309,8 +309,17 @@ export default function App() {
         if (!confirm(t('app.importOverwrite'))) return
         await importData(data)
         alert(t('app.importOk'))
-      } catch {
-        alert(t('app.importFail'))
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : ''
+        if (
+          msg.includes('BACKUP_DECRYPT_FAILED') ||
+          msg.includes('BACKUP_INVALID') ||
+          msg.includes('SECRET_CORRUPT')
+        ) {
+          alert(t('app.importFailDecrypt'))
+        } else {
+          alert(t('app.importFail'))
+        }
       }
     }
     input.click()

@@ -130,7 +130,7 @@ function registerIpcHandlers(): void {
   })
 
   // 导入导出 / 备份
-  safeHandle('data:export', () => dataStore.exportData())
+  safeHandle('data:export', () => dataStore.exportSealedBackup())
   safeHandle('data:import', async (_e, data) => {
     portForwardManager.stopAll(mainWindow)
     dataStore.importData(data)
