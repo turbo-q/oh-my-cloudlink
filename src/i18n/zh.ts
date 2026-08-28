@@ -134,6 +134,15 @@ export const zh = {
     edit: '编辑',
     delete: '删除',
   },
+  sshConfig: {
+    subtitle: '通过 ~/.ssh/config',
+    placeholder: 'SSH Hostname 或 user@hostname',
+    connect: '连接 ↵',
+    loading: '正在读取 SSH config…',
+    empty: '未找到匹配配置，可直接输入 user@hostname 连接',
+    authHint: '使用 IdentityFile 或系统 ssh-agent 认证',
+    openConfig: '打开 SSH 配置',
+  },
   keys: {
     title: 'SSH 密钥',
     subtitle: '管理连接认证用的密钥',

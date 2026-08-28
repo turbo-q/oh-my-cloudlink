@@ -136,6 +136,15 @@ export const en: Messages = {
     edit: 'Edit',
     delete: 'Delete',
   },
+  sshConfig: {
+    subtitle: 'via ~/.ssh/config',
+    placeholder: 'SSH hostname or user@hostname',
+    connect: 'Connect ↵',
+    loading: 'Loading SSH config…',
+    empty: 'No matching config. Enter user@hostname to connect.',
+    authHint: 'Uses IdentityFile or system ssh-agent',
+    openConfig: 'Open SSH Config',
+  },
   keys: {
     title: 'SSH Keys',
     subtitle: 'Manage keys used for authentication',
