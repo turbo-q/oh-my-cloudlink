@@ -1,4 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" fill="none">
+  <!--
+    macOS Dock icons need transparent margin (~10%) around the squircle.
+    Content is drawn in a 1024 artboard then scaled to ~80% and centered.
+  -->
   <defs>
     <linearGradient id="bg" x1="128" y1="128" x2="896" y2="896" gradientUnits="userSpaceOnUse">
       <stop stop-color="#34D399"/>
@@ -9,19 +13,21 @@
       <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
     </linearGradient>
   </defs>
-  <rect width="1024" height="1024" rx="228" fill="url(#bg)"/>
-  <rect x="64" y="64" width="896" height="896" rx="188" fill="url(#shine)"/>
-  <!-- terminal window -->
-  <rect x="192" y="248" width="640" height="528" rx="56" fill="#0B1220" fill-opacity="0.22"/>
-  <rect x="224" y="280" width="576" height="464" rx="40" fill="#081018" fill-opacity="0.35"/>
-  <!-- window dots -->
-  <circle cx="292" cy="348" r="20" fill="#FFFFFF" fill-opacity="0.45"/>
-  <circle cx="356" cy="348" r="20" fill="#FFFFFF" fill-opacity="0.28"/>
-  <circle cx="420" cy="348" r="20" fill="#FFFFFF" fill-opacity="0.18"/>
-  <!-- prompt -->
-  <path d="M288 560 L408 680 L288 800" stroke="#FFFFFF" stroke-width="52" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M448 800 H688" stroke="#FFFFFF" stroke-width="52" stroke-linecap="round"/>
-  <!-- cloud link accent -->
-  <path d="M704 360 C784 320 864 380 832 448 C896 456 912 552 832 576 C784 672 640 672 608 576 C544 576 512 504 544 448 C560 384 640 344 704 360Z" fill="#FFFFFF" fill-opacity="0.92"/>
-  <path d="M760 512 L832 584 M832 512 L760 584" stroke="#0D9488" stroke-width="36" stroke-linecap="round"/>
+  <g transform="translate(512 512) scale(0.8) translate(-512 -512)">
+    <rect width="1024" height="1024" rx="228" fill="url(#bg)"/>
+    <rect x="64" y="64" width="896" height="896" rx="188" fill="url(#shine)"/>
+    <!-- terminal window -->
+    <rect x="192" y="248" width="640" height="528" rx="56" fill="#0B1220" fill-opacity="0.22"/>
+    <rect x="224" y="280" width="576" height="464" rx="40" fill="#081018" fill-opacity="0.35"/>
+    <!-- window dots -->
+    <circle cx="292" cy="348" r="20" fill="#FFFFFF" fill-opacity="0.45"/>
+    <circle cx="356" cy="348" r="20" fill="#FFFFFF" fill-opacity="0.28"/>
+    <circle cx="420" cy="348" r="20" fill="#FFFFFF" fill-opacity="0.18"/>
+    <!-- prompt -->
+    <path d="M288 560 L408 680 L288 800" stroke="#FFFFFF" stroke-width="52" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M448 800 H688" stroke="#FFFFFF" stroke-width="52" stroke-linecap="round"/>
+    <!-- cloud link accent -->
+    <path d="M704 360 C784 320 864 380 832 448 C896 456 912 552 832 576 C784 672 640 672 608 576 C544 576 512 504 544 448 C560 384 640 344 704 360Z" fill="#FFFFFF" fill-opacity="0.92"/>
+    <path d="M760 512 L832 584 M832 512 L760 584" stroke="#0D9488" stroke-width="36" stroke-linecap="round"/>
+  </g>
 </svg>
