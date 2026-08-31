@@ -25,6 +25,7 @@ export function LogViewer({ logId, title, live = false }: LogViewerProps) {
 
   const [searchOpen, setSearchOpen] = useState(false)
   const [query, setQuery] = useState('')
+  const [searchFocusNonce, setSearchFocusNonce] = useState(0)
 
   const runSearch = useCallback(
     (direction: 'next' | 'prev') => {
@@ -36,7 +37,10 @@ export function LogViewer({ logId, title, live = false }: LogViewerProps) {
     [query],
   )
 
-  const openSearch = useCallback(() => setSearchOpen(true), [])
+  const openSearch = useCallback(() => {
+    setSearchOpen(true)
+    setSearchFocusNonce((n) => n + 1)
+  }, [])
   const closeSearch = useCallback(() => setSearchOpen(false), [])
 
   useTerminalSearchShortcut(Boolean(logId), searchOpen, openSearch, closeSearch)
@@ -160,6 +164,7 @@ export function LogViewer({ logId, title, live = false }: LogViewerProps) {
         onClose={closeSearch}
         onSearch={runSearch}
         placeholder={t('logs.searchLog')}
+        focusNonce={searchFocusNonce}
       />
 
       <div ref={containerRef} className="flex-1 min-h-0 p-2" tabIndex={0} />

@@ -1,6 +1,7 @@
 import { app } from 'electron'
 import fs from 'fs'
 import path from 'path'
+import { stripScreenClearSequences } from './session-log-sanitize'
 
 export type SessionLogStatus = 'connecting' | 'connected' | 'disconnected' | 'error'
 
@@ -127,15 +128,19 @@ export class SessionLogStore {
     return this.manifest.find((m) => m.id === sessionId)
   }
 
-  append(sessionId: string, chunk: string): void {
-    if (!chunk) return
+  /** Append PTY output to the session log. Returns the sanitized chunk written (or ''). */
+  append(sessionId: string, chunk: string): string {
+    if (!chunk) return ''
     const meta = this.getMeta(sessionId)
-    if (!meta) return
+    if (!meta) return ''
+
+    chunk = stripScreenClearSequences(chunk)
+    if (!chunk) return ''
 
     let bytes = (this.byteCounts.get(sessionId) ?? meta.byteSize) + Buffer.byteLength(chunk, 'utf-8')
     if (bytes > MAX_BYTES_PER_LOG) {
       const allowed = MAX_BYTES_PER_LOG - (this.byteCounts.get(sessionId) ?? meta.byteSize)
-      if (allowed <= 0) return
+      if (allowed <= 0) return ''
       chunk = chunk.slice(0, allowed)
       bytes = MAX_BYTES_PER_LOG
     }
@@ -152,6 +157,7 @@ export class SessionLogStore {
     meta.byteSize = bytes
     if (meta.status === 'connecting') meta.status = 'connected'
     this.saveManifest()
+    return chunk
   }
 
   updateStatus(sessionId: string, status: SessionLogStatus): void {
@@ -185,7 +191,8 @@ export class SessionLogStore {
   getContent(id: string): string {
     const filePath = this.logFilePath(id)
     if (!fs.existsSync(filePath)) return ''
-    return fs.readFileSync(filePath, 'utf-8')
+    // Sanitize again so older logs recorded before clear-stripping still keep history on replay.
+    return stripScreenClearSequences(fs.readFileSync(filePath, 'utf-8'))
   }
 
   deleteLog(id: string): boolean {

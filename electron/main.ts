@@ -204,12 +204,13 @@ function registerIpcHandlers(): void {
 
     const logHooks = {
       onOutput: (data: string) => {
-        sessionLogStore.append(sessionId, data)
-        mainWindow?.webContents.send('log:append', sessionId, data)
+        const logged = sessionLogStore.append(sessionId, data)
+        if (logged) mainWindow?.webContents.send('log:append', sessionId, logged)
       },
       onClose: () => sessionLogStore.endSession(sessionId, 'disconnected'),
       onError: (message: string) => {
-        sessionLogStore.append(sessionId, `\r\n\x1b[31m[错误] ${message}\x1b[0m\r\n`)
+        const logged = sessionLogStore.append(sessionId, `\r\n\x1b[31m[错误] ${message}\x1b[0m\r\n`)
+        if (logged) mainWindow?.webContents.send('log:append', sessionId, logged)
         sessionLogStore.endSession(sessionId, 'error')
       },
       onOsDetected: (osId: string) => {
@@ -240,12 +241,13 @@ function registerIpcHandlers(): void {
     const { config } = resolveSshConnectConfig(target)
     const logHooks = {
       onOutput: (data: string) => {
-        sessionLogStore.append(sessionId, data)
-        mainWindow?.webContents.send('log:append', sessionId, data)
+        const logged = sessionLogStore.append(sessionId, data)
+        if (logged) mainWindow?.webContents.send('log:append', sessionId, logged)
       },
       onClose: () => sessionLogStore.endSession(sessionId, 'disconnected'),
       onError: (message: string) => {
-        sessionLogStore.append(sessionId, `\r\n\x1b[31m[错误] ${message}\x1b[0m\r\n`)
+        const logged = sessionLogStore.append(sessionId, `\r\n\x1b[31m[错误] ${message}\x1b[0m\r\n`)
+        if (logged) mainWindow?.webContents.send('log:append', sessionId, logged)
         sessionLogStore.endSession(sessionId, 'error')
       },
     }
@@ -304,8 +306,8 @@ function registerIpcHandlers(): void {
     return true
   })
   safeHandle('sessionLog:append', (_e, sessionId: string, text: string) => {
-    sessionLogStore.append(sessionId, text)
-    mainWindow?.webContents.send('log:append', sessionId, text)
+    const logged = sessionLogStore.append(sessionId, text)
+    if (logged) mainWindow?.webContents.send('log:append', sessionId, logged)
     return true
   })
 

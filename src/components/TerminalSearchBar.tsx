@@ -8,6 +8,8 @@ interface TerminalSearchBarProps {
   onClose: () => void
   onSearch: (direction: 'next' | 'prev') => void
   placeholder?: string
+  /** Increment to re-focus the input while the bar stays open (e.g. ⌘F again). */
+  focusNonce?: number
 }
 
 export function TerminalSearchBar({
@@ -17,16 +19,19 @@ export function TerminalSearchBar({
   onClose,
   onSearch,
   placeholder,
+  focusNonce = 0,
 }: TerminalSearchBarProps) {
   const { t } = useI18n()
   const inputRef = useRef<HTMLInputElement>(null)
   const resolvedPlaceholder = placeholder ?? `${t('common.search')}…`
 
   useEffect(() => {
-    if (open) {
-      requestAnimationFrame(() => inputRef.current?.focus())
-    }
-  }, [open])
+    if (!open) return
+    requestAnimationFrame(() => {
+      inputRef.current?.focus()
+      inputRef.current?.select()
+    })
+  }, [open, focusNonce])
 
   if (!open) return null
 
