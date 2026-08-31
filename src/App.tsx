@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import { useAppData } from './hooks/useAppData'
 import { SessionTabBar } from './components/SessionTabBar'
@@ -12,12 +12,14 @@ import { HostFormModal, GroupFormModal, KeyFormModal, DiscoverKeysModal, PortFor
 import { PortForwardsPanel } from './components/PortForwardsPanel'
 import { SnippetsPanel } from './components/SnippetsPanel'
 import { SshConfigConnectModal } from './components/SshConfigConnectModal'
-import { VaultGate, VaultPasswordModal } from './components/VaultPasswordModal'
+import { VaultGate } from './components/VaultPasswordModal'
+import { ImportDialogUi } from './components/ImportDialogUi'
+import { useImportDialog } from './hooks/useImportDialog'
 import type { Host, Group, SSHKey, AppSession, DiscoveredKey, PortForward, Snippet, SshConfigHost } from './types'
 import type { AppPanel } from './types/app'
 import { isFileProtocol, isSshHost, getHostFileProtocol, GROUP_COLORS } from './types'
 import { filterHosts, type GroupFilter } from './utils/filterHosts'
-import { backupNeedsPassword, isVaultErrorCode } from './utils/backupCrypto'
+import { isVaultErrorCode } from './utils/backupCrypto'
 import { useI18n } from './i18n/I18nProvider'
 
 type VaultScreen = 'checking' | 'setup' | 'unlock' | 'ready'
@@ -35,10 +37,6 @@ type ModalState =
 export default function App() {
   const { t } = useI18n()
   const [vaultScreen, setVaultScreen] = useState<VaultScreen>('checking')
-  const importCancelRef = useRef<(() => void) | null>(null)
-  const [backupPasswordPrompt, setBackupPasswordPrompt] = useState<{
-    onSubmit: (password: string) => Promise<void>
-  } | null>(null)
 
   useEffect(() => {
     if (!window.electronAPI?.vaultStatus) {
@@ -73,8 +71,29 @@ export default function App() {
     saveSnippet,
     deleteSnippet,
     exportData,
-    importData,
   } = useAppData({ enabled: vaultReady })
+
+  const importDialog = useImportDialog({
+    onApplied: async () => {
+      await refresh()
+      alert(t('import.ok'))
+    },
+    onNoChanges: () => alert(t('import.noChanges')),
+    onError: (msg) => {
+      if (
+        isVaultErrorCode(msg, 'BACKUP_DECRYPT_FAILED') ||
+        isVaultErrorCode(msg, 'BACKUP_INVALID') ||
+        isVaultErrorCode(msg, 'SECRET_CORRUPT') ||
+        isVaultErrorCode(msg, 'BACKUP_PASSWORD_REQUIRED')
+      ) {
+        alert(t('import.failDecrypt'))
+      } else if (msg) {
+        alert(`${t('import.fail')}: ${msg}`)
+      } else {
+        alert(t('import.fail'))
+      }
+    },
+  })
 
   const [searchQuery, setSearchQuery] = useState('')
   const [groupFilter, setGroupFilter] = useState<GroupFilter>(null)
@@ -330,37 +349,9 @@ export default function App() {
       try {
         const text = await file.text()
         const data = JSON.parse(text)
-        if (!confirm(t('app.importOverwrite'))) return
-
-        if (backupNeedsPassword(data)) {
-          await new Promise<void>((resolve, reject) => {
-            importCancelRef.current = () => reject(new Error('IMPORT_CANCELLED'))
-            setBackupPasswordPrompt({
-              onSubmit: async (backupPassword) => {
-                await importData(data, backupPassword)
-                alert(t('app.importOk'))
-                importCancelRef.current = null
-                resolve()
-              },
-            })
-          })
-        } else {
-          await importData(data)
-          alert(t('app.importOk'))
-        }
-      } catch (err) {
-        if (err instanceof Error && err.message === 'IMPORT_CANCELLED') return
-        const msg = err instanceof Error ? err.message : ''
-        if (
-          isVaultErrorCode(msg, 'BACKUP_DECRYPT_FAILED') ||
-          isVaultErrorCode(msg, 'BACKUP_INVALID') ||
-          isVaultErrorCode(msg, 'SECRET_CORRUPT') ||
-          isVaultErrorCode(msg, 'BACKUP_PASSWORD_REQUIRED')
-        ) {
-          alert(t('app.importFailDecrypt'))
-        } else {
-          alert(t('app.importFail'))
-        }
+        await importDialog.openWithTarget({ type: 'data', payload: data })
+      } catch {
+        alert(t('import.fail'))
       }
     }
     input.click()
@@ -581,18 +572,7 @@ export default function App() {
         onClose={() => setModal({ type: 'none' })}
       />
 
-      {backupPasswordPrompt && (
-        <VaultPasswordModal
-          mode="backup"
-          onSuccess={() => setBackupPasswordPrompt(null)}
-          onCancel={() => {
-            importCancelRef.current?.()
-            importCancelRef.current = null
-            setBackupPasswordPrompt(null)
-          }}
-          onSubmitBackup={backupPasswordPrompt.onSubmit}
-        />
-      )}
+      <ImportDialogUi dialog={importDialog} />
     </div>
   )
 }

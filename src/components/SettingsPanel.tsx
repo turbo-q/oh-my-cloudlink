@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
-import { VaultPasswordModal } from './VaultPasswordModal'
+import { ImportDialogUi } from './ImportDialogUi'
+import { useImportDialog } from '../hooks/useImportDialog'
 import { useTheme } from '../hooks/useTheme'
 import { useI18n } from '../i18n/I18nProvider'
 import { dateLocaleTag, type LocalePreference } from '../i18n'
+import { isVaultErrorCode } from '../utils/backupCrypto'
 import type { ThemeMode } from '../theme'
 
 interface BackupInfo {
@@ -29,9 +31,6 @@ export function SettingsPanel({ onExport, onImport, onDataRestored }: SettingsPa
   const [backups, setBackups] = useState<BackupInfo[]>([])
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
-  const [backupPasswordPrompt, setBackupPasswordPrompt] = useState<{
-    onSubmit: (password: string) => Promise<void>
-  } | null>(null)
 
   const themeOptions: { value: ThemeMode; label: string; description: string }[] = [
     { value: 'system', label: t('settings.themeSystem'), description: t('settings.themeSystemDesc') },
@@ -80,6 +79,27 @@ export function SettingsPanel({ onExport, onImport, onDataRestored }: SettingsPa
     void refreshBackups()
   }, [refreshBackups])
 
+  const importDialog = useImportDialog({
+    onApplied: async () => {
+      await onDataRestored()
+      setMessage(t('import.ok'))
+      await refreshBackups()
+    },
+    onNoChanges: () => setMessage(t('import.noChanges')),
+    onError: (msg) => {
+      if (
+        isVaultErrorCode(msg, 'BACKUP_DECRYPT_FAILED') ||
+        isVaultErrorCode(msg, 'BACKUP_INVALID') ||
+        isVaultErrorCode(msg, 'SECRET_CORRUPT') ||
+        isVaultErrorCode(msg, 'BACKUP_PASSWORD_REQUIRED')
+      ) {
+        setMessage(t('import.failDecrypt'))
+      } else {
+        setMessage(restoreErrorMessage({ message: msg } as Error, t('import.fail')))
+      }
+    },
+  })
+
   const handleCreateBackup = async () => {
     setBusy(true)
     setMessage(null)
@@ -95,65 +115,25 @@ export function SettingsPanel({ onExport, onImport, onDataRestored }: SettingsPa
   }
 
   const handleRestoreBackup = async (fileName: string) => {
-    if (!confirm(t('settings.restoreConfirm', { fileName }))) return
-    setBusy(true)
     setMessage(null)
     try {
-      await window.electronAPI.restoreBackup(fileName)
-      await onDataRestored()
-      setMessage(t('settings.restoreOk'))
-      await refreshBackups()
+      await importDialog.openWithTarget({ type: 'backupFile', fileName })
     } catch (err) {
       setMessage(restoreErrorMessage(err, t('settings.restoreFail')))
-    } finally {
-      setBusy(false)
     }
   }
 
   const handleRestoreFromFile = async () => {
-    if (!confirm(t('settings.restoreFileConfirm'))) return
-    setBusy(true)
     setMessage(null)
     try {
-      const result = await window.electronAPI.restoreBackupFromFile()
-      if (result.cancelled) {
+      const picked = await window.electronAPI.pickBackupFile()
+      if (picked.cancelled) {
         setMessage(t('settings.restoreCancelled'))
         return
       }
-      if ('needPassword' in result && result.needPassword && result.filePath) {
-        const filePath = result.filePath
-        setBusy(false)
-        await new Promise<void>((resolve, reject) => {
-          setBackupPasswordPrompt({
-            onSubmit: async (password) => {
-              try {
-                setBusy(true)
-                await window.electronAPI.restoreBackupAtPath(filePath, password)
-                await onDataRestored()
-                setMessage(t('settings.restoreFileOk'))
-                await refreshBackups()
-                resolve()
-              } catch (retryErr) {
-                reject(retryErr)
-              } finally {
-                setBusy(false)
-              }
-            },
-          })
-        }).catch((retryErr) => {
-          setMessage(restoreErrorMessage(retryErr, t('settings.restoreFileFail')))
-        })
-        return
-      }
-      if (result.ok) {
-        await onDataRestored()
-        setMessage(t('settings.restoreFileOk'))
-        await refreshBackups()
-      }
+      await importDialog.openWithTarget({ type: 'backupPath', filePath: picked.filePath })
     } catch (err) {
       setMessage(restoreErrorMessage(err, t('settings.restoreFileFail')))
-    } finally {
-      setBusy(false)
     }
   }
 
@@ -352,14 +332,7 @@ export function SettingsPanel({ onExport, onImport, onDataRestored }: SettingsPa
         </div>
       </div>
 
-      {backupPasswordPrompt && (
-        <VaultPasswordModal
-          mode="backup"
-          onSuccess={() => setBackupPasswordPrompt(null)}
-          onCancel={() => setBackupPasswordPrompt(null)}
-          onSubmitBackup={backupPasswordPrompt.onSubmit}
-        />
-      )}
+      <ImportDialogUi dialog={importDialog} />
     </div>
   )
 }

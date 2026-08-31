@@ -9,6 +9,7 @@ import type {
   Snippet,
   SshConfigHost,
 } from './index'
+import type { ImportOptions, ImportPreviewResult } from './import'
 
 export interface ElectronAPI {
   getHosts: () => Promise<Host[]>
@@ -59,7 +60,10 @@ export interface ElectronAPI {
     tag: string
     ciphertext: string
   }>
-  importData: (data: unknown, backupPassword?: string) => Promise<boolean>
+  importPreview: (data: unknown, options: ImportOptions) => Promise<ImportPreviewResult>
+  previewBackupFile: (fileName: string, options: ImportOptions) => Promise<ImportPreviewResult>
+  previewBackupAtPath: (filePath: string, options: ImportOptions) => Promise<ImportPreviewResult>
+  importData: (data: unknown, options: ImportOptions) => Promise<boolean>
   listBackups: () => Promise<
     {
       fileName: string
@@ -84,13 +88,14 @@ export interface ElectronAPI {
     portForwards: number
     snippets: number
   }>
-  restoreBackup: (fileName: string, backupPassword?: string) => Promise<boolean>
+  restoreBackup: (fileName: string, options: ImportOptions) => Promise<boolean>
+  pickBackupFile: () => Promise<{ cancelled: true } | { cancelled: false; filePath: string }>
   restoreBackupFromFile: (backupPassword?: string) => Promise<
     | { ok: true; cancelled: false }
     | { ok: false; cancelled: true }
     | { ok: false; cancelled: false; needPassword: true; filePath: string }
   >
-  restoreBackupAtPath: (filePath: string, backupPassword?: string) => Promise<boolean>
+  restoreBackupAtPath: (filePath: string, options: ImportOptions) => Promise<boolean>
 
   vaultStatus: () => Promise<{
     needsSetup: boolean

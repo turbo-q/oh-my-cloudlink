@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
+import type { ImportOptions } from './import-merge'
 
 const electronAPI = {
   // 主机
@@ -71,19 +72,31 @@ const electronAPI = {
   vaultSetup: (password: string) => ipcRenderer.invoke('vault:setup', password) as Promise<boolean>,
   vaultUnlock: (password: string) => ipcRenderer.invoke('vault:unlock', password) as Promise<boolean>,
 
+  importPreview: (data: unknown, options: ImportOptions) =>
+    ipcRenderer.invoke('data:importPreview', data, options),
+  previewBackupFile: (fileName: string, options: ImportOptions) =>
+    ipcRenderer.invoke('data:previewBackupFile', fileName, options),
+  previewBackupAtPath: (filePath: string, options: ImportOptions) =>
+    ipcRenderer.invoke('data:previewBackupAtPath', filePath, options),
   exportData: () => ipcRenderer.invoke('data:export'),
-  importData: (data: unknown, backupPassword?: string) =>
-    ipcRenderer.invoke('data:import', data, backupPassword),
+  importData: (data: unknown, options: ImportOptions) =>
+    ipcRenderer.invoke('data:import', data, options),
   listBackups: () => ipcRenderer.invoke('data:listBackups'),
   createBackup: () => ipcRenderer.invoke('data:createBackup'),
-  restoreBackup: (fileName: string, backupPassword?: string) =>
-    ipcRenderer.invoke('data:restoreBackup', fileName, backupPassword),
+  restoreBackup: (fileName: string, options: ImportOptions) =>
+    ipcRenderer.invoke('data:restoreBackup', fileName, options),
+  pickBackupFile: () =>
+    ipcRenderer.invoke('data:pickBackupFile') as Promise<
+      { cancelled: true } | { cancelled: false; filePath: string }
+    >,
   restoreBackupFromFile: (backupPassword?: string) =>
     ipcRenderer.invoke('data:restoreBackupFromFile', backupPassword) as Promise<
-      { ok: boolean; cancelled: boolean }
+      | { ok: true; cancelled: false }
+      | { ok: false; cancelled: true }
+      | { ok: false; cancelled: false; needPassword: true; filePath: string }
     >,
-  restoreBackupAtPath: (filePath: string, backupPassword?: string) =>
-    ipcRenderer.invoke('data:restoreBackupAtPath', filePath, backupPassword) as Promise<boolean>,
+  restoreBackupAtPath: (filePath: string, options: ImportOptions) =>
+    ipcRenderer.invoke('data:restoreBackupAtPath', filePath, options) as Promise<boolean>,
 
   // 系统对话框
   openFileDialog: (options?: { title?: string; multi?: boolean }) =>

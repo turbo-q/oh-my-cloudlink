@@ -3,6 +3,7 @@ import fs from 'fs'
 import path from 'path'
 import { ensureAppPaths } from './app-paths'
 import { CryptoVaultError } from './crypto-vault'
+import type { ImportOptions } from './import-merge'
 import { DataStore } from './data-store'
 import { SshManager } from './ssh-manager'
 import { FileManager } from './file-manager'
@@ -140,9 +141,18 @@ function registerIpcHandlers(): void {
 
   // 导入导出 / 备份
   safeHandle('data:export', () => dataStore.exportSealedBackup())
-  safeHandle('data:import', async (_e, data, backupPassword?: string) => {
+  safeHandle('data:importPreview', (_e, data: unknown, options: ImportOptions) =>
+    dataStore.importPreview(data, options),
+  )
+  safeHandle('data:previewBackupFile', (_e, fileName: string, options: ImportOptions) =>
+    dataStore.previewBackupFile(fileName, options),
+  )
+  safeHandle('data:previewBackupAtPath', (_e, filePath: string, options: ImportOptions) =>
+    dataStore.previewBackupAtPath(filePath, options),
+  )
+  safeHandle('data:import', async (_e, data: unknown, options: ImportOptions) => {
     portForwardManager.stopAll(mainWindow)
-    dataStore.importData(data, backupPassword)
+    dataStore.importData(data, options)
     return true
   })
   safeHandle('data:listBackups', () => dataStore.listBackups())
@@ -151,10 +161,20 @@ function registerIpcHandlers(): void {
     if (!info) throw new Error('当前没有可备份的数据')
     return info
   })
-  safeHandle('data:restoreBackup', async (_e, fileName: string, backupPassword?: string) => {
+  safeHandle('data:restoreBackup', async (_e, fileName: string, options: ImportOptions) => {
     portForwardManager.stopAll(mainWindow)
-    dataStore.restoreBackupFile(fileName, backupPassword)
+    dataStore.restoreBackupFile(fileName, options)
     return true
+  })
+  safeHandle('data:pickBackupFile', async () => {
+    if (!mainWindow) return { cancelled: true as const }
+    const result = await dialog.showOpenDialog(mainWindow, {
+      title: '选择备份文件',
+      properties: ['openFile'],
+      filters: [{ name: 'JSON 备份', extensions: ['json'] }],
+    })
+    if (result.canceled || !result.filePaths[0]) return { cancelled: true as const }
+    return { cancelled: false as const, filePath: result.filePaths[0] }
   })
   safeHandle('data:restoreBackupFromFile', async (_e, backupPassword?: string) => {
     if (!mainWindow) return { ok: false as const, cancelled: true }
@@ -167,7 +187,10 @@ function registerIpcHandlers(): void {
     const filePath = result.filePaths[0]
     portForwardManager.stopAll(mainWindow)
     try {
-      dataStore.restoreFromAbsolutePath(filePath, backupPassword)
+      dataStore.restoreFromAbsolutePath(filePath, {
+        mode: 'replace',
+        backupPassword,
+      })
       return { ok: true as const, cancelled: false }
     } catch (err) {
       if (err instanceof CryptoVaultError && err.message === 'BACKUP_PASSWORD_REQUIRED') {
@@ -181,9 +204,9 @@ function registerIpcHandlers(): void {
       throw err
     }
   })
-  safeHandle('data:restoreBackupAtPath', async (_e, filePath: string, backupPassword?: string) => {
+  safeHandle('data:restoreBackupAtPath', async (_e, filePath: string, options: ImportOptions) => {
     portForwardManager.stopAll(mainWindow)
-    dataStore.restoreFromAbsolutePath(filePath, backupPassword)
+    dataStore.restoreFromAbsolutePath(filePath, options)
     return true
   })
 

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import type { ImportOptions } from '../types/import'
 import type { Group, Host, PortForward, Snippet, SSHKey, HostOsId } from '../types'
 
 export function useAppData(options?: { enabled?: boolean }) {
@@ -107,8 +108,8 @@ export function useAppData(options?: { enabled?: boolean }) {
     return window.electronAPI.exportData()
   }
 
-  const importData = async (data: unknown, backupPassword?: string) => {
-    await window.electronAPI.importData(data, backupPassword)
+  const importData = async (data: unknown, options: ImportOptions) => {
+    await window.electronAPI.importData(data, options)
     await refresh()
   }
 
