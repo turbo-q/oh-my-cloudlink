@@ -23,24 +23,36 @@ function targetPassword(target: ImportApplyTarget): string | undefined {
   return target.backupPassword
 }
 
-function targetKey(target: ImportApplyTarget | null): string {
+function targetKey(target: ImportApplyTarget | null, allowPlaintext: boolean): string {
   if (!target) return ''
   const pw = target.backupPassword ?? ''
-  if (target.type === 'data') return `data:${pw}`
-  if (target.type === 'backupFile') return `file:${target.fileName}:${pw}`
-  return `path:${target.filePath}:${pw}`
+  const plain = allowPlaintext ? '1' : '0'
+  if (target.type === 'data') return `data:${pw}:${plain}`
+  if (target.type === 'backupFile') return `file:${target.fileName}:${pw}:${plain}`
+  return `path:${target.filePath}:${pw}:${plain}`
+}
+
+function buildImportOptions(
+  target: ImportApplyTarget,
+  mode: ImportMode,
+  conflict: ImportConflict,
+  allowPlaintext: boolean,
+): ImportOptions {
+  return {
+    mode,
+    conflict: mode === 'merge' ? conflict : undefined,
+    backupPassword: targetPassword(target),
+    allowPlaintext: allowPlaintext || undefined,
+  }
 }
 
 async function fetchPreview(
   target: ImportApplyTarget,
   mode: ImportMode,
   conflict: ImportConflict,
+  allowPlaintext: boolean,
 ): Promise<ImportPreviewResult> {
-  const options: ImportOptions = {
-    mode,
-    conflict: mode === 'merge' ? conflict : undefined,
-    backupPassword: targetPassword(target),
-  }
+  const options = buildImportOptions(target, mode, conflict, allowPlaintext)
   if (target.type === 'data') {
     return window.electronAPI.importPreview(target.payload, options)
   }
@@ -67,6 +79,8 @@ export function useImportDialog({ onApplied, onError, onNoChanges }: UseImportDi
   const [conflict, setConflict] = useState<ImportConflict>(DEFAULT_IMPORT_OPTIONS.conflict ?? 'skip')
   const [target, setTarget] = useState<ImportApplyTarget | null>(null)
   const [needsPassword, setNeedsPassword] = useState(false)
+  const [needsPlaintextConfirm, setNeedsPlaintextConfirm] = useState(false)
+  const [allowPlaintext, setAllowPlaintext] = useState(false)
 
   const openWithTarget = useCallback(async (nextTarget: ImportApplyTarget) => {
     previewSeqRef.current += 1
@@ -74,13 +88,15 @@ export function useImportDialog({ onApplied, onError, onNoChanges }: UseImportDi
     setConflict(DEFAULT_IMPORT_OPTIONS.conflict ?? 'skip')
     setPreview(null)
     setNeedsPassword(false)
+    setNeedsPlaintextConfirm(false)
+    setAllowPlaintext(false)
     setTarget(nextTarget)
     setOpen(true)
   }, [])
 
-  // Single preview loader — keyed by target/mode/conflict only (not unstable callbacks).
+  // Single preview loader — keyed by target/mode/conflict/allowPlaintext.
   useEffect(() => {
-    if (!open || !target) return
+    if (!open || !target || needsPlaintextConfirm) return
 
     const seq = ++previewSeqRef.current
     let cancelled = false
@@ -88,7 +104,7 @@ export function useImportDialog({ onApplied, onError, onNoChanges }: UseImportDi
     const run = async () => {
       setLoading(true)
       try {
-        const result = await fetchPreview(target, mode, conflict)
+        const result = await fetchPreview(target, mode, conflict, allowPlaintext)
         if (cancelled || seq !== previewSeqRef.current) return
         setPreview(result)
         setNeedsPassword(false)
@@ -97,6 +113,10 @@ export function useImportDialog({ onApplied, onError, onNoChanges }: UseImportDi
         const msg = err instanceof Error ? err.message : ''
         if (isVaultErrorCode(msg, 'BACKUP_PASSWORD_REQUIRED')) {
           setNeedsPassword(true)
+          return
+        }
+        if (isVaultErrorCode(msg, 'BACKUP_PLAINTEXT') && !allowPlaintext) {
+          setNeedsPlaintextConfirm(true)
           return
         }
         onErrorRef.current(msg)
@@ -114,7 +134,7 @@ export function useImportDialog({ onApplied, onError, onNoChanges }: UseImportDi
     return () => {
       cancelled = true
     }
-  }, [open, targetKey(target), mode, conflict])
+  }, [open, targetKey(target, allowPlaintext), mode, conflict, needsPlaintextConfirm, allowPlaintext])
 
   const submitPassword = useCallback(async (password: string) => {
     setTarget((prev) => {
@@ -126,13 +146,22 @@ export function useImportDialog({ onApplied, onError, onNoChanges }: UseImportDi
     setNeedsPassword(false)
   }, [])
 
+  const confirmPlaintext = useCallback(() => {
+    setNeedsPlaintextConfirm(false)
+    setAllowPlaintext(true)
+  }, [])
+
+  const cancelPlaintextConfirm = useCallback(() => {
+    setNeedsPlaintextConfirm(false)
+    setOpen(false)
+    setTarget(null)
+    setPreview(null)
+    setAllowPlaintext(false)
+  }, [])
+
   const confirm = useCallback(async () => {
     if (!target) return
-    const options: ImportOptions = {
-      mode,
-      conflict: mode === 'merge' ? conflict : undefined,
-      backupPassword: targetPassword(target),
-    }
+    const options = buildImportOptions(target, mode, conflict, allowPlaintext)
     try {
       if (target.type === 'data') {
         await window.electronAPI.importData(target.payload, options)
@@ -144,6 +173,7 @@ export function useImportDialog({ onApplied, onError, onNoChanges }: UseImportDi
       setOpen(false)
       setTarget(null)
       setPreview(null)
+      setAllowPlaintext(false)
       await onAppliedRef.current()
     } catch (err) {
       const msg = err instanceof Error ? err.message : ''
@@ -151,12 +181,13 @@ export function useImportDialog({ onApplied, onError, onNoChanges }: UseImportDi
         setOpen(false)
         setTarget(null)
         setPreview(null)
+        setAllowPlaintext(false)
         onNoChangesRef.current?.()
         return
       }
       onErrorRef.current(msg)
     }
-  }, [target, mode, conflict])
+  }, [target, mode, conflict, allowPlaintext])
 
   const cancel = useCallback(() => {
     previewSeqRef.current += 1
@@ -164,6 +195,8 @@ export function useImportDialog({ onApplied, onError, onNoChanges }: UseImportDi
     setTarget(null)
     setPreview(null)
     setNeedsPassword(false)
+    setNeedsPlaintextConfirm(false)
+    setAllowPlaintext(false)
   }, [])
 
   return {
@@ -181,5 +214,8 @@ export function useImportDialog({ onApplied, onError, onNoChanges }: UseImportDi
     cancelPasswordPrompt: cancel,
     submitPasswordPrompt: submitPassword,
     passwordPromptOpen: needsPassword,
+    plaintextConfirmOpen: needsPlaintextConfirm,
+    confirmPlaintext,
+    cancelPlaintextConfirm,
   }
 }

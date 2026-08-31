@@ -5,6 +5,7 @@ export interface ImportOptions {
   mode: ImportMode
   conflict?: ImportConflict
   backupPassword?: string
+  allowPlaintext?: boolean
 }
 
 export interface ImportEntityCounts {

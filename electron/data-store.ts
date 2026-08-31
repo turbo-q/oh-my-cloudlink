@@ -19,6 +19,7 @@ import {
   unsealDataFile,
   verifyVaultCheckBlob,
   type EncryptedBackupV3,
+  type UnsealDataFileOptions,
 } from './crypto-vault'
 import {
   buildMergePlan,
@@ -390,7 +391,7 @@ export class DataStore {
     try {
       if (this.listBackupFiles().length > 0) return
       if (!fs.existsSync(this.legacyBackupPath)) return
-      const data = this.readDataFile(this.legacyBackupPath)
+      const data = this.readDataFile(this.legacyBackupPath, { allowPlaintext: true })
       if (
         !data ||
         data.hosts.length +
@@ -645,7 +646,7 @@ export class DataStore {
     for (const jsonPath of candidates) {
       if (!fs.existsSync(jsonPath)) continue
       try {
-        const data = this.readDataFile(jsonPath)
+        const data = this.readDataFile(jsonPath, { allowPlaintext: true })
         if (!data) continue
         if (
           data.hosts.length +
@@ -683,11 +684,14 @@ export class DataStore {
       })
   }
 
-  private readDataFile(jsonPath: string, backupPassword?: string): DataFile | null {
+  private readDataFile(
+    jsonPath: string,
+    options?: UnsealDataFileOptions,
+  ): DataFile | null {
     try {
       const raw = fs.readFileSync(jsonPath, 'utf-8')
       const parsed = JSON.parse(raw) as unknown
-      return unsealDataFile(parsed, backupPassword)
+      return unsealDataFile(parsed, options)
     } catch (err) {
       if (err instanceof CryptoVaultError) throw err
       console.error('[data-store] readDataFile failed:', jsonPath, err)
@@ -823,7 +827,10 @@ export class DataStore {
   }
 
   restoreFromAbsolutePath(filePath: string, options: ImportOptions): DataFile {
-    const data = this.readDataFile(filePath, options.backupPassword)
+    const data = this.readDataFile(filePath, {
+      backupPassword: options.backupPassword,
+      allowPlaintext: options.allowPlaintext,
+    })
     if (!data) throw new Error('备份文件格式不正确')
     if (
       data.hosts.length +
@@ -1284,7 +1291,10 @@ export class DataStore {
   }
 
   importPreview(data: unknown, options: ImportOptions): ImportPreviewResult {
-    const plain = unsealDataFile(data, options.backupPassword)
+    const plain = unsealDataFile(data, {
+      backupPassword: options.backupPassword,
+      allowPlaintext: options.allowPlaintext,
+    })
     this.assertVaultUnlocked()
     const local = this.exportData()
     return computeImportPreview(local, plain, options.mode, options.conflict ?? 'skip')
@@ -1299,7 +1309,10 @@ export class DataStore {
     if (!fs.existsSync(filePath)) {
       throw new Error('备份文件不存在')
     }
-    const data = this.readDataFile(filePath, options.backupPassword)
+    const data = this.readDataFile(filePath, {
+      backupPassword: options.backupPassword,
+      allowPlaintext: options.allowPlaintext,
+    })
     if (!data) throw new Error('备份文件格式不正确')
     return this.importPreview(data, options)
   }
@@ -1723,7 +1736,10 @@ export class DataStore {
   }
 
   previewBackupAtPath(filePath: string, options: ImportOptions): ImportPreviewResult {
-    const data = this.readDataFile(filePath, options.backupPassword)
+    const data = this.readDataFile(filePath, {
+      backupPassword: options.backupPassword,
+      allowPlaintext: options.allowPlaintext,
+    })
     if (!data) throw new Error('备份文件格式不正确')
     return this.importPreview(data, options)
   }
@@ -1735,7 +1751,10 @@ export class DataStore {
   }
 
   importData(data: unknown, options: ImportOptions): void {
-    const plain = unsealDataFile(data, options.backupPassword)
+    const plain = unsealDataFile(data, {
+      backupPassword: options.backupPassword,
+      allowPlaintext: options.allowPlaintext,
+    })
     this.assertVaultUnlocked()
     this.applyImportData(plain, options)
     this.setMeta('secrets_encrypted', '1')

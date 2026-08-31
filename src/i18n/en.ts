@@ -106,6 +106,10 @@ export const en: Messages = {
     noChanges: 'No new data — nothing changed',
     fail: 'Import failed',
     failDecrypt: 'Decrypt failed: wrong master password or corrupted file',
+    plaintextTitle: 'Unencrypted backup',
+    plaintextDesc:
+      'This file is not encrypted. Hosts, keys, and other entries could have been tampered with. Continue only if you trust the source.',
+    plaintextConfirm: 'Import anyway',
   },
   settings: {
     title: 'Settings',

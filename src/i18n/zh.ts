@@ -103,6 +103,9 @@ export const zh = {
     noChanges: '无新数据，未做变更',
     fail: '导入失败',
     failDecrypt: '解密失败：主密码错误或文件已损坏',
+    plaintextTitle: '未加密备份',
+    plaintextDesc: '该文件未加密，其中主机/密钥等内容可能被篡改。仅在你确认来源可信时继续导入。',
+    plaintextConfirm: '仍要导入',
   },
   settings: {
     title: '设置',

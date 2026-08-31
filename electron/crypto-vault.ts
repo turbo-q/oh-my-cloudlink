@@ -51,6 +51,11 @@ export interface EncryptedBackupV3 {
 
 export type EncryptedBackup = EncryptedBackupV2 | EncryptedBackupV3
 
+export interface UnsealDataFileOptions {
+  backupPassword?: string
+  allowPlaintext?: boolean
+}
+
 export class CryptoVaultError extends Error {
   constructor(message: string) {
     super(message)
@@ -274,6 +279,11 @@ function isPlainDataFile(raw: unknown): raw is Partial<DataFile> {
   )
 }
 
+/** Detect legacy unencrypted export JSON (no backup envelope). */
+export function isPlaintextDataFile(raw: unknown): boolean {
+  return isPlainDataFile(raw)
+}
+
 function normalizeDataFile(parsed: Partial<DataFile>): DataFile {
   return {
     hosts: Array.isArray(parsed.hosts) ? parsed.hosts : [],
@@ -337,9 +347,12 @@ export function sealDataFile(data: DataFile, saltB64: string): EncryptedBackupV3
 
 /**
  * Unseal a backup: v3 (password), v2 (legacy static key), or plaintext DataFile.
- * For v3, pass backupPassword when vault is locked or salt differs from local vault.
+ * Plaintext imports require allowPlaintext (user-confirmed in UI).
  */
-export function unsealDataFile(raw: unknown, backupPassword?: string): DataFile {
+export function unsealDataFile(raw: unknown, options?: UnsealDataFileOptions): DataFile {
+  const backupPassword = options?.backupPassword
+  const allowPlaintext = options?.allowPlaintext === true
+
   if (isEncryptedBackupV3(raw)) {
     const salt = Buffer.from(raw.salt, 'base64')
     let key: Buffer | null = null
@@ -372,6 +385,9 @@ export function unsealDataFile(raw: unknown, backupPassword?: string): DataFile 
   }
 
   if (isPlainDataFile(raw)) {
+    if (!allowPlaintext) {
+      throw new CryptoVaultError('BACKUP_PLAINTEXT')
+    }
     return normalizeDataFile(raw)
   }
 
