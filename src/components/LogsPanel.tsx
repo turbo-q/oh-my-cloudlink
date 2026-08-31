@@ -77,12 +77,18 @@ export function LogsPanel() {
 
   useEffect(() => {
     void refresh()
+    let refreshTimer: ReturnType<typeof setTimeout> | null = null
     const unsub = window.electronAPI.onLogAppend(() => {
-      void refresh()
+      if (refreshTimer) return
+      refreshTimer = setTimeout(() => {
+        refreshTimer = null
+        void refresh()
+      }, 500)
     })
     const timer = setInterval(() => void refresh(), 5000)
     return () => {
       unsub()
+      if (refreshTimer) clearTimeout(refreshTimer)
       clearInterval(timer)
     }
   }, [refresh])
