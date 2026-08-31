@@ -58,6 +58,16 @@ npm run build        # Compile renderer + Electron main process
 npm run package      # Package distributable installers
 ```
 
+### Install from GitHub (macOS)
+
+Release builds are **not Apple-signed / notarized**. After installing from a downloaded DMG or zip, macOS may say the app is “damaged” — that is Gatekeeper quarantine, not a corrupt package. Run:
+
+```bash
+xattr -cr "/Applications/oh-my-cloudlink.app"
+```
+
+Then open the app again.
+
 ## Project Structure
 
 ```

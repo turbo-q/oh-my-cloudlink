@@ -58,6 +58,16 @@ npm run build        # 编译前端 + Electron 主进程
 npm run package      # 打包为可分发安装包
 ```
 
+### 从 GitHub 安装（macOS）
+
+当前发布包**未做 Apple 签名 / 公证**。从浏览器下载的 DMG / zip 安装后，打开时可能提示「已损坏」——这是 Gatekeeper 隔离属性，不是安装包损坏。在终端执行：
+
+```bash
+xattr -cr "/Applications/oh-my-cloudlink.app"
+```
+
+然后再打开应用即可。
+
 ## 项目结构
 
 ```
