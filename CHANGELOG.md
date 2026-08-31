@@ -33,6 +33,9 @@
 | `OhMyCloudLink-0.3.1-arm64.dmg` | macOS 安装镜像（Apple Silicon） |
 | `OhMyCloudLink-0.3.1-arm64.zip` | macOS 应用包压缩包 |
 
+> **macOS 提示「已损坏」**：未签名导致的 Gatekeeper 拦截，执行  
+> `xattr -cr "/Applications/oh-my-cloudlink.app"` 后再打开即可。
+
 ---
 
 ## [0.3.0] - 2026-08-31
