@@ -3,6 +3,8 @@ import { useEffect, useRef } from 'react'
 export interface ContextMenuItem {
   id: string
   label: string
+  /** Right-aligned accelerator hint, e.g. ⌘W / Ctrl+W */
+  shortcut?: string
   disabled?: boolean
   danger?: boolean
   separatorBefore?: boolean
@@ -61,7 +63,7 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
   return (
     <div
       ref={menuRef}
-      className="fixed z-[100] min-w-[168px] py-1 rounded-lg border border-app-strong bg-elevated shadow-xl"
+      className="fixed z-[100] min-w-[200px] py-1 rounded-lg border border-app-strong bg-elevated shadow-xl"
       style={{ left: x, top: y }}
       onContextMenu={(e) => e.preventDefault()}
     >
@@ -71,7 +73,7 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
           <button
             type="button"
             disabled={item.disabled}
-            className={`w-full px-3 py-1.5 text-left text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+            className={`w-full flex items-center gap-4 px-3 py-1.5 text-left text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
               item.danger
                 ? 'text-red-400 hover:bg-red-500/10'
                 : 'text-app-secondary hover:bg-app-hover hover:text-app'
@@ -82,7 +84,12 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
               onClose()
             }}
           >
-            {item.label}
+            <span className="flex-1 min-w-0 truncate">{item.label}</span>
+            {item.shortcut && (
+              <span className="shrink-0 text-xs text-app-subtle tabular-nums tracking-wide">
+                {item.shortcut}
+              </span>
+            )}
           </button>
         </div>
       ))}

@@ -1,8 +1,9 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import type { AppSession } from '../types'
 import { PROTOCOL_COLORS } from '../types'
 import type { AppPanel } from '../types/app'
 import { useI18n } from '../i18n/I18nProvider'
+import { SESSION_TAB_SHORTCUTS } from '../utils/keyboard'
 import { ContextMenu, type ContextMenuItem } from './ContextMenu'
 import { SessionTabRenameModal } from './SessionTabRenameModal'
 
@@ -53,9 +54,42 @@ export function SessionTabBar({
 
   const closeMenu = useCallback(() => setMenu(null), [])
 
+  const openRenameForSession = useCallback(
+    (sessionId: string) => {
+      const session = sessions.find((s) => s.id === sessionId)
+      if (!session) return
+      setRenameTarget({
+        sessionId,
+        name: session.tabLabel ?? session.hostName,
+      })
+    },
+    [sessions],
+  )
+
   const openContextMenu = useCallback((sessionId: string, x: number, y: number) => {
     setMenu({ sessionId, x, y })
   }, [])
+
+  // F2 rename · ⌘⇧D / Ctrl+Shift+D duplicate (⌘W close is handled in main + App)
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (!activeSessionId) return
+
+      if (e.key === 'F2' && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) {
+        e.preventDefault()
+        openRenameForSession(activeSessionId)
+        return
+      }
+
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'd') {
+        e.preventDefault()
+        onDuplicateSession(activeSessionId)
+      }
+    }
+
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [activeSessionId, openRenameForSession, onDuplicateSession])
 
   const buildMenuItems = useCallback(
     (sessionId: string): ContextMenuItem[] => {
@@ -67,23 +101,19 @@ export function SessionTabBar({
         {
           id: 'open-new',
           label: t('sessionTab.openNew'),
+          shortcut: SESSION_TAB_SHORTCUTS.openNew(),
           onClick: () => onDuplicateSession(sessionId),
         },
         {
           id: 'rename',
           label: t('sessionTab.rename'),
-          onClick: () => {
-            const session = sessions.find((s) => s.id === sessionId)
-            if (!session) return
-            setRenameTarget({
-              sessionId,
-              name: session.tabLabel ?? session.hostName,
-            })
-          },
+          shortcut: SESSION_TAB_SHORTCUTS.rename(),
+          onClick: () => openRenameForSession(sessionId),
         },
         {
           id: 'close',
           label: t('sessionTab.close'),
+          shortcut: SESSION_TAB_SHORTCUTS.close(),
           separatorBefore: true,
           onClick: () => onCloseSession(sessionId),
         },
@@ -112,7 +142,7 @@ export function SessionTabBar({
       sessions,
       t,
       onDuplicateSession,
-      onRenameSession,
+      openRenameForSession,
       onCloseSession,
       onCloseOtherSessions,
       onCloseSessionsToRight,
