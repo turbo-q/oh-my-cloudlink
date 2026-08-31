@@ -279,11 +279,8 @@ export class SshManager {
   }
 
   private cleanup(sessionId: string): void {
-    const session = this.sessions.get(sessionId)
-    if (session?.flushTimer != null) {
-      clearTimeout(session.flushTimer)
-      session.flushTimer = null
-    }
+    // Always flush coalesced PTY output before dropping the session (disconnect timeout, etc.).
+    this.flushOutput(sessionId)
     this.sessions.delete(sessionId)
   }
 }
