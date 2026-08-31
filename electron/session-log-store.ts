@@ -1,7 +1,7 @@
 import { app } from 'electron'
 import fs from 'fs'
 import path from 'path'
-import { stripScreenClearSequences } from './session-log-sanitize'
+import { stripScreenClearSequences, ScreenClearSanitizer } from './session-log-sanitize'
 
 export type SessionLogStatus = 'connecting' | 'connected' | 'disconnected' | 'error'
 
@@ -34,6 +34,7 @@ export class SessionLogStore {
   private manifest: SessionLogMeta[] = []
   private writeStreams = new Map<string, fs.WriteStream>()
   private byteCounts = new Map<string, number>()
+  private clearSanitizers = new Map<string, ScreenClearSanitizer>()
 
   constructor() {
     const userData = app.getPath('userData')
@@ -128,15 +129,28 @@ export class SessionLogStore {
     return this.manifest.find((m) => m.id === sessionId)
   }
 
+  private getClearSanitizer(sessionId: string): ScreenClearSanitizer {
+    let sanitizer = this.clearSanitizers.get(sessionId)
+    if (!sanitizer) {
+      sanitizer = new ScreenClearSanitizer()
+      this.clearSanitizers.set(sessionId, sanitizer)
+    }
+    return sanitizer
+  }
+
   /** Append PTY output to the session log. Returns the sanitized chunk written (or ''). */
   append(sessionId: string, chunk: string): string {
     if (!chunk) return ''
     const meta = this.getMeta(sessionId)
     if (!meta) return ''
 
-    chunk = stripScreenClearSequences(chunk)
+    chunk = this.getClearSanitizer(sessionId).push(chunk)
     if (!chunk) return ''
 
+    return this.writeSanitized(sessionId, meta, chunk)
+  }
+
+  private writeSanitized(sessionId: string, meta: SessionLogMeta, chunk: string): string {
     let bytes = (this.byteCounts.get(sessionId) ?? meta.byteSize) + Buffer.byteLength(chunk, 'utf-8')
     if (bytes > MAX_BYTES_PER_LOG) {
       const allowed = MAX_BYTES_PER_LOG - (this.byteCounts.get(sessionId) ?? meta.byteSize)
@@ -176,6 +190,16 @@ export class SessionLogStore {
   }
 
   private closeStream(sessionId: string): void {
+    const sanitizer = this.clearSanitizers.get(sessionId)
+    if (sanitizer) {
+      const flushed = sanitizer.flush()
+      this.clearSanitizers.delete(sessionId)
+      if (flushed) {
+        const meta = this.getMeta(sessionId)
+        if (meta) this.writeSanitized(sessionId, meta, flushed)
+      }
+    }
+
     const stream = this.writeStreams.get(sessionId)
     if (stream && !stream.destroyed) {
       stream.end()
