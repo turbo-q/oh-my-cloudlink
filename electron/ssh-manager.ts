@@ -4,9 +4,18 @@ import { buildSshConnectConfig, type ConnectOptions } from './auth-config'
 import { attachHostKeyVerification } from './host-key'
 import { detectRemoteOs } from './os-detect'
 
+/** Coalesce PTY chunks before IPC to cut main↔renderer traffic under burst output. */
+const OUTPUT_FLUSH_MS = 12
+const OUTPUT_FLUSH_CHARS = 32 * 1024
+
 interface ActiveSession {
   client: Client
   stream: ClientChannel
+  win: BrowserWindow
+  hooks?: SshSessionHooks
+  pendingChunks: string[]
+  pendingChars: number
+  flushTimer: ReturnType<typeof setTimeout> | null
 }
 
 export interface SshSessionHooks {
@@ -94,24 +103,30 @@ export class SshManager {
           }
 
           dropPending()
-          this.sessions.set(sessionId, { client, stream })
+          const session: ActiveSession = {
+            client,
+            stream,
+            win,
+            hooks,
+            pendingChunks: [],
+            pendingChars: 0,
+            flushTimer: null,
+          }
+          this.sessions.set(sessionId, session)
 
           stream.on('data', (data: Buffer) => {
-            const text = data.toString('utf-8')
-            hooks?.onOutput?.(text)
-            win.webContents.send('ssh:data', sessionId, text)
+            this.enqueueOutput(sessionId, data.toString('utf-8'))
           })
 
           stream.on('close', () => {
+            this.flushOutput(sessionId)
             this.cleanup(sessionId)
             hooks?.onClose?.()
-            win.webContents.send('ssh:close', sessionId)
+            if (!win.isDestroyed()) win.webContents.send('ssh:close', sessionId)
           })
 
           stream.stderr.on('data', (data: Buffer) => {
-            const text = data.toString('utf-8')
-            hooks?.onOutput?.(text)
-            win.webContents.send('ssh:data', sessionId, text)
+            this.enqueueOutput(sessionId, data.toString('utf-8'))
           })
 
           resolve()
@@ -124,18 +139,20 @@ export class SshManager {
           client.end()
           return
         }
+        this.flushOutput(sessionId)
         this.cleanup(sessionId)
         hooks?.onError?.(err.message)
-        win.webContents.send('ssh:error', sessionId, err.message)
+        if (!win.isDestroyed()) win.webContents.send('ssh:error', sessionId, err.message)
         reject(err)
       })
 
       client.on('close', () => {
         dropPending()
         if (this.sessions.has(sessionId)) {
+          this.flushOutput(sessionId)
           this.cleanup(sessionId)
           hooks?.onClose?.()
-          win.webContents.send('ssh:close', sessionId)
+          if (!win.isDestroyed()) win.webContents.send('ssh:close', sessionId)
         }
       })
 
@@ -165,6 +182,8 @@ export class SshManager {
     const session = this.sessions.get(sessionId)
     if (!session) return
 
+    this.flushOutput(sessionId)
+
     return new Promise((resolve) => {
       session.client.end()
       session.client.on('close', () => {
@@ -186,6 +205,47 @@ export class SshManager {
     }
   }
 
+  private enqueueOutput(sessionId: string, text: string): void {
+    const session = this.sessions.get(sessionId)
+    if (!session || !text) return
+
+    session.pendingChunks.push(text)
+    session.pendingChars += text.length
+
+    if (session.pendingChars >= OUTPUT_FLUSH_CHARS) {
+      this.flushOutput(sessionId)
+      return
+    }
+
+    if (session.flushTimer == null) {
+      session.flushTimer = setTimeout(() => {
+        session.flushTimer = null
+        this.flushOutput(sessionId)
+      }, OUTPUT_FLUSH_MS)
+    }
+  }
+
+  private flushOutput(sessionId: string): void {
+    const session = this.sessions.get(sessionId)
+    if (!session) return
+
+    if (session.flushTimer != null) {
+      clearTimeout(session.flushTimer)
+      session.flushTimer = null
+    }
+
+    if (session.pendingChunks.length === 0) return
+
+    const text = session.pendingChunks.join('')
+    session.pendingChunks = []
+    session.pendingChars = 0
+
+    session.hooks?.onOutput?.(text)
+    if (!session.win.isDestroyed()) {
+      session.win.webContents.send('ssh:data', sessionId, text)
+    }
+  }
+
   private bumpGeneration(sessionId: string): number {
     const next = (this.connectGeneration.get(sessionId) ?? 0) + 1
     this.connectGeneration.set(sessionId, next)
@@ -204,6 +264,11 @@ export class SshManager {
   }
 
   private cleanup(sessionId: string): void {
+    const session = this.sessions.get(sessionId)
+    if (session?.flushTimer != null) {
+      clearTimeout(session.flushTimer)
+      session.flushTimer = null
+    }
     this.sessions.delete(sessionId)
   }
 }

@@ -190,14 +190,37 @@ export function TerminalPanel({
       }
     })
 
+    let writeBuffer = ''
+    let writeRaf = 0
+    const flushTerminalWrite = () => {
+      if (writeRaf) {
+        cancelAnimationFrame(writeRaf)
+        writeRaf = 0
+      }
+      if (!writeBuffer || disposed) {
+        writeBuffer = ''
+        return
+      }
+      const chunk = writeBuffer
+      writeBuffer = ''
+      term.write(chunk)
+    }
+    const enqueueTerminalWrite = (data: string) => {
+      writeBuffer += data
+      if (!writeRaf) {
+        writeRaf = requestAnimationFrame(flushTerminalWrite)
+      }
+    }
+
     const unsubData = window.electronAPI.onSshData((sid, data) => {
-      if (sid === sessionId) term.write(data)
+      if (sid === sessionId) enqueueTerminalWrite(data)
     })
 
     const unsubClose = window.electronAPI.onSshClose((sid) => {
       if (sid === sessionId) {
         connectedRef.current = false
         onStatusChange(sessionId, 'disconnected')
+        flushTerminalWrite()
         const msg = `\r\n\x1b[90m${disconnectedText}\x1b[0m`
         term.writeln(msg)
         appendLog(`${msg}\r\n`)
@@ -208,6 +231,7 @@ export function TerminalPanel({
       if (sid === sessionId) {
         connectedRef.current = false
         onStatusChange(sessionId, 'error', error)
+        flushTerminalWrite()
         const msg = `\r\n\x1b[31m${translate(resolveLocale(getStoredLocalePreference()), 'terminal.error', { message: error })}\x1b[0m`
         term.writeln(msg)
         appendLog(`${msg}\r\n`)
@@ -238,6 +262,8 @@ export function TerminalPanel({
     return () => {
       disposed = true
       connectedRef.current = false
+      if (writeRaf) cancelAnimationFrame(writeRaf)
+      writeBuffer = ''
       window.removeEventListener(THEME_CHANGE_EVENT, handleThemeChange)
       window.removeEventListener('resize', handleResize)
       observer.disconnect()

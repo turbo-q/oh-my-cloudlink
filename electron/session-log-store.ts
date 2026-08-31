@@ -27,6 +27,8 @@ export interface SessionLogHostMeta {
 
 const MAX_SESSION_LOGS = 20
 const MAX_BYTES_PER_LOG = 2 * 1024 * 1024
+/** Debounce manifest disk writes during high-throughput PTY output. */
+const MANIFEST_FLUSH_MS = 500
 
 /** App session ids are UUID v4 — rejects `..`, separators, and other path tricks. */
 const SESSION_LOG_ID_RE =
@@ -39,6 +41,8 @@ export class SessionLogStore {
   private writeStreams = new Map<string, fs.WriteStream>()
   private byteCounts = new Map<string, number>()
   private clearSanitizers = new Map<string, ScreenClearSanitizer>()
+  private manifestDirty = false
+  private manifestTimer: ReturnType<typeof setTimeout> | null = null
 
   constructor() {
     const userData = app.getPath('userData')
@@ -73,7 +77,7 @@ export class SessionLogStore {
     // Drop entries that could not map to a safe log filename (path traversal / garbage).
     const before = this.manifest.length
     this.manifest = this.manifest.filter((m) => this.isSafeLogId(m.id))
-    if (this.manifest.length !== before) this.saveManifest()
+    if (this.manifest.length !== before) this.saveManifestNow()
     // Previous run may have been force-killed while status was still "connected"
     this.finalizeOrphanSessions()
   }
@@ -93,10 +97,31 @@ export class SessionLogStore {
         changed = true
       }
     }
-    if (changed) this.saveManifest()
+    if (changed) this.saveManifestNow()
   }
 
   private saveManifest(): void {
+    this.manifestDirty = true
+    if (this.manifestTimer != null) return
+    this.manifestTimer = setTimeout(() => {
+      this.manifestTimer = null
+      this.flushManifest()
+    }, MANIFEST_FLUSH_MS)
+  }
+
+  /** Persist immediately (status changes, session lifecycle, shutdown). */
+  private saveManifestNow(): void {
+    if (this.manifestTimer != null) {
+      clearTimeout(this.manifestTimer)
+      this.manifestTimer = null
+    }
+    this.manifestDirty = true
+    this.flushManifest()
+  }
+
+  private flushManifest(): void {
+    if (!this.manifestDirty) return
+    this.manifestDirty = false
     fs.writeFileSync(this.manifestPath, JSON.stringify(this.manifest, null, 2), 'utf-8')
   }
 
@@ -118,7 +143,7 @@ export class SessionLogStore {
     if (existing) {
       existing.status = 'connecting'
       existing.endedAt = null
-      this.saveManifest()
+      this.saveManifestNow()
       return
     }
 
@@ -135,7 +160,7 @@ export class SessionLogStore {
       byteSize: 0,
     }
     this.manifest.unshift(meta)
-    this.saveManifest()
+    this.saveManifestNow()
     this.openStream(sessionId)
     this.prune()
   }
@@ -208,7 +233,7 @@ export class SessionLogStore {
       meta.endedAt = new Date().toISOString()
       this.closeStream(sessionId)
     }
-    this.saveManifest()
+    this.saveManifestNow()
   }
 
   endSession(sessionId: string, status: SessionLogStatus = 'disconnected'): void {
@@ -255,7 +280,7 @@ export class SessionLogStore {
       if (fs.existsSync(filePath)) fs.unlinkSync(filePath)
     }
     this.manifest.splice(idx, 1)
-    this.saveManifest()
+    this.saveManifestNow()
     return true
   }
 
@@ -268,7 +293,7 @@ export class SessionLogStore {
       if (fs.existsSync(filePath)) fs.unlinkSync(filePath)
     }
     this.manifest = []
-    this.saveManifest()
+    this.saveManifestNow()
   }
 
   private prune(): void {
@@ -288,5 +313,6 @@ export class SessionLogStore {
     for (const sessionId of [...this.writeStreams.keys()]) {
       this.closeStream(sessionId)
     }
+    this.saveManifestNow()
   }
 }
