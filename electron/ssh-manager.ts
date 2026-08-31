@@ -1,6 +1,7 @@
 import { BrowserWindow } from 'electron'
 import { Client, type ConnectConfig, type ClientChannel } from 'ssh2'
 import { buildSshConnectConfig, type ConnectOptions } from './auth-config'
+import { attachHostKeyVerification } from './host-key'
 import { detectRemoteOs } from './os-detect'
 
 interface ActiveSession {
@@ -45,6 +46,12 @@ export class SshManager {
     if (this.sessions.has(sessionId)) {
       return
     }
+
+    attachHostKeyVerification(config, {
+      hostname: String(config.host ?? ''),
+      port: Number(config.port) || 22,
+      parentWindow: win,
+    })
 
     await this.cancelPending(sessionId)
     const gen = this.bumpGeneration(sessionId)

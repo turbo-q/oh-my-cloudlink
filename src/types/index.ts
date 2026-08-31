@@ -195,9 +195,9 @@ export function isSshHost(host: Host): boolean {
   return host.protocol !== 'ftp'
 }
 
-/** 根据主机配置推断文件传输协议 */
-export function getHostFileProtocol(host: Host): 'sftp' | 'ftp' {
-  return host.protocol === 'ftp' ? 'ftp' : 'sftp'
+/** 根据主机配置推断文件传输协议（仅 SFTP） */
+export function getHostFileProtocol(_host: Host): 'sftp' {
+  return 'sftp'
 }
 
 export function formatFileSize(bytes: number): string {

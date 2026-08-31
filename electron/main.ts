@@ -2,6 +2,8 @@ import { app, BrowserWindow, ipcMain, dialog, nativeTheme, shell, type IpcMainIn
 import fs from 'fs'
 import path from 'path'
 import { ensureAppPaths } from './app-paths'
+import { CryptoVaultError } from './crypto-vault'
+import type { ImportOptions } from './import-merge'
 import { DataStore } from './data-store'
 import { SshManager } from './ssh-manager'
 import { FileManager } from './file-manager'
@@ -40,7 +42,7 @@ function createWindow(): void {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false,
+      sandbox: true,
     },
   })
 
@@ -53,6 +55,15 @@ function createWindow(): void {
 
   mainWindow.on('closed', () => {
     mainWindow = null
+  })
+
+  // ⌘W / Ctrl+W: intercept before OS/menu closes the window; renderer closes the active session tab.
+  mainWindow.webContents.on('before-input-event', (event, input) => {
+    if (input.type !== 'keyDown') return
+    if (input.key.toLowerCase() !== 'w') return
+    if (!(input.meta || input.control) || input.alt || input.shift) return
+    event.preventDefault()
+    mainWindow?.webContents.send('shortcut:close-tab')
   })
 }
 
@@ -116,7 +127,28 @@ function registerIpcHandlers(): void {
 
   // 本机密钥发现
   safeHandle('keys:discover', () => discoverLocalKeys())
-  safeHandle('keys:readFile', (_e, filePath: string) => readKeyFromFile(filePath))
+  safeHandle(
+    'keys:pickKeyFile',
+    async (
+      _e,
+      options?: {
+        title?: string
+        filters?: { name: string; extensions: string[] }[]
+      },
+    ) => {
+      if (!mainWindow) return null
+      const result = await dialog.showOpenDialog(mainWindow, {
+        title: options?.title ?? '选择 SSH 私钥',
+        properties: ['openFile'],
+        filters: options?.filters ?? [
+          { name: 'SSH 私钥', extensions: ['pem', 'key'] },
+          { name: '所有文件', extensions: ['*'] },
+        ],
+      })
+      if (result.canceled || !result.filePaths[0]) return null
+      return readKeyFromFile(result.filePaths[0])
+    },
+  )
 
   // ~/.ssh/config 快速连接
   safeHandle('sshConfig:list', () => listSshConfigHosts())
@@ -129,11 +161,28 @@ function registerIpcHandlers(): void {
     return true
   })
 
+  // Vault (master password)
+  safeHandle('vault:status', () => dataStore.getVaultStatus())
+  safeHandle('vault:setup', (_e, password: string) => {
+    dataStore.setupMasterPassword(password)
+    return true
+  })
+  safeHandle('vault:unlock', (_e, password: string) => dataStore.unlockVault(password))
+
   // 导入导出 / 备份
   safeHandle('data:export', () => dataStore.exportSealedBackup())
-  safeHandle('data:import', async (_e, data) => {
+  safeHandle('data:importPreview', (_e, data: unknown, options: ImportOptions) =>
+    dataStore.importPreview(data, options),
+  )
+  safeHandle('data:previewBackupFile', (_e, fileName: string, options: ImportOptions) =>
+    dataStore.previewBackupFile(fileName, options),
+  )
+  safeHandle('data:previewBackupAtPath', (_e, filePath: string, options: ImportOptions) =>
+    dataStore.previewBackupAtPath(filePath, options),
+  )
+  safeHandle('data:import', async (_e, data: unknown, options: ImportOptions) => {
     portForwardManager.stopAll(mainWindow)
-    dataStore.importData(data)
+    dataStore.importData(data, options)
     return true
   })
   safeHandle('data:listBackups', () => dataStore.listBackups())
@@ -142,21 +191,52 @@ function registerIpcHandlers(): void {
     if (!info) throw new Error('当前没有可备份的数据')
     return info
   })
-  safeHandle('data:restoreBackup', async (_e, fileName: string) => {
+  safeHandle('data:restoreBackup', async (_e, fileName: string, options: ImportOptions) => {
     portForwardManager.stopAll(mainWindow)
-    dataStore.restoreBackupFile(fileName)
+    dataStore.restoreBackupFile(fileName, options)
     return true
   })
-  safeHandle('data:restoreBackupFromFile', async () => {
-    if (!mainWindow) return false
+  safeHandle('data:pickBackupFile', async () => {
+    if (!mainWindow) return { cancelled: true as const }
     const result = await dialog.showOpenDialog(mainWindow, {
       title: '选择备份文件',
       properties: ['openFile'],
       filters: [{ name: 'JSON 备份', extensions: ['json'] }],
     })
-    if (result.canceled || !result.filePaths[0]) return false
+    if (result.canceled || !result.filePaths[0]) return { cancelled: true as const }
+    return { cancelled: false as const, filePath: result.filePaths[0] }
+  })
+  safeHandle('data:restoreBackupFromFile', async (_e, backupPassword?: string) => {
+    if (!mainWindow) return { ok: false as const, cancelled: true }
+    const result = await dialog.showOpenDialog(mainWindow, {
+      title: '选择备份文件',
+      properties: ['openFile'],
+      filters: [{ name: 'JSON 备份', extensions: ['json'] }],
+    })
+    if (result.canceled || !result.filePaths[0]) return { ok: false as const, cancelled: true }
+    const filePath = result.filePaths[0]
     portForwardManager.stopAll(mainWindow)
-    dataStore.restoreFromAbsolutePath(result.filePaths[0])
+    try {
+      dataStore.restoreFromAbsolutePath(filePath, {
+        mode: 'replace',
+        backupPassword,
+      })
+      return { ok: true as const, cancelled: false }
+    } catch (err) {
+      if (err instanceof CryptoVaultError && err.message === 'BACKUP_PASSWORD_REQUIRED') {
+        return {
+          ok: false as const,
+          cancelled: false,
+          needPassword: true as const,
+          filePath,
+        }
+      }
+      throw err
+    }
+  })
+  safeHandle('data:restoreBackupAtPath', async (_e, filePath: string, options: ImportOptions) => {
+    portForwardManager.stopAll(mainWindow)
+    dataStore.restoreFromAbsolutePath(filePath, options)
     return true
   })
 
@@ -204,12 +284,13 @@ function registerIpcHandlers(): void {
 
     const logHooks = {
       onOutput: (data: string) => {
-        sessionLogStore.append(sessionId, data)
-        mainWindow?.webContents.send('log:append', sessionId, data)
+        const logged = sessionLogStore.append(sessionId, data)
+        if (logged) mainWindow?.webContents.send('log:append', sessionId, logged)
       },
       onClose: () => sessionLogStore.endSession(sessionId, 'disconnected'),
       onError: (message: string) => {
-        sessionLogStore.append(sessionId, `\r\n\x1b[31m[错误] ${message}\x1b[0m\r\n`)
+        const logged = sessionLogStore.append(sessionId, `\r\n\x1b[31m[错误] ${message}\x1b[0m\r\n`)
+        if (logged) mainWindow?.webContents.send('log:append', sessionId, logged)
         sessionLogStore.endSession(sessionId, 'error')
       },
       onOsDetected: (osId: string) => {
@@ -240,12 +321,13 @@ function registerIpcHandlers(): void {
     const { config } = resolveSshConnectConfig(target)
     const logHooks = {
       onOutput: (data: string) => {
-        sessionLogStore.append(sessionId, data)
-        mainWindow?.webContents.send('log:append', sessionId, data)
+        const logged = sessionLogStore.append(sessionId, data)
+        if (logged) mainWindow?.webContents.send('log:append', sessionId, logged)
       },
       onClose: () => sessionLogStore.endSession(sessionId, 'disconnected'),
       onError: (message: string) => {
-        sessionLogStore.append(sessionId, `\r\n\x1b[31m[错误] ${message}\x1b[0m\r\n`)
+        const logged = sessionLogStore.append(sessionId, `\r\n\x1b[31m[错误] ${message}\x1b[0m\r\n`)
+        if (logged) mainWindow?.webContents.send('log:append', sessionId, logged)
         sessionLogStore.endSession(sessionId, 'error')
       },
     }
@@ -304,21 +386,17 @@ function registerIpcHandlers(): void {
     return true
   })
   safeHandle('sessionLog:append', (_e, sessionId: string, text: string) => {
-    sessionLogStore.append(sessionId, text)
-    mainWindow?.webContents.send('log:append', sessionId, text)
+    const logged = sessionLogStore.append(sessionId, text)
+    if (logged) mainWindow?.webContents.send('log:append', sessionId, logged)
     return true
   })
 
-  // 文件传输 (SFTP / FTP)
-  safeHandle(
-    'file:connect',
-    async (_e, sessionId: string, hostId: string, fileProtocol?: 'sftp' | 'ftp') => {
-      const host = dataStore.getHosts().find((h) => h.id === hostId)
-      if (!host) throw new Error('主机不存在')
-      const protocol = fileProtocol ?? (host.protocol === 'ftp' ? 'ftp' : 'sftp')
-      return fileManager.connect(sessionId, host, dataStore.getKeys(), protocol)
-    },
-  )
+  // 文件传输 (SFTP)
+  safeHandle('file:connect', async (_e, sessionId: string, hostId: string) => {
+    const host = dataStore.getHosts().find((h) => h.id === hostId)
+    if (!host) throw new Error('主机不存在')
+    return fileManager.connect(sessionId, host, dataStore.getKeys(), mainWindow)
+  })
 
   safeHandle('file:disconnect', async (_e, sessionId: string) => {
     await fileManager.disconnect(sessionId)
@@ -394,6 +472,14 @@ function registerIpcHandlers(): void {
   safeHandle('theme:setSource', (_e, source: 'system' | 'light' | 'dark') => {
     nativeTheme.themeSource = source
     return nativeTheme.shouldUseDarkColors
+  })
+
+  safeHandle('window:close', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.close()
+      return true
+    }
+    return false
   })
 
   console.log('[main] IPC handlers registered (local:home, local:list ready)')

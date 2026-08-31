@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
+import type { ImportOptions } from './import-merge'
 
 const electronAPI = {
   // 主机
@@ -57,17 +58,48 @@ const electronAPI = {
   },
 
   discoverLocalKeys: () => ipcRenderer.invoke('keys:discover'),
-  readKeyFile: (filePath: string) => ipcRenderer.invoke('keys:readFile', filePath),
+  pickKeyFile: (options?: {
+    title?: string
+    filters?: { name: string; extensions: string[] }[]
+  }) => ipcRenderer.invoke('keys:pickKeyFile', options),
   sshConfigList: () => ipcRenderer.invoke('sshConfig:list'),
   sshConfigOpen: () => ipcRenderer.invoke('sshConfig:open'),
 
   // 数据导入导出 / 备份恢复
+  vaultStatus: () =>
+    ipcRenderer.invoke('vault:status') as Promise<{
+      needsSetup: boolean
+      isLocked: boolean
+      canRememberOnDevice: boolean
+    }>,
+  vaultSetup: (password: string) => ipcRenderer.invoke('vault:setup', password) as Promise<boolean>,
+  vaultUnlock: (password: string) => ipcRenderer.invoke('vault:unlock', password) as Promise<boolean>,
+
+  importPreview: (data: unknown, options: ImportOptions) =>
+    ipcRenderer.invoke('data:importPreview', data, options),
+  previewBackupFile: (fileName: string, options: ImportOptions) =>
+    ipcRenderer.invoke('data:previewBackupFile', fileName, options),
+  previewBackupAtPath: (filePath: string, options: ImportOptions) =>
+    ipcRenderer.invoke('data:previewBackupAtPath', filePath, options),
   exportData: () => ipcRenderer.invoke('data:export'),
-  importData: (data: unknown) => ipcRenderer.invoke('data:import', data),
+  importData: (data: unknown, options: ImportOptions) =>
+    ipcRenderer.invoke('data:import', data, options),
   listBackups: () => ipcRenderer.invoke('data:listBackups'),
   createBackup: () => ipcRenderer.invoke('data:createBackup'),
-  restoreBackup: (fileName: string) => ipcRenderer.invoke('data:restoreBackup', fileName),
-  restoreBackupFromFile: () => ipcRenderer.invoke('data:restoreBackupFromFile'),
+  restoreBackup: (fileName: string, options: ImportOptions) =>
+    ipcRenderer.invoke('data:restoreBackup', fileName, options),
+  pickBackupFile: () =>
+    ipcRenderer.invoke('data:pickBackupFile') as Promise<
+      { cancelled: true } | { cancelled: false; filePath: string }
+    >,
+  restoreBackupFromFile: (backupPassword?: string) =>
+    ipcRenderer.invoke('data:restoreBackupFromFile', backupPassword) as Promise<
+      | { ok: true; cancelled: false }
+      | { ok: false; cancelled: true }
+      | { ok: false; cancelled: false; needPassword: true; filePath: string }
+    >,
+  restoreBackupAtPath: (filePath: string, options: ImportOptions) =>
+    ipcRenderer.invoke('data:restoreBackupAtPath', filePath, options) as Promise<boolean>,
 
   // 系统对话框
   openFileDialog: (options?: { title?: string; multi?: boolean }) =>
@@ -133,8 +165,8 @@ const electronAPI = {
   },
 
   // 文件传输
-  fileConnect: (sessionId: string, hostId: string, fileProtocol?: 'sftp' | 'ftp') =>
-    ipcRenderer.invoke('file:connect', sessionId, hostId, fileProtocol) as Promise<string>,
+  fileConnect: (sessionId: string, hostId: string) =>
+    ipcRenderer.invoke('file:connect', sessionId, hostId) as Promise<string>,
   fileDisconnect: (sessionId: string) => ipcRenderer.invoke('file:disconnect', sessionId),
   fileList: (sessionId: string, dirPath: string) =>
     ipcRenderer.invoke('file:list', sessionId, dirPath),
@@ -184,6 +216,14 @@ const electronAPI = {
 
   setNativeTheme: (source: 'system' | 'light' | 'dark') =>
     ipcRenderer.invoke('theme:setSource', source) as Promise<boolean>,
+
+  onCloseTabShortcut: (callback: () => void) => {
+    const handler = () => callback()
+    ipcRenderer.on('shortcut:close-tab', handler)
+    return () => ipcRenderer.removeListener('shortcut:close-tab', handler)
+  },
+
+  closeWindow: () => ipcRenderer.invoke('window:close') as Promise<boolean>,
 }
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPI)

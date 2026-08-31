@@ -2,7 +2,7 @@
   "name": "oh-my-cloudlink",
   "productName": "Oh My CloudLink",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.3.0",
   "type": "module",
   "main": "main.cjs",
   "scripts": {
@@ -22,7 +22,6 @@
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/addon-search": "^0.15.0",
     "@xterm/addon-web-links": "^0.12.0",
-    "basic-ftp": "^6.2.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "ssh2": "^1.17.0",

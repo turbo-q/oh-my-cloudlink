@@ -9,7 +9,6 @@ interface SftpPanelProps {
   sessionId?: string | null
   hostId?: string | null
   hostName?: string
-  protocol?: 'sftp' | 'ftp'
   active?: boolean
   hosts: Host[]
   groups: Group[]
@@ -26,7 +25,6 @@ export function SftpPanel({
   sessionId,
   hostId,
   hostName,
-  protocol = 'sftp',
   active = true,
   hosts,
   groups,
@@ -51,7 +49,6 @@ export function SftpPanel({
           <RemoteFilePane
             sessionId={sessionId!}
             hostId={hostId!}
-            protocol={protocol}
             hostName={hostName}
             onStatusChange={onStatusChange!}
             onDisconnect={onDisconnectSession}

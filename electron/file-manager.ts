@@ -1,73 +1,47 @@
 import type { StoredHost, StoredKey } from './data-store'
-import { FtpManager } from './ftp-manager'
 import { SftpManager } from './sftp-manager'
 import type { RemoteFileEntry } from './auth-config'
 import type { TransferProgressCallback } from './transfer-progress'
+import type { BrowserWindow } from 'electron'
 
 interface FileSessionMeta {
-  protocol: 'sftp' | 'ftp'
   homePath: string
 }
 
 export class FileManager {
   private sftp = new SftpManager()
-  private ftp = new FtpManager()
   private meta = new Map<string, FileSessionMeta>()
 
   async connect(
     sessionId: string,
     host: StoredHost,
     keys: StoredKey[],
-    fileProtocol?: 'sftp' | 'ftp',
+    parentWindow?: BrowserWindow | null,
   ): Promise<string> {
-    const protocol =
-      fileProtocol ?? (host.protocol === 'ftp' ? 'ftp' : 'sftp')
-
-    if (protocol === 'sftp') {
-      const homePath = await this.sftp.connect(sessionId, { host, keys })
-      this.meta.set(sessionId, { protocol: 'sftp', homePath })
-      return homePath
-    }
-
-    if (protocol === 'ftp') {
-      const homePath = await this.ftp.connect(sessionId, host)
-      this.meta.set(sessionId, { protocol: 'ftp', homePath })
-      return homePath
-    }
-
-    throw new Error(`不支持的文件传输协议: ${protocol}`)
+    const homePath = await this.sftp.connect(sessionId, { host, keys }, parentWindow)
+    this.meta.set(sessionId, { homePath })
+    return homePath
   }
 
   async disconnect(sessionId: string): Promise<void> {
-    const info = this.meta.get(sessionId)
-    if (!info) return
-
-    if (info.protocol === 'sftp') {
-      await this.sftp.disconnect(sessionId)
-    } else {
-      await this.ftp.disconnect(sessionId)
-    }
+    if (!this.meta.has(sessionId)) return
+    await this.sftp.disconnect(sessionId)
     this.meta.delete(sessionId)
   }
 
   disconnectAll(): void {
     this.sftp.disconnectAll()
-    this.ftp.disconnectAll()
     this.meta.clear()
   }
 
   getHome(sessionId: string): string {
-    const info = this.requireMeta(sessionId)
-    return info.protocol === 'sftp'
-      ? this.sftp.getHome(sessionId)
-      : this.ftp.getHome(sessionId)
+    this.requireMeta(sessionId)
+    return this.sftp.getHome(sessionId)
   }
 
   async list(sessionId: string, dirPath: string): Promise<RemoteFileEntry[]> {
-    const info = this.requireMeta(sessionId)
-    return info.protocol === 'sftp'
-      ? this.sftp.list(sessionId, dirPath)
-      : this.ftp.list(sessionId, dirPath)
+    this.requireMeta(sessionId)
+    return this.sftp.list(sessionId, dirPath)
   }
 
   async download(
@@ -76,10 +50,8 @@ export class FileManager {
     localPath: string,
     onProgress?: TransferProgressCallback,
   ): Promise<void> {
-    const info = this.requireMeta(sessionId)
-    return info.protocol === 'sftp'
-      ? this.sftp.download(sessionId, remotePath, localPath, onProgress)
-      : this.ftp.download(sessionId, remotePath, localPath, onProgress)
+    this.requireMeta(sessionId)
+    return this.sftp.download(sessionId, remotePath, localPath, onProgress)
   }
 
   async upload(
@@ -88,31 +60,23 @@ export class FileManager {
     remotePath: string,
     onProgress?: TransferProgressCallback,
   ): Promise<void> {
-    const info = this.requireMeta(sessionId)
-    return info.protocol === 'sftp'
-      ? this.sftp.upload(sessionId, localPath, remotePath, onProgress)
-      : this.ftp.upload(sessionId, localPath, remotePath, onProgress)
+    this.requireMeta(sessionId)
+    return this.sftp.upload(sessionId, localPath, remotePath, onProgress)
   }
 
   async mkdir(sessionId: string, remotePath: string): Promise<void> {
-    const info = this.requireMeta(sessionId)
-    return info.protocol === 'sftp'
-      ? this.sftp.mkdir(sessionId, remotePath)
-      : this.ftp.mkdir(sessionId, remotePath)
+    this.requireMeta(sessionId)
+    return this.sftp.mkdir(sessionId, remotePath)
   }
 
   async delete(sessionId: string, remotePath: string, isDirectory: boolean): Promise<void> {
-    const info = this.requireMeta(sessionId)
-    return info.protocol === 'sftp'
-      ? this.sftp.delete(sessionId, remotePath, isDirectory)
-      : this.ftp.delete(sessionId, remotePath, isDirectory)
+    this.requireMeta(sessionId)
+    return this.sftp.delete(sessionId, remotePath, isDirectory)
   }
 
   async rename(sessionId: string, oldPath: string, newPath: string): Promise<void> {
-    const info = this.requireMeta(sessionId)
-    return info.protocol === 'sftp'
-      ? this.sftp.rename(sessionId, oldPath, newPath)
-      : this.ftp.rename(sessionId, oldPath, newPath)
+    this.requireMeta(sessionId)
+    return this.sftp.rename(sessionId, oldPath, newPath)
   }
 
   private requireMeta(sessionId: string): FileSessionMeta {

@@ -5,14 +5,59 @@ import { randomUUID } from 'crypto'
 import { DatabaseSync } from 'node:sqlite'
 import { LEGACY_USER_DATA_NAMES } from './app-paths'
 import {
+  createVaultCheckBlob,
   CryptoVaultError,
   decryptSecret,
+  deriveKeyFromPassword,
   encryptSecret,
+  generateSalt,
   isEncryptedSecret,
+  isVaultUnlocked,
+  lockVault,
   sealDataFile,
+  setVaultKey,
   unsealDataFile,
-  type EncryptedBackup,
+  verifyVaultCheckBlob,
+  type EncryptedBackupV3,
+  type UnsealDataFileOptions,
 } from './crypto-vault'
+import {
+  buildMergePlan,
+  computeImportPreview,
+  hasMergeChanges,
+  normalizeImportDataFile,
+  type ImportConflict,
+  type ImportEntityCounts,
+  type ImportMode,
+  type ImportOptions,
+  type ImportPreviewResult,
+} from './import-merge'
+import {
+  clearDeviceWrap,
+  isDeviceWrapAvailable,
+  loadDeviceWrap,
+  saveDeviceWrap,
+} from './vault-device-store'
+
+export type {
+  ImportConflict,
+  ImportEntityCounts,
+  ImportMode,
+  ImportOptions,
+  ImportPreviewResult,
+} from './import-merge'
+
+export interface VaultStatus {
+  needsSetup: boolean
+  isLocked: boolean
+  /** OS keychain can remember unlock on this device (macOS/Windows/libsecret). */
+  canRememberOnDevice: boolean
+}
+
+const META_MASTER_PASSWORD = 'master_password_set'
+const META_VAULT_SALT = 'vault_salt'
+const META_VAULT_CHECK = 'vault_check'
+const MIN_MASTER_PASSWORD_LENGTH = 8
 
 export interface StoredHost {
   id: string
@@ -167,6 +212,7 @@ export class DataStore {
   private userData: string
   private backupsDir: string
   private legacyBackupPath: string
+  private autoUnlockAttempted = false
 
   constructor() {
     const userData = app.getPath('userData')
@@ -190,7 +236,154 @@ export class DataStore {
     this.migrateFromJsonIfNeeded(userData)
     this.migrateSecretsIfNeeded()
     this.seedLegacyBackupIntoTimed()
+  }
+
+  /** Called after setup or unlock — deferred timed backup while vault is locked. */
+  onVaultUnlocked(): void {
     this.createTimedBackup({ force: true })
+  }
+
+  getVaultStatus(): VaultStatus {
+    this.tryAutoUnlockFromDeviceOnce()
+    const needsSetup = this.getMeta(META_MASTER_PASSWORD) !== '1'
+    return {
+      needsSetup,
+      isLocked: !needsSetup && !isVaultUnlocked(),
+      canRememberOnDevice: isDeviceWrapAvailable(),
+    }
+  }
+
+  /** Try silent unlock using OS-protected device wrap (same machine only). */
+  private tryAutoUnlockFromDeviceOnce(): void {
+    if (this.autoUnlockAttempted) return
+    this.autoUnlockAttempted = true
+
+    if (this.getMeta(META_MASTER_PASSWORD) !== '1') return
+    if (isVaultUnlocked()) return
+
+    const key = loadDeviceWrap()
+    if (!key) return
+
+    const check = this.getMeta(META_VAULT_CHECK)
+    if (!check || !verifyVaultCheckBlob(check, key)) {
+      clearDeviceWrap()
+      return
+    }
+
+    setVaultKey(key)
+    this.onVaultUnlocked()
+  }
+
+  private persistDeviceWrap(key: Buffer): void {
+    saveDeviceWrap(key)
+  }
+
+  private assertVaultUnlocked(): void {
+    if (this.getVaultStatus().needsSetup) {
+      throw new CryptoVaultError('VAULT_NEEDS_SETUP')
+    }
+    if (!isVaultUnlocked()) {
+      throw new CryptoVaultError('VAULT_LOCKED')
+    }
+  }
+
+  private getVaultSaltB64(): string {
+    const salt = this.getMeta(META_VAULT_SALT)
+    if (!salt) throw new CryptoVaultError('VAULT_NOT_CONFIGURED')
+    return salt
+  }
+
+  setupMasterPassword(password: string): void {
+    if (this.getMeta(META_MASTER_PASSWORD) === '1') {
+      throw new CryptoVaultError('VAULT_ALREADY_CONFIGURED')
+    }
+    if (password.length < MIN_MASTER_PASSWORD_LENGTH) {
+      throw new CryptoVaultError('VAULT_PASSWORD_TOO_SHORT')
+    }
+
+    const salt = generateSalt()
+    const key = deriveKeyFromPassword(password, salt)
+    setVaultKey(key)
+
+    this.db.exec('BEGIN')
+    try {
+      this.setMeta(META_VAULT_SALT, salt.toString('base64'))
+      this.setMeta(META_VAULT_CHECK, createVaultCheckBlob(key))
+      this.migrateSecretsToPasswordVault()
+      this.setMeta(META_MASTER_PASSWORD, '1')
+      this.setMeta('secrets_encrypted', '1')
+      this.db.exec('COMMIT')
+    } catch (err) {
+      this.db.exec('ROLLBACK')
+      lockVault()
+      throw err
+    }
+
+    this.onVaultUnlocked()
+    this.persistDeviceWrap(key)
+  }
+
+  unlockVault(password: string): boolean {
+    if (this.getVaultStatus().needsSetup) {
+      throw new CryptoVaultError('VAULT_NEEDS_SETUP')
+    }
+
+    const saltB64 = this.getMeta(META_VAULT_SALT)
+    const check = this.getMeta(META_VAULT_CHECK)
+    if (!saltB64 || !check) {
+      throw new CryptoVaultError('VAULT_NOT_CONFIGURED')
+    }
+
+    const key = deriveKeyFromPassword(password, Buffer.from(saltB64, 'base64'))
+    if (!verifyVaultCheckBlob(check, key)) {
+      lockVault()
+      return false
+    }
+
+    setVaultKey(key)
+    this.onVaultUnlocked()
+    this.persistDeviceWrap(key)
+    return true
+  }
+
+  /** Re-encrypt omcl1 / plaintext secrets with the password-derived vault key. */
+  private migrateSecretsToPasswordVault(): void {
+    const hosts = this.db.prepare('SELECT id, password FROM hosts').all() as unknown as {
+      id: string
+      password: string | null
+    }[]
+    const updateHost = this.db.prepare('UPDATE hosts SET password = ? WHERE id = ?')
+    for (const row of hosts) {
+      if (!row.password) continue
+      const plain = decryptSecret(row.password)
+      if (plain !== undefined) {
+        updateHost.run(encryptSecret(plain), row.id)
+      }
+    }
+
+    const keys = this.db
+      .prepare('SELECT id, private_key, passphrase FROM keys')
+      .all() as unknown as {
+      id: string
+      private_key: string
+      passphrase: string | null
+    }[]
+    const updateKey = this.db.prepare(
+      'UPDATE keys SET private_key = ?, passphrase = ? WHERE id = ?',
+    )
+    for (const row of keys) {
+      const privatePlain = decryptSecret(row.private_key)
+      const passPlain =
+        row.passphrase != null && row.passphrase !== ''
+          ? decryptSecret(row.passphrase)
+          : row.passphrase
+      if (privatePlain === undefined) continue
+      updateKey.run(
+        encryptSecret(privatePlain) ?? '',
+        passPlain != null && passPlain !== '' ? encryptSecret(passPlain) : row.passphrase,
+        row.id,
+      )
+    }
   }
 
   /** One-time: promote old data.backup.json into backups/ if folder is empty. */
@@ -198,7 +391,7 @@ export class DataStore {
     try {
       if (this.listBackupFiles().length > 0) return
       if (!fs.existsSync(this.legacyBackupPath)) return
-      const data = this.readDataFile(this.legacyBackupPath)
+      const data = this.readDataFile(this.legacyBackupPath, { allowPlaintext: true })
       if (
         !data ||
         data.hosts.length +
@@ -453,7 +646,7 @@ export class DataStore {
     for (const jsonPath of candidates) {
       if (!fs.existsSync(jsonPath)) continue
       try {
-        const data = this.readDataFile(jsonPath)
+        const data = this.readDataFile(jsonPath, { allowPlaintext: true })
         if (!data) continue
         if (
           data.hosts.length +
@@ -491,11 +684,14 @@ export class DataStore {
       })
   }
 
-  private readDataFile(jsonPath: string): DataFile | null {
+  private readDataFile(
+    jsonPath: string,
+    options?: UnsealDataFileOptions,
+  ): DataFile | null {
     try {
       const raw = fs.readFileSync(jsonPath, 'utf-8')
       const parsed = JSON.parse(raw) as unknown
-      return unsealDataFile(parsed)
+      return unsealDataFile(parsed, options)
     } catch (err) {
       if (err instanceof CryptoVaultError) throw err
       console.error('[data-store] readDataFile failed:', jsonPath, err)
@@ -504,7 +700,8 @@ export class DataStore {
   }
 
   private writeSealedBackup(filePath: string, data: DataFile): void {
-    const sealed = sealDataFile(data)
+    this.assertVaultUnlocked()
+    const sealed = sealDataFile(data, this.getVaultSaltB64())
     fs.writeFileSync(filePath, JSON.stringify(sealed, null, 2), 'utf-8')
   }
 
@@ -617,7 +814,7 @@ export class DataStore {
       })
   }
 
-  restoreBackupFile(fileName: string): DataFile {
+  restoreBackupFile(fileName: string, options: ImportOptions): DataFile {
     const safeName = path.basename(fileName)
     if (safeName !== fileName || !/^backup-.*\.json$/i.test(safeName)) {
       throw new Error('无效的备份文件名')
@@ -626,11 +823,14 @@ export class DataStore {
     if (!fs.existsSync(filePath)) {
       throw new Error('备份文件不存在')
     }
-    return this.restoreFromAbsolutePath(filePath)
+    return this.restoreFromAbsolutePath(filePath, options)
   }
 
-  restoreFromAbsolutePath(filePath: string): DataFile {
-    const data = this.readDataFile(filePath)
+  restoreFromAbsolutePath(filePath: string, options: ImportOptions): DataFile {
+    const data = this.readDataFile(filePath, {
+      backupPassword: options.backupPassword,
+      allowPlaintext: options.allowPlaintext,
+    })
     if (!data) throw new Error('备份文件格式不正确')
     if (
       data.hosts.length +
@@ -642,8 +842,17 @@ export class DataStore {
     ) {
       throw new Error('备份文件为空')
     }
-    this.replaceAll(data)
+    this.applyImportData(data, options)
     return data
+  }
+
+  private applyImportData(data: DataFile, options: ImportOptions): void {
+    const normalized = normalizeImportDataFile(data)
+    if (options.mode === 'replace') {
+      this.replaceAll(normalized)
+      return
+    }
+    this.mergeIncoming(normalized, options.conflict ?? 'skip')
   }
 
   private countRows(table: 'hosts' | 'groups' | 'keys' | 'port_forwards' | 'snippets'): number {
@@ -751,6 +960,14 @@ export class DataStore {
     }
   }
 
+  private sealSecretForStorage(value: string | null | undefined): string | null {
+    if (value == null) return null
+    if (value === '') return ''
+    if (isVaultUnlocked()) return encryptSecret(value)
+    if (isEncryptedSecret(value)) return value
+    return value
+  }
+
   private replaceAll(data: DataFile, options?: { skipBackup?: boolean }): void {
     this.db.exec('BEGIN')
     try {
@@ -775,9 +992,9 @@ export class DataStore {
         insertKey.run(
           k.id,
           k.name,
-          encryptSecret(k.privateKey) ?? '',
+          this.sealSecretForStorage(k.privateKey) ?? '',
           k.publicKey ?? null,
-          encryptSecret(k.passphrase ?? null),
+          this.sealSecretForStorage(k.passphrase ?? null),
           k.createdAt,
         )
       }
@@ -797,7 +1014,7 @@ export class DataStore {
           h.username,
           h.protocol,
           h.authType,
-          encryptSecret(h.password ?? null),
+          this.sealSecretForStorage(h.password ?? null),
           h.keyId ?? null,
           h.groupId ?? null,
           JSON.stringify(h.tags ?? []),
@@ -855,12 +1072,259 @@ export class DataStore {
     }
   }
 
+  private mergeIncoming(incomingRaw: Partial<DataFile>, conflict: ImportConflict): void {
+    const incoming = normalizeImportDataFile(incomingRaw)
+    const local = this.exportData()
+    const plan = buildMergePlan(local, incoming, conflict)
+
+    if (!hasMergeChanges(plan.preview)) {
+      throw new CryptoVaultError('IMPORT_NO_CHANGES')
+    }
+
+    const localForwardByKey = new Map(
+      local.portForwards.map((f) => [`${f.hostId}\0${f.name.trim().toLowerCase()}`, f]),
+    )
+    const localSnippetByKey = new Map(
+      local.snippets.map((s) => [s.name.trim().toLowerCase(), s]),
+    )
+
+    this.db.exec('BEGIN')
+    try {
+      for (const g of incoming.groups) {
+        const action = plan.groups.get(g.id)
+        if (!action || action === 'skip') continue
+        const targetId = plan.groupIdRemap.get(g.id) ?? g.id
+        if (action === 'add') {
+          this.db
+            .prepare(
+              `INSERT INTO groups (id, name, color, parent_id, created_at) VALUES (?, ?, ?, ?, ?)`,
+            )
+            .run(g.id, g.name, g.color, g.parentId ?? null, g.createdAt)
+        } else {
+          this.db
+            .prepare(`UPDATE groups SET name = ?, color = ?, parent_id = ? WHERE id = ?`)
+            .run(g.name, g.color, g.parentId ?? null, targetId)
+        }
+      }
+
+      for (const k of incoming.keys) {
+        const action = plan.keys.get(k.id)
+        if (!action || action === 'skip') continue
+        const targetId = plan.keyIdRemap.get(k.id) ?? k.id
+        const privateKey = this.sealSecretForStorage(k.privateKey) ?? ''
+        const passphrase = this.sealSecretForStorage(k.passphrase ?? null)
+        if (action === 'add') {
+          this.db
+            .prepare(
+              `INSERT INTO keys (id, name, private_key, public_key, passphrase, created_at)
+               VALUES (?, ?, ?, ?, ?, ?)`,
+            )
+            .run(k.id, k.name, privateKey, k.publicKey ?? null, passphrase, k.createdAt)
+        } else {
+          this.db
+            .prepare(
+              `UPDATE keys SET name = ?, private_key = ?, public_key = ?, passphrase = ? WHERE id = ?`,
+            )
+            .run(k.name, privateKey, k.publicKey ?? null, passphrase, targetId)
+        }
+      }
+
+      for (const h of incoming.hosts) {
+        const action = plan.hosts.get(h.id)
+        if (!action || action === 'skip') continue
+        const targetId = plan.hostIdRemap.get(h.id) ?? h.id
+        const groupId = h.groupId ? (plan.groupIdRemap.get(h.groupId) ?? null) : null
+        const keyId = h.keyId ? (plan.keyIdRemap.get(h.keyId) ?? null) : null
+        const password = this.sealSecretForStorage(h.password ?? null)
+        if (action === 'add') {
+          this.db
+            .prepare(
+              `INSERT INTO hosts (
+                id, name, hostname, port, username, protocol, auth_type,
+                password, key_id, group_id, tags, notes, os_id, created_at, updated_at
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            )
+            .run(
+              h.id,
+              h.name,
+              h.hostname,
+              h.port,
+              h.username,
+              h.protocol,
+              h.authType,
+              password,
+              keyId,
+              groupId,
+              JSON.stringify(h.tags ?? []),
+              h.notes ?? null,
+              h.osId ?? null,
+              h.createdAt,
+              h.updatedAt,
+            )
+        } else {
+          this.db
+            .prepare(
+              `UPDATE hosts SET
+                name = ?, hostname = ?, port = ?, username = ?, protocol = ?, auth_type = ?,
+                password = ?, key_id = ?, group_id = ?, tags = ?, notes = ?, os_id = ?, updated_at = ?
+               WHERE id = ?`,
+            )
+            .run(
+              h.name,
+              h.hostname,
+              h.port,
+              h.username,
+              h.protocol,
+              h.authType,
+              password,
+              keyId,
+              groupId,
+              JSON.stringify(h.tags ?? []),
+              h.notes ?? null,
+              h.osId ?? null,
+              h.updatedAt,
+              targetId,
+            )
+        }
+      }
+
+      for (const f of incoming.portForwards) {
+        const action = plan.forwards.get(f.id)
+        if (!action || action === 'skip') continue
+        const hostId = plan.hostIdRemap.get(f.hostId)
+        if (!hostId) continue
+
+        if (action === 'add') {
+          this.db
+            .prepare(
+              `INSERT INTO port_forwards (
+                id, host_id, name, type, local_host, local_port, remote_host, remote_port, created_at, updated_at
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            )
+            .run(
+              f.id,
+              hostId,
+              f.name,
+              f.type,
+              f.localHost,
+              f.localPort,
+              f.remoteHost ?? null,
+              f.remotePort ?? null,
+              f.createdAt,
+              f.updatedAt,
+            )
+        } else {
+          const existing =
+            local.portForwards.find((x) => x.id === f.id) ??
+            localForwardByKey.get(`${hostId}\0${f.name.trim().toLowerCase()}`)
+          if (!existing) continue
+          this.db
+            .prepare(
+              `UPDATE port_forwards SET
+                host_id = ?, name = ?, type = ?, local_host = ?, local_port = ?,
+                remote_host = ?, remote_port = ?, updated_at = ?
+               WHERE id = ?`,
+            )
+            .run(
+              hostId,
+              f.name,
+              f.type,
+              f.localHost,
+              f.localPort,
+              f.remoteHost ?? null,
+              f.remotePort ?? null,
+              f.updatedAt,
+              existing.id,
+            )
+        }
+      }
+
+      for (const s of incoming.snippets) {
+        const action = plan.snippets.get(s.id)
+        if (!action || action === 'skip') continue
+        const hostIds = this.normalizeSnippetHostIds(s as StoredSnippet & { hostId?: string })
+          .map((id) => plan.hostIdRemap.get(id))
+          .filter((id): id is string => Boolean(id))
+
+        if (action === 'add') {
+          this.db
+            .prepare(
+              `INSERT INTO snippets (id, name, command, host_ids, tags, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            )
+            .run(
+              s.id,
+              s.name,
+              s.command,
+              JSON.stringify(hostIds),
+              JSON.stringify(s.tags ?? []),
+              s.createdAt,
+              s.updatedAt,
+            )
+        } else {
+          const existing =
+            local.snippets.find((x) => x.id === s.id) ??
+            localSnippetByKey.get(s.name.trim().toLowerCase())
+          if (!existing) continue
+          this.db
+            .prepare(
+              `UPDATE snippets SET name = ?, command = ?, host_ids = ?, tags = ?, updated_at = ? WHERE id = ?`,
+            )
+            .run(
+              s.name,
+              s.command,
+              JSON.stringify(hostIds),
+              JSON.stringify(s.tags ?? []),
+              s.updatedAt,
+              existing.id,
+            )
+        }
+      }
+
+      this.db.exec('COMMIT')
+      this.setMeta('secrets_encrypted', '1')
+      this.createTimedBackup({ force: true })
+    } catch (err) {
+      this.db.exec('ROLLBACK')
+      throw err
+    }
+  }
+
+  importPreview(data: unknown, options: ImportOptions): ImportPreviewResult {
+    const plain = unsealDataFile(data, {
+      backupPassword: options.backupPassword,
+      allowPlaintext: options.allowPlaintext,
+    })
+    this.assertVaultUnlocked()
+    const local = this.exportData()
+    return computeImportPreview(local, plain, options.mode, options.conflict ?? 'skip')
+  }
+
+  previewBackupFile(fileName: string, options: ImportOptions): ImportPreviewResult {
+    const safeName = path.basename(fileName)
+    if (safeName !== fileName || !/^backup-.*\.json$/i.test(safeName)) {
+      throw new Error('无效的备份文件名')
+    }
+    const filePath = path.join(this.backupsDir, safeName)
+    if (!fs.existsSync(filePath)) {
+      throw new Error('备份文件不存在')
+    }
+    const data = this.readDataFile(filePath, {
+      backupPassword: options.backupPassword,
+      allowPlaintext: options.allowPlaintext,
+    })
+    if (!data) throw new Error('备份文件格式不正确')
+    return this.importPreview(data, options)
+  }
+
   getHosts(): StoredHost[] {
+    this.assertVaultUnlocked()
     const rows = this.db.prepare('SELECT * FROM hosts ORDER BY name COLLATE NOCASE').all() as unknown as HostRow[]
     return rows.map((r) => this.mapHost(r))
   }
 
   saveHost(host: Omit<StoredHost, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }): StoredHost {
+    this.assertVaultUnlocked()
     const now = new Date().toISOString()
     if (host.id) {
       const existing = this.db.prepare('SELECT * FROM hosts WHERE id = ?').get(host.id) as unknown as
@@ -1021,11 +1485,13 @@ export class DataStore {
   }
 
   getKeys(): StoredKey[] {
+    this.assertVaultUnlocked()
     const rows = this.db.prepare('SELECT * FROM keys ORDER BY name COLLATE NOCASE').all() as unknown as KeyRow[]
     return rows.map((r) => this.mapKey(r))
   }
 
   saveKey(key: Omit<StoredKey, 'id' | 'createdAt'> & { id?: string }): StoredKey {
+    this.assertVaultUnlocked()
     const now = new Date().toISOString()
     if (key.id) {
       const existing = this.db.prepare('SELECT * FROM keys WHERE id = ?').get(key.id) as unknown as
@@ -1269,20 +1735,28 @@ export class DataStore {
     }
   }
 
-  /** Sealed backup envelope for export / timed backups (app-bound ciphertext). */
-  exportSealedBackup(): EncryptedBackup {
-    return sealDataFile(this.exportData())
+  previewBackupAtPath(filePath: string, options: ImportOptions): ImportPreviewResult {
+    const data = this.readDataFile(filePath, {
+      backupPassword: options.backupPassword,
+      allowPlaintext: options.allowPlaintext,
+    })
+    if (!data) throw new Error('备份文件格式不正确')
+    return this.importPreview(data, options)
   }
 
-  importData(data: unknown): void {
-    const plain = unsealDataFile(data)
-    this.replaceAll({
-      hosts: plain.hosts ?? [],
-      groups: plain.groups ?? [],
-      keys: plain.keys ?? [],
-      portForwards: plain.portForwards ?? [],
-      snippets: plain.snippets ?? [],
+  /** Sealed v3 backup envelope for export / timed backups (portable with master password). */
+  exportSealedBackup(): EncryptedBackupV3 {
+    this.assertVaultUnlocked()
+    return sealDataFile(this.exportData(), this.getVaultSaltB64())
+  }
+
+  importData(data: unknown, options: ImportOptions): void {
+    const plain = unsealDataFile(data, {
+      backupPassword: options.backupPassword,
+      allowPlaintext: options.allowPlaintext,
     })
+    this.assertVaultUnlocked()
+    this.applyImportData(plain, options)
     this.setMeta('secrets_encrypted', '1')
   }
 }

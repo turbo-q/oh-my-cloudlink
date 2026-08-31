@@ -54,6 +54,7 @@ export function TerminalPanel({
   const [searchOpen, setSearchOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [snippetOpen, setSnippetOpen] = useState(false)
+  const [searchFocusNonce, setSearchFocusNonce] = useState(0)
 
   const runSearch = useCallback(
     (direction: 'next' | 'prev') => {
@@ -68,6 +69,7 @@ export function TerminalPanel({
   const openSearch = useCallback(() => {
     setSnippetOpen(false)
     setSearchOpen(true)
+    setSearchFocusNonce((n) => n + 1)
   }, [])
   const closeSearch = useCallback(() => setSearchOpen(false), [])
 
@@ -265,6 +267,7 @@ export function TerminalPanel({
         onClose={closeSearch}
         onSearch={runSearch}
         placeholder={t('terminal.searchPlaceholder')}
+        focusNonce={searchFocusNonce}
       />
       <div className="relative flex-1 min-h-0">
         <TerminalSnippetPicker

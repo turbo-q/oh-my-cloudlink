@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
+import { ImportDialogUi } from './ImportDialogUi'
+import { useImportDialog } from '../hooks/useImportDialog'
 import { useTheme } from '../hooks/useTheme'
 import { useI18n } from '../i18n/I18nProvider'
 import { dateLocaleTag, type LocalePreference } from '../i18n'
+import { isVaultErrorCode } from '../utils/backupCrypto'
 import type { ThemeMode } from '../theme'
 
 interface BackupInfo {
@@ -54,7 +57,8 @@ export function SettingsPanel({ onExport, onImport, onDataRestored }: SettingsPa
     if (
       msg.includes('BACKUP_DECRYPT_FAILED') ||
       msg.includes('BACKUP_INVALID') ||
-      msg.includes('SECRET_CORRUPT')
+      msg.includes('SECRET_CORRUPT') ||
+      msg.includes('BACKUP_PASSWORD_REQUIRED')
     ) {
       return t('settings.restoreFailDecrypt')
     }
@@ -75,6 +79,27 @@ export function SettingsPanel({ onExport, onImport, onDataRestored }: SettingsPa
     void refreshBackups()
   }, [refreshBackups])
 
+  const importDialog = useImportDialog({
+    onApplied: async () => {
+      await onDataRestored()
+      setMessage(t('import.ok'))
+      await refreshBackups()
+    },
+    onNoChanges: () => setMessage(t('import.noChanges')),
+    onError: (msg) => {
+      if (
+        isVaultErrorCode(msg, 'BACKUP_DECRYPT_FAILED') ||
+        isVaultErrorCode(msg, 'BACKUP_INVALID') ||
+        isVaultErrorCode(msg, 'SECRET_CORRUPT') ||
+        isVaultErrorCode(msg, 'BACKUP_PASSWORD_REQUIRED')
+      ) {
+        setMessage(t('import.failDecrypt'))
+      } else {
+        setMessage(restoreErrorMessage({ message: msg } as Error, t('import.fail')))
+      }
+    },
+  })
+
   const handleCreateBackup = async () => {
     setBusy(true)
     setMessage(null)
@@ -90,38 +115,25 @@ export function SettingsPanel({ onExport, onImport, onDataRestored }: SettingsPa
   }
 
   const handleRestoreBackup = async (fileName: string) => {
-    if (!confirm(t('settings.restoreConfirm', { fileName }))) return
-    setBusy(true)
     setMessage(null)
     try {
-      await window.electronAPI.restoreBackup(fileName)
-      await onDataRestored()
-      setMessage(t('settings.restoreOk'))
-      await refreshBackups()
+      await importDialog.openWithTarget({ type: 'backupFile', fileName })
     } catch (err) {
       setMessage(restoreErrorMessage(err, t('settings.restoreFail')))
-    } finally {
-      setBusy(false)
     }
   }
 
   const handleRestoreFromFile = async () => {
-    if (!confirm(t('settings.restoreFileConfirm'))) return
-    setBusy(true)
     setMessage(null)
     try {
-      const ok = await window.electronAPI.restoreBackupFromFile()
-      if (!ok) {
+      const picked = await window.electronAPI.pickBackupFile()
+      if (picked.cancelled) {
         setMessage(t('settings.restoreCancelled'))
         return
       }
-      await onDataRestored()
-      setMessage(t('settings.restoreFileOk'))
-      await refreshBackups()
+      await importDialog.openWithTarget({ type: 'backupPath', filePath: picked.filePath })
     } catch (err) {
       setMessage(restoreErrorMessage(err, t('settings.restoreFileFail')))
-    } finally {
-      setBusy(false)
     }
   }
 
@@ -298,7 +310,7 @@ export function SettingsPanel({ onExport, onImport, onDataRestored }: SettingsPa
                 {t('settings.about')}
               </h3>
               <div className="text-sm text-app-muted space-y-1 rounded-xl border border-app-strong bg-app-card p-5">
-                <p className="text-app font-medium">Oh My CloudLink v0.2.0</p>
+                <p className="text-app font-medium">Oh My CloudLink v0.3.0</p>
                 <p className="text-app-subtle">{t('settings.aboutBlurb')}</p>
               </div>
             </section>
@@ -319,6 +331,8 @@ export function SettingsPanel({ onExport, onImport, onDataRestored }: SettingsPa
           </div>
         </div>
       </div>
+
+      <ImportDialogUi dialog={importDialog} />
     </div>
   )
 }

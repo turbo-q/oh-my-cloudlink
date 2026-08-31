@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import { useAppData } from './hooks/useAppData'
 import { SessionTabBar } from './components/SessionTabBar'
@@ -12,11 +12,17 @@ import { HostFormModal, GroupFormModal, KeyFormModal, DiscoverKeysModal, PortFor
 import { PortForwardsPanel } from './components/PortForwardsPanel'
 import { SnippetsPanel } from './components/SnippetsPanel'
 import { SshConfigConnectModal } from './components/SshConfigConnectModal'
+import { VaultGate } from './components/VaultPasswordModal'
+import { ImportDialogUi } from './components/ImportDialogUi'
+import { useImportDialog } from './hooks/useImportDialog'
 import type { Host, Group, SSHKey, AppSession, DiscoveredKey, PortForward, Snippet, SshConfigHost } from './types'
 import type { AppPanel } from './types/app'
 import { isFileProtocol, isSshHost, getHostFileProtocol, GROUP_COLORS } from './types'
 import { filterHosts, type GroupFilter } from './utils/filterHosts'
+import { isVaultErrorCode } from './utils/backupCrypto'
 import { useI18n } from './i18n/I18nProvider'
+
+type VaultScreen = 'checking' | 'setup' | 'unlock' | 'ready'
 
 type ModalState =
   | { type: 'none' }
@@ -30,6 +36,22 @@ type ModalState =
 
 export default function App() {
   const { t } = useI18n()
+  const [vaultScreen, setVaultScreen] = useState<VaultScreen>('checking')
+
+  useEffect(() => {
+    if (!window.electronAPI?.vaultStatus) {
+      setVaultScreen('ready')
+      return
+    }
+    void window.electronAPI.vaultStatus().then((status) => {
+      if (status.needsSetup) setVaultScreen('setup')
+      else if (status.isLocked) setVaultScreen('unlock')
+      else setVaultScreen('ready')
+    })
+  }, [])
+
+  const vaultReady = vaultScreen === 'ready'
+
   const {
     hosts,
     groups,
@@ -49,8 +71,29 @@ export default function App() {
     saveSnippet,
     deleteSnippet,
     exportData,
-    importData,
-  } = useAppData()
+  } = useAppData({ enabled: vaultReady })
+
+  const importDialog = useImportDialog({
+    onApplied: async () => {
+      await refresh()
+      alert(t('import.ok'))
+    },
+    onNoChanges: () => alert(t('import.noChanges')),
+    onError: (msg) => {
+      if (
+        isVaultErrorCode(msg, 'BACKUP_DECRYPT_FAILED') ||
+        isVaultErrorCode(msg, 'BACKUP_INVALID') ||
+        isVaultErrorCode(msg, 'SECRET_CORRUPT') ||
+        isVaultErrorCode(msg, 'BACKUP_PASSWORD_REQUIRED')
+      ) {
+        alert(t('import.failDecrypt'))
+      } else if (msg) {
+        alert(`${t('import.fail')}: ${msg}`)
+      } else {
+        alert(t('import.fail'))
+      }
+    },
+  })
 
   const [searchQuery, setSearchQuery] = useState('')
   const [groupFilter, setGroupFilter] = useState<GroupFilter>(null)
@@ -187,6 +230,24 @@ export default function App() {
     closeSessionsByIds([sessionId])
   }, [closeSessionsByIds])
 
+  // ⌘W / Ctrl+W — main intercepts before window close; close active session or the window
+  const activeSessionIdRef = useRef(activeSessionId)
+  const closeSessionRef = useRef(closeSession)
+  activeSessionIdRef.current = activeSessionId
+  closeSessionRef.current = closeSession
+
+  useEffect(() => {
+    if (!window.electronAPI?.onCloseTabShortcut) return
+    return window.electronAPI.onCloseTabShortcut(() => {
+      const id = activeSessionIdRef.current
+      if (id) {
+        closeSessionRef.current(id)
+        return
+      }
+      void window.electronAPI.closeWindow()
+    })
+  }, [])
+
   const closeOtherSessions = useCallback((sessionId: string) => {
     closeSessionsByIds(sessions.filter((s) => s.id !== sessionId).map((s) => s.id))
   }, [closeSessionsByIds, sessions])
@@ -306,20 +367,9 @@ export default function App() {
       try {
         const text = await file.text()
         const data = JSON.parse(text)
-        if (!confirm(t('app.importOverwrite'))) return
-        await importData(data)
-        alert(t('app.importOk'))
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : ''
-        if (
-          msg.includes('BACKUP_DECRYPT_FAILED') ||
-          msg.includes('BACKUP_INVALID') ||
-          msg.includes('SECRET_CORRUPT')
-        ) {
-          alert(t('app.importFailDecrypt'))
-        } else {
-          alert(t('app.importFail'))
-        }
+        await importDialog.openWithTarget({ type: 'data', payload: data })
+      } catch {
+        alert(t('import.fail'))
       }
     }
     input.click()
@@ -333,6 +383,22 @@ export default function App() {
         publicKey: key.publicKey,
       })
     }
+  }
+
+  if (vaultScreen === 'checking') {
+    return (
+      <div className="h-screen flex items-center justify-center bg-app text-app-muted">
+        {t('common.loading')}
+      </div>
+    )
+  }
+
+  if (vaultScreen === 'setup') {
+    return <VaultGate mode="setup" onReady={() => setVaultScreen('ready')} />
+  }
+
+  if (vaultScreen === 'unlock') {
+    return <VaultGate mode="unlock" onReady={() => setVaultScreen('ready')} />
   }
 
   if (loading) {
@@ -441,7 +507,6 @@ export default function App() {
                     sessionId={sessionId}
                     hostId={session.hostId}
                     hostName={session.hostName}
-                    protocol={session.protocol as 'sftp' | 'ftp'}
                     active={showSession && activeSessionId === sessionId}
                     hosts={hosts}
                     groups={groups}
@@ -523,6 +588,8 @@ export default function App() {
         onConnect={connectSshConfigHost}
         onClose={() => setModal({ type: 'none' })}
       />
+
+      <ImportDialogUi dialog={importDialog} />
     </div>
   )
 }

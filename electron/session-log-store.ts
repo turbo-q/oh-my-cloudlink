@@ -1,6 +1,7 @@
 import { app } from 'electron'
 import fs from 'fs'
 import path from 'path'
+import { stripScreenClearSequences, ScreenClearSanitizer } from './session-log-sanitize'
 
 export type SessionLogStatus = 'connecting' | 'connected' | 'disconnected' | 'error'
 
@@ -27,12 +28,17 @@ export interface SessionLogHostMeta {
 const MAX_SESSION_LOGS = 20
 const MAX_BYTES_PER_LOG = 2 * 1024 * 1024
 
+/** App session ids are UUID v4 — rejects `..`, separators, and other path tricks. */
+const SESSION_LOG_ID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
 export class SessionLogStore {
   private logsDir: string
   private manifestPath: string
   private manifest: SessionLogMeta[] = []
   private writeStreams = new Map<string, fs.WriteStream>()
   private byteCounts = new Map<string, number>()
+  private clearSanitizers = new Map<string, ScreenClearSanitizer>()
 
   constructor() {
     const userData = app.getPath('userData')
@@ -42,6 +48,16 @@ export class SessionLogStore {
       fs.mkdirSync(this.logsDir, { recursive: true })
     }
     this.loadManifest()
+  }
+
+  private isSafeLogId(id: string): boolean {
+    return typeof id === 'string' && SESSION_LOG_ID_RE.test(id)
+  }
+
+  private assertSafeLogId(id: string): void {
+    if (!this.isSafeLogId(id)) {
+      throw new Error('无效的会话日志 ID')
+    }
   }
 
   private loadManifest(): void {
@@ -54,6 +70,10 @@ export class SessionLogStore {
     } catch {
       this.manifest = []
     }
+    // Drop entries that could not map to a safe log filename (path traversal / garbage).
+    const before = this.manifest.length
+    this.manifest = this.manifest.filter((m) => this.isSafeLogId(m.id))
+    if (this.manifest.length !== before) this.saveManifest()
     // Previous run may have been force-killed while status was still "connected"
     this.finalizeOrphanSessions()
   }
@@ -81,10 +101,18 @@ export class SessionLogStore {
   }
 
   private logFilePath(id: string): string {
-    return path.join(this.logsDir, `${id}.log`)
+    this.assertSafeLogId(id)
+    const root = path.resolve(this.logsDir)
+    const resolved = path.resolve(root, `${id}.log`)
+    const rel = path.relative(root, resolved)
+    if (!rel || rel.startsWith('..') || path.isAbsolute(rel)) {
+      throw new Error('无效的会话日志 ID')
+    }
+    return resolved
   }
 
   startSession(sessionId: string, host: SessionLogHostMeta): void {
+    this.assertSafeLogId(sessionId)
     const now = new Date().toISOString()
     const existing = this.manifest.find((m) => m.id === sessionId)
     if (existing) {
@@ -127,15 +155,32 @@ export class SessionLogStore {
     return this.manifest.find((m) => m.id === sessionId)
   }
 
-  append(sessionId: string, chunk: string): void {
-    if (!chunk) return
-    const meta = this.getMeta(sessionId)
-    if (!meta) return
+  private getClearSanitizer(sessionId: string): ScreenClearSanitizer {
+    let sanitizer = this.clearSanitizers.get(sessionId)
+    if (!sanitizer) {
+      sanitizer = new ScreenClearSanitizer()
+      this.clearSanitizers.set(sessionId, sanitizer)
+    }
+    return sanitizer
+  }
 
+  /** Append PTY output to the session log. Returns the sanitized chunk written (or ''). */
+  append(sessionId: string, chunk: string): string {
+    if (!chunk || !this.isSafeLogId(sessionId)) return ''
+    const meta = this.getMeta(sessionId)
+    if (!meta) return ''
+
+    chunk = this.getClearSanitizer(sessionId).push(chunk)
+    if (!chunk) return ''
+
+    return this.writeSanitized(sessionId, meta, chunk)
+  }
+
+  private writeSanitized(sessionId: string, meta: SessionLogMeta, chunk: string): string {
     let bytes = (this.byteCounts.get(sessionId) ?? meta.byteSize) + Buffer.byteLength(chunk, 'utf-8')
     if (bytes > MAX_BYTES_PER_LOG) {
       const allowed = MAX_BYTES_PER_LOG - (this.byteCounts.get(sessionId) ?? meta.byteSize)
-      if (allowed <= 0) return
+      if (allowed <= 0) return ''
       chunk = chunk.slice(0, allowed)
       bytes = MAX_BYTES_PER_LOG
     }
@@ -152,6 +197,7 @@ export class SessionLogStore {
     meta.byteSize = bytes
     if (meta.status === 'connecting') meta.status = 'connected'
     this.saveManifest()
+    return chunk
   }
 
   updateStatus(sessionId: string, status: SessionLogStatus): void {
@@ -170,6 +216,16 @@ export class SessionLogStore {
   }
 
   private closeStream(sessionId: string): void {
+    const sanitizer = this.clearSanitizers.get(sessionId)
+    if (sanitizer) {
+      const flushed = sanitizer.flush()
+      this.clearSanitizers.delete(sessionId)
+      if (flushed && this.isSafeLogId(sessionId)) {
+        const meta = this.getMeta(sessionId)
+        if (meta) this.writeSanitized(sessionId, meta, flushed)
+      }
+    }
+
     const stream = this.writeStreams.get(sessionId)
     if (stream && !stream.destroyed) {
       stream.end()
@@ -179,21 +235,25 @@ export class SessionLogStore {
   }
 
   list(limit = MAX_SESSION_LOGS): SessionLogMeta[] {
-    return this.manifest.slice(0, limit)
+    return this.manifest.filter((m) => this.isSafeLogId(m.id)).slice(0, limit)
   }
 
   getContent(id: string): string {
+    this.assertSafeLogId(id)
     const filePath = this.logFilePath(id)
     if (!fs.existsSync(filePath)) return ''
-    return fs.readFileSync(filePath, 'utf-8')
+    // Sanitize again so older logs recorded before clear-stripping still keep history on replay.
+    return stripScreenClearSequences(fs.readFileSync(filePath, 'utf-8'))
   }
 
   deleteLog(id: string): boolean {
     const idx = this.manifest.findIndex((m) => m.id === id)
     if (idx < 0) return false
     this.closeStream(id)
-    const filePath = this.logFilePath(id)
-    if (fs.existsSync(filePath)) fs.unlinkSync(filePath)
+    if (this.isSafeLogId(id)) {
+      const filePath = this.logFilePath(id)
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath)
+    }
     this.manifest.splice(idx, 1)
     this.saveManifest()
     return true

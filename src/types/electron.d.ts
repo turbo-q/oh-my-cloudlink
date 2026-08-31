@@ -9,6 +9,7 @@ import type {
   Snippet,
   SshConfigHost,
 } from './index'
+import type { ImportOptions, ImportPreviewResult } from './import'
 
 export interface ElectronAPI {
   getHosts: () => Promise<Host[]>
@@ -21,7 +22,10 @@ export interface ElectronAPI {
   saveKey: (key: Partial<SSHKey> & { name: string; privateKey: string }) => Promise<SSHKey>
   deleteKey: (id: string) => Promise<boolean>
   discoverLocalKeys: () => Promise<DiscoveredKey[]>
-  readKeyFile: (filePath: string) => Promise<DiscoveredKey>
+  pickKeyFile: (options?: {
+    title?: string
+    filters?: { name: string; extensions: string[] }[]
+  }) => Promise<DiscoveredKey | null>
   sshConfigList: () => Promise<SshConfigHost[]>
   sshConfigOpen: () => Promise<boolean>
 
@@ -50,13 +54,19 @@ export interface ElectronAPI {
 
   exportData: () => Promise<{
     format: 'oh-my-cloudlink-backup'
-    version: 2
+    version: 2 | 3
     alg: 'aes-256-gcm'
+    kdf?: 'scrypt'
+    salt?: string
+    kdfParams?: { N: number; r: number; p: number }
     iv: string
     tag: string
     ciphertext: string
   }>
-  importData: (data: unknown) => Promise<boolean>
+  importPreview: (data: unknown, options: ImportOptions) => Promise<ImportPreviewResult>
+  previewBackupFile: (fileName: string, options: ImportOptions) => Promise<ImportPreviewResult>
+  previewBackupAtPath: (filePath: string, options: ImportOptions) => Promise<ImportPreviewResult>
+  importData: (data: unknown, options: ImportOptions) => Promise<boolean>
   listBackups: () => Promise<
     {
       fileName: string
@@ -81,8 +91,22 @@ export interface ElectronAPI {
     portForwards: number
     snippets: number
   }>
-  restoreBackup: (fileName: string) => Promise<boolean>
-  restoreBackupFromFile: () => Promise<boolean>
+  restoreBackup: (fileName: string, options: ImportOptions) => Promise<boolean>
+  pickBackupFile: () => Promise<{ cancelled: true } | { cancelled: false; filePath: string }>
+  restoreBackupFromFile: (backupPassword?: string) => Promise<
+    | { ok: true; cancelled: false }
+    | { ok: false; cancelled: true }
+    | { ok: false; cancelled: false; needPassword: true; filePath: string }
+  >
+  restoreBackupAtPath: (filePath: string, options: ImportOptions) => Promise<boolean>
+
+  vaultStatus: () => Promise<{
+    needsSetup: boolean
+    isLocked: boolean
+    canRememberOnDevice: boolean
+  }>
+  vaultSetup: (password: string) => Promise<boolean>
+  vaultUnlock: (password: string) => Promise<boolean>
 
   openFileDialog: (options?: {
     title?: string
@@ -124,7 +148,7 @@ export interface ElectronAPI {
   sessionLogAppend: (sessionId: string, text: string) => Promise<boolean>
   onLogAppend: (callback: (sessionId: string, chunk: string) => void) => () => void
 
-  fileConnect: (sessionId: string, hostId: string, fileProtocol?: 'sftp' | 'ftp') => Promise<string>
+  fileConnect: (sessionId: string, hostId: string) => Promise<string>
   fileDisconnect: (sessionId: string) => Promise<void>
   fileList: (sessionId: string, dirPath: string) => Promise<RemoteFileEntry[]>
   fileDownload: (sessionId: string, remotePath: string, localPath: string) => Promise<boolean>
@@ -149,6 +173,8 @@ export interface ElectronAPI {
   localList: (dirPath: string) => Promise<RemoteFileEntry[]>
   getPathForFile: (file: File) => string
   setNativeTheme: (source: 'system' | 'light' | 'dark') => Promise<boolean>
+  onCloseTabShortcut: (callback: () => void) => () => void
+  closeWindow: () => Promise<boolean>
 }
 
 declare global {
