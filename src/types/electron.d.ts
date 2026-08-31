@@ -116,10 +116,18 @@ export interface ElectronAPI {
   openDirectoryDialog: (options?: { title?: string }) => Promise<string | null>
   saveFileDialog: (options?: { title?: string; defaultPath?: string }) => Promise<string | null>
 
-  sshConnect: (sessionId: string, hostId: string) => Promise<void>
-  sshConnectConfig: (sessionId: string, target: string) => Promise<void>
-  sshWrite: (sessionId: string, data: string) => Promise<void>
-  sshResize: (sessionId: string, cols: number, rows: number) => Promise<void>
+  sshConnect: (
+    sessionId: string,
+    hostId: string,
+    size?: { cols: number; rows: number },
+  ) => Promise<void>
+  sshConnectConfig: (
+    sessionId: string,
+    target: string,
+    size?: { cols: number; rows: number },
+  ) => Promise<void>
+  sshWrite: (sessionId: string, data: string) => void
+  sshResize: (sessionId: string, cols: number, rows: number) => void
   sshDisconnect: (sessionId: string) => Promise<void>
   onSshData: (callback: (sessionId: string, data: string) => void) => () => void
   onSshClose: (callback: (sessionId: string) => void) => () => void

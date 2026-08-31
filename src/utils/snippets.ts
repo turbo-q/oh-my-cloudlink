@@ -79,5 +79,5 @@ export async function insertSnippetToSession(
     host: options.host,
   })
   const payload = prepareSnippetPayload(expanded, options.run === true)
-  await window.electronAPI.sshWrite(sessionId, payload)
+  window.electronAPI.sshWrite(sessionId, payload)
 }
