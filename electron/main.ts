@@ -361,16 +361,12 @@ function registerIpcHandlers(): void {
     return true
   })
 
-  // 文件传输 (SFTP / FTP)
-  safeHandle(
-    'file:connect',
-    async (_e, sessionId: string, hostId: string, fileProtocol?: 'sftp' | 'ftp') => {
-      const host = dataStore.getHosts().find((h) => h.id === hostId)
-      if (!host) throw new Error('主机不存在')
-      const protocol = fileProtocol ?? (host.protocol === 'ftp' ? 'ftp' : 'sftp')
-      return fileManager.connect(sessionId, host, dataStore.getKeys(), protocol, mainWindow)
-    },
-  )
+  // 文件传输 (SFTP)
+  safeHandle('file:connect', async (_e, sessionId: string, hostId: string) => {
+    const host = dataStore.getHosts().find((h) => h.id === hostId)
+    if (!host) throw new Error('主机不存在')
+    return fileManager.connect(sessionId, host, dataStore.getKeys(), mainWindow)
+  })
 
   safeHandle('file:disconnect', async (_e, sessionId: string) => {
     await fileManager.disconnect(sessionId)

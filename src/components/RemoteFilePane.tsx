@@ -8,7 +8,6 @@ import { useI18n } from '../i18n/I18nProvider'
 interface RemoteFilePaneProps {
   sessionId: string
   hostId: string
-  protocol: 'sftp' | 'ftp'
   hostName?: string
   onStatusChange: (
     sessionId: string,
@@ -21,7 +20,6 @@ interface RemoteFilePaneProps {
 export function RemoteFilePane({
   sessionId,
   hostId,
-  protocol,
   hostName,
   onStatusChange,
   onDisconnect,
@@ -59,7 +57,7 @@ export function RemoteFilePane({
     onStatusChange(sessionId, 'connecting')
 
     void window.electronAPI
-      .fileConnect(sessionId, hostId, protocol)
+      .fileConnect(sessionId, hostId)
       .then((homePath) => {
         if (cancelled) return
         onStatusChange(sessionId, 'connected')
@@ -77,7 +75,7 @@ export function RemoteFilePane({
       cancelled = true
       void window.electronAPI.fileDisconnect(sessionId)
     }
-  }, [sessionId, hostId, protocol, onStatusChange, loadDirectory, t])
+  }, [sessionId, hostId, onStatusChange, loadDirectory, t])
 
   const navigateTo = (entry: RemoteFileEntry) => {
     if (entry.isDirectory) void loadDirectory(entry.path)

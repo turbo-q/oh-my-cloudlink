@@ -162,8 +162,8 @@ const electronAPI = {
   },
 
   // 文件传输
-  fileConnect: (sessionId: string, hostId: string, fileProtocol?: 'sftp' | 'ftp') =>
-    ipcRenderer.invoke('file:connect', sessionId, hostId, fileProtocol) as Promise<string>,
+  fileConnect: (sessionId: string, hostId: string) =>
+    ipcRenderer.invoke('file:connect', sessionId, hostId) as Promise<string>,
   fileDisconnect: (sessionId: string) => ipcRenderer.invoke('file:disconnect', sessionId),
   fileList: (sessionId: string, dirPath: string) =>
     ipcRenderer.invoke('file:list', sessionId, dirPath),

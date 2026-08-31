@@ -489,7 +489,6 @@ export default function App() {
                     sessionId={sessionId}
                     hostId={session.hostId}
                     hostName={session.hostName}
-                    protocol={session.protocol as 'sftp' | 'ftp'}
                     active={showSession && activeSessionId === sessionId}
                     hosts={hosts}
                     groups={groups}

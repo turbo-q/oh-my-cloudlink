@@ -145,7 +145,7 @@ export interface ElectronAPI {
   sessionLogAppend: (sessionId: string, text: string) => Promise<boolean>
   onLogAppend: (callback: (sessionId: string, chunk: string) => void) => () => void
 
-  fileConnect: (sessionId: string, hostId: string, fileProtocol?: 'sftp' | 'ftp') => Promise<string>
+  fileConnect: (sessionId: string, hostId: string) => Promise<string>
   fileDisconnect: (sessionId: string) => Promise<void>
   fileList: (sessionId: string, dirPath: string) => Promise<RemoteFileEntry[]>
   fileDownload: (sessionId: string, remotePath: string, localPath: string) => Promise<boolean>
