@@ -6,6 +6,7 @@ import { WebLinksAddon } from '@xterm/addon-web-links'
 import { getStoredTheme, getTerminalTheme, resolveTheme, THEME_CHANGE_EVENT } from '../theme'
 import type { Host, Snippet } from '../types'
 import { insertSnippetToSession } from '../utils/snippets'
+import { subscribeSshData } from '../utils/sshDataBus'
 import { TerminalSearchBar, useTerminalSearchShortcut } from './TerminalSearchBar'
 import { TerminalSnippetPicker, useTerminalSnippetShortcut } from './TerminalSnippetPicker'
 import { useI18n } from '../i18n/I18nProvider'
@@ -45,6 +46,10 @@ export function TerminalPanel({
   const fitAddonRef = useRef<FitAddon | null>(null)
   const searchAddonRef = useRef<SearchAddon | null>(null)
   const connectedRef = useRef(false)
+  const activeRef = useRef(active)
+  activeRef.current = active
+  /** Drain inactive-tab buffer when this panel becomes visible. */
+  const flushInactiveRef = useRef<(() => void) | null>(null)
   const pendingSnippetRef = useRef(pendingSnippet)
   pendingSnippetRef.current = pendingSnippet
 
@@ -146,9 +151,10 @@ export function TerminalPanel({
       appendLog(banner)
       onStatusChange(sessionId, 'connecting')
 
+      const size = { cols: term.cols, rows: term.rows }
       const connect = sshConfigTarget
-        ? window.electronAPI.sshConnectConfig(sessionId, sshConfigTarget)
-        : window.electronAPI.sshConnect(sessionId, hostId)
+        ? window.electronAPI.sshConnectConfig(sessionId, sshConfigTarget, size)
+        : window.electronAPI.sshConnect(sessionId, hostId, size)
       void connect
         .then(() => {
           if (disposed) return
@@ -156,7 +162,7 @@ export function TerminalPanel({
           onStatusChange(sessionId, 'connected')
           fitAddon.fit()
           const { cols, rows } = term
-          void window.electronAPI.sshResize(sessionId, cols, rows)
+          window.electronAPI.sshResize(sessionId, cols, rows)
 
           const pending = pendingSnippetRef.current
           if (pending) {
@@ -186,11 +192,14 @@ export function TerminalPanel({
 
     term.onData((data) => {
       if (connectedRef.current) {
-        void window.electronAPI.sshWrite(sessionId, data)
+        window.electronAPI.sshWrite(sessionId, data)
       }
     })
 
+    /** Cap background-tab backlog so a hidden `cat` of a huge file cannot blow memory. */
+    const INACTIVE_BUFFER_MAX = 512 * 1024
     let writeBuffer = ''
+    let inactiveBuffer = ''
     let writeRaf = 0
     const flushTerminalWrite = () => {
       if (writeRaf) {
@@ -206,20 +215,35 @@ export function TerminalPanel({
       term.write(chunk)
     }
     const enqueueTerminalWrite = (data: string) => {
+      if (!activeRef.current) {
+        inactiveBuffer += data
+        if (inactiveBuffer.length > INACTIVE_BUFFER_MAX) {
+          inactiveBuffer = inactiveBuffer.slice(-INACTIVE_BUFFER_MAX)
+        }
+        return
+      }
       writeBuffer += data
       if (!writeRaf) {
         writeRaf = requestAnimationFrame(flushTerminalWrite)
       }
     }
+    flushInactiveRef.current = () => {
+      if (!inactiveBuffer || disposed) return
+      writeBuffer += inactiveBuffer
+      inactiveBuffer = ''
+      flushTerminalWrite()
+    }
 
-    const unsubData = window.electronAPI.onSshData((sid, data) => {
-      if (sid === sessionId) enqueueTerminalWrite(data)
-    })
+    const unsubData = subscribeSshData(sessionId, enqueueTerminalWrite)
 
     const unsubClose = window.electronAPI.onSshClose((sid) => {
       if (sid === sessionId) {
         connectedRef.current = false
         onStatusChange(sessionId, 'disconnected')
+        if (inactiveBuffer) {
+          writeBuffer += inactiveBuffer
+          inactiveBuffer = ''
+        }
         flushTerminalWrite()
         const msg = `\r\n\x1b[90m${disconnectedText}\x1b[0m`
         term.writeln(msg)
@@ -231,6 +255,10 @@ export function TerminalPanel({
       if (sid === sessionId) {
         connectedRef.current = false
         onStatusChange(sessionId, 'error', error)
+        if (inactiveBuffer) {
+          writeBuffer += inactiveBuffer
+          inactiveBuffer = ''
+        }
         flushTerminalWrite()
         const msg = `\r\n\x1b[31m${translate(resolveLocale(getStoredLocalePreference()), 'terminal.error', { message: error })}\x1b[0m`
         term.writeln(msg)
@@ -245,14 +273,18 @@ export function TerminalPanel({
 
     window.addEventListener(THEME_CHANGE_EVENT, handleThemeChange)
 
+    let resizeTimer: ReturnType<typeof setTimeout> | null = null
+    const RESIZE_DEBOUNCE_MS = 80
     const handleResize = () => {
-      if (fitAddonRef.current && terminalRef.current) {
-        fitAddonRef.current.fit()
-        const { cols, rows } = terminalRef.current
-        if (connectedRef.current) {
-          void window.electronAPI.sshResize(sessionId, cols, rows)
-        }
-      }
+      if (!fitAddonRef.current || !terminalRef.current) return
+      fitAddonRef.current.fit()
+      const { cols, rows } = terminalRef.current
+      if (!connectedRef.current) return
+      if (resizeTimer) clearTimeout(resizeTimer)
+      resizeTimer = setTimeout(() => {
+        resizeTimer = null
+        window.electronAPI.sshResize(sessionId, cols, rows)
+      }, RESIZE_DEBOUNCE_MS)
     }
 
     window.addEventListener('resize', handleResize)
@@ -262,8 +294,11 @@ export function TerminalPanel({
     return () => {
       disposed = true
       connectedRef.current = false
+      flushInactiveRef.current = null
       if (writeRaf) cancelAnimationFrame(writeRaf)
+      if (resizeTimer) clearTimeout(resizeTimer)
       writeBuffer = ''
+      inactiveBuffer = ''
       window.removeEventListener(THEME_CHANGE_EVENT, handleThemeChange)
       window.removeEventListener('resize', handleResize)
       observer.disconnect()
@@ -279,10 +314,18 @@ export function TerminalPanel({
   }, [sessionId, hostId, sshConfigTarget, onStatusChange])
 
   useEffect(() => {
-    if (active && fitAddonRef.current) {
-      requestAnimationFrame(() => fitAddonRef.current?.fit())
+    if (!active) return
+    flushInactiveRef.current?.()
+    if (fitAddonRef.current) {
+      requestAnimationFrame(() => {
+        fitAddonRef.current?.fit()
+        const term = terminalRef.current
+        if (term && connectedRef.current) {
+          window.electronAPI.sshResize(sessionId, term.cols, term.rows)
+        }
+      })
     }
-  }, [active, searchOpen, snippetOpen])
+  }, [active, searchOpen, snippetOpen, sessionId])
 
   return (
     <div className={`absolute inset-0 flex flex-col min-h-0 bg-app ${active ? 'block' : 'hidden'}`}>

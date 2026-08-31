@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, nativeTheme, shell, type IpcMainInvokeEvent } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog, nativeTheme, shell, type IpcMainEvent, type IpcMainInvokeEvent } from 'electron'
 import fs from 'fs'
 import path from 'path'
 import { ensureAppPaths } from './app-paths'
@@ -73,6 +73,23 @@ function safeHandle(
 ): void {
   ipcMain.removeHandler(channel)
   ipcMain.handle(channel, handler)
+}
+
+function safeOn(
+  channel: string,
+  handler: (event: IpcMainEvent, ...args: any[]) => void,
+): void {
+  ipcMain.removeAllListeners(channel)
+  ipcMain.on(channel, handler)
+}
+
+function parseTerminalSize(raw: unknown): { cols: number; rows: number } | undefined {
+  if (!raw || typeof raw !== 'object') return undefined
+  const o = raw as { cols?: unknown; rows?: unknown }
+  const cols = typeof o.cols === 'number' ? Math.floor(o.cols) : 0
+  const rows = typeof o.rows === 'number' ? Math.floor(o.rows) : 0
+  if (cols < 1 || rows < 1) return undefined
+  return { cols, rows }
 }
 
 function registerIpcHandlers(): void {
@@ -270,83 +287,98 @@ function registerIpcHandlers(): void {
   })
 
   // SSH 连接
-  safeHandle('ssh:connect', async (_e, sessionId: string, hostId: string) => {
-    if (!mainWindow) throw new Error('窗口未就绪')
-    const host = dataStore.getHosts().find((h) => h.id === hostId)
-    if (!host) throw new Error('主机不存在')
+  safeHandle(
+    'ssh:connect',
+    async (_e, sessionId: string, hostId: string, size?: { cols: number; rows: number }) => {
+      if (!mainWindow) throw new Error('窗口未就绪')
+      const host = dataStore.getHosts().find((h) => h.id === hostId)
+      if (!host) throw new Error('主机不存在')
 
-    sessionLogStore.startSession(sessionId, {
-      hostId: host.id,
-      hostName: host.name,
-      hostname: host.hostname,
-      username: host.username,
-    })
+      sessionLogStore.startSession(sessionId, {
+        hostId: host.id,
+        hostName: host.name,
+        hostname: host.hostname,
+        username: host.username,
+      })
 
-    const logHooks = {
-      onOutput: (data: string) => {
-        const logged = sessionLogStore.append(sessionId, data)
-        if (logged) mainWindow?.webContents.send('log:append', sessionId, logged)
-      },
-      onClose: () => sessionLogStore.endSession(sessionId, 'disconnected'),
-      onError: (message: string) => {
-        const logged = sessionLogStore.append(sessionId, `\r\n\x1b[31m[错误] ${message}\x1b[0m\r\n`)
-        if (logged) mainWindow?.webContents.send('log:append', sessionId, logged)
+      const logHooks = {
+        onOutput: (data: string) => {
+          const logged = sessionLogStore.append(sessionId, data)
+          if (logged) mainWindow?.webContents.send('log:append', sessionId, logged)
+        },
+        onClose: () => sessionLogStore.endSession(sessionId, 'disconnected'),
+        onError: (message: string) => {
+          const logged = sessionLogStore.append(sessionId, `\r\n\x1b[31m[错误] ${message}\x1b[0m\r\n`)
+          if (logged) mainWindow?.webContents.send('log:append', sessionId, logged)
+          sessionLogStore.endSession(sessionId, 'error')
+        },
+        onOsDetected: (osId: string) => {
+          if (host.osId === osId) return
+          const updated = dataStore.updateHostOsId(host.id, osId)
+          if (updated) {
+            mainWindow?.webContents.send('host:osUpdated', host.id, osId)
+          }
+        },
+      }
+
+      try {
+        await sshManager.connect(
+          sessionId,
+          { host, keys: dataStore.getKeys() },
+          mainWindow,
+          logHooks,
+          parseTerminalSize(size),
+        )
+        sessionLogStore.updateStatus(sessionId, 'connected')
+      } catch (err) {
         sessionLogStore.endSession(sessionId, 'error')
-      },
-      onOsDetected: (osId: string) => {
-        if (host.osId === osId) return
-        const updated = dataStore.updateHostOsId(host.id, osId)
-        if (updated) {
-          mainWindow?.webContents.send('host:osUpdated', host.id, osId)
-        }
-      },
-    }
+        throw err
+      }
+    },
+  )
 
-    try {
-      await sshManager.connect(
-        sessionId,
-        { host, keys: dataStore.getKeys() },
-        mainWindow,
-        logHooks,
-      )
-      sessionLogStore.updateStatus(sessionId, 'connected')
-    } catch (err) {
-      sessionLogStore.endSession(sessionId, 'error')
-      throw err
-    }
-  })
-
-  safeHandle('ssh:connectConfig', async (_e, sessionId: string, target: string) => {
-    if (!mainWindow) throw new Error('窗口未就绪')
-    const { config } = resolveSshConnectConfig(target)
-    const logHooks = {
-      onOutput: (data: string) => {
-        const logged = sessionLogStore.append(sessionId, data)
-        if (logged) mainWindow?.webContents.send('log:append', sessionId, logged)
-      },
-      onClose: () => sessionLogStore.endSession(sessionId, 'disconnected'),
-      onError: (message: string) => {
-        const logged = sessionLogStore.append(sessionId, `\r\n\x1b[31m[错误] ${message}\x1b[0m\r\n`)
-        if (logged) mainWindow?.webContents.send('log:append', sessionId, logged)
+  safeHandle(
+    'ssh:connectConfig',
+    async (_e, sessionId: string, target: string, size?: { cols: number; rows: number }) => {
+      if (!mainWindow) throw new Error('窗口未就绪')
+      const { config } = resolveSshConnectConfig(target)
+      const logHooks = {
+        onOutput: (data: string) => {
+          const logged = sessionLogStore.append(sessionId, data)
+          if (logged) mainWindow?.webContents.send('log:append', sessionId, logged)
+        },
+        onClose: () => sessionLogStore.endSession(sessionId, 'disconnected'),
+        onError: (message: string) => {
+          const logged = sessionLogStore.append(sessionId, `\r\n\x1b[31m[错误] ${message}\x1b[0m\r\n`)
+          if (logged) mainWindow?.webContents.send('log:append', sessionId, logged)
+          sessionLogStore.endSession(sessionId, 'error')
+        },
+      }
+      try {
+        await sshManager.connectWithConfig(
+          sessionId,
+          config,
+          mainWindow,
+          logHooks,
+          parseTerminalSize(size),
+        )
+        sessionLogStore.updateStatus(sessionId, 'connected')
+      } catch (err) {
         sessionLogStore.endSession(sessionId, 'error')
-      },
-    }
-    try {
-      await sshManager.connectWithConfig(sessionId, config, mainWindow, logHooks)
-      sessionLogStore.updateStatus(sessionId, 'connected')
-    } catch (err) {
-      sessionLogStore.endSession(sessionId, 'error')
-      throw err
-    }
-  })
+        throw err
+      }
+    },
+  )
 
-  safeHandle('ssh:write', (_e, sessionId: string, data: string) => {
-    // Do not log input here — remote PTY echo already arrives via ssh:data / onOutput.
-    // Logging both doubles every typed character (ps → psps).
+  // Fire-and-forget I/O — avoid invoke round-trip on every keystroke / resize
+  safeOn('ssh:write', (_e, sessionId: string, data: string) => {
+    if (typeof sessionId !== 'string' || typeof data !== 'string') return
     sshManager.write(sessionId, data)
   })
 
-  safeHandle('ssh:resize', (_e, sessionId: string, cols: number, rows: number) => {
+  safeOn('ssh:resize', (_e, sessionId: string, cols: number, rows: number) => {
+    if (typeof sessionId !== 'string') return
+    if (typeof cols !== 'number' || typeof rows !== 'number') return
     sshManager.resize(sessionId, cols, rows)
   })
 

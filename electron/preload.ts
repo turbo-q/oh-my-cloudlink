@@ -110,14 +110,16 @@ const electronAPI = {
     ipcRenderer.invoke('dialog:saveFile', options) as Promise<string | null>,
 
   // SSH
-  sshConnect: (sessionId: string, hostId: string) =>
-    ipcRenderer.invoke('ssh:connect', sessionId, hostId),
-  sshConnectConfig: (sessionId: string, target: string) =>
-    ipcRenderer.invoke('ssh:connectConfig', sessionId, target),
-  sshWrite: (sessionId: string, data: string) =>
-    ipcRenderer.invoke('ssh:write', sessionId, data),
-  sshResize: (sessionId: string, cols: number, rows: number) =>
-    ipcRenderer.invoke('ssh:resize', sessionId, cols, rows),
+  sshConnect: (sessionId: string, hostId: string, size?: { cols: number; rows: number }) =>
+    ipcRenderer.invoke('ssh:connect', sessionId, hostId, size),
+  sshConnectConfig: (sessionId: string, target: string, size?: { cols: number; rows: number }) =>
+    ipcRenderer.invoke('ssh:connectConfig', sessionId, target, size),
+  sshWrite: (sessionId: string, data: string) => {
+    ipcRenderer.send('ssh:write', sessionId, data)
+  },
+  sshResize: (sessionId: string, cols: number, rows: number) => {
+    ipcRenderer.send('ssh:resize', sessionId, cols, rows)
+  },
   sshDisconnect: (sessionId: string) => ipcRenderer.invoke('ssh:disconnect', sessionId),
 
   // 连接日志

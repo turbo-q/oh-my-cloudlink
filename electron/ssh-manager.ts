@@ -26,6 +26,11 @@ export interface SshSessionHooks {
   onOsDetected?: (osId: string) => void
 }
 
+export interface SshTerminalSize {
+  cols: number
+  rows: number
+}
+
 export class SshManager {
   private sessions = new Map<string, ActiveSession>()
   /** Bumped on each connect/disconnect to drop stale in-flight handshakes. */
@@ -37,13 +42,14 @@ export class SshManager {
     options: ConnectOptions,
     win: BrowserWindow,
     hooks?: SshSessionHooks,
+    size?: SshTerminalSize,
   ): Promise<void> {
     if (options.host.protocol === 'ftp') {
       throw new Error('FTP 主机请使用 SFTP 菜单进行文件传输')
     }
 
     const config: ConnectConfig = buildSshConnectConfig(options.host, options.keys)
-    return this.connectWithConfig(sessionId, config, win, hooks)
+    return this.connectWithConfig(sessionId, config, win, hooks, size)
   }
 
   async connectWithConfig(
@@ -51,6 +57,7 @@ export class SshManager {
     config: ConnectConfig,
     win: BrowserWindow,
     hooks?: SshSessionHooks,
+    size?: SshTerminalSize,
   ): Promise<void> {
     if (this.sessions.has(sessionId)) {
       return
@@ -88,7 +95,15 @@ export class SshManager {
           if (osId) hooks?.onOsDetected?.(osId)
         })
 
-        client.shell({ term: 'xterm-256color' }, (err, stream) => {
+        const shellOpts: { term: string; cols?: number; rows?: number } = {
+          term: 'xterm-256color',
+        }
+        if (size && size.cols > 0 && size.rows > 0) {
+          shellOpts.cols = size.cols
+          shellOpts.rows = size.rows
+        }
+
+        client.shell(shellOpts, (err, stream) => {
           if (stale()) {
             client.end()
             dropPending()
