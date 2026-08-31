@@ -216,6 +216,14 @@ const electronAPI = {
 
   setNativeTheme: (source: 'system' | 'light' | 'dark') =>
     ipcRenderer.invoke('theme:setSource', source) as Promise<boolean>,
+
+  onCloseTabShortcut: (callback: () => void) => {
+    const handler = () => callback()
+    ipcRenderer.on('shortcut:close-tab', handler)
+    return () => ipcRenderer.removeListener('shortcut:close-tab', handler)
+  },
+
+  closeWindow: () => ipcRenderer.invoke('window:close') as Promise<boolean>,
 }
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPI)

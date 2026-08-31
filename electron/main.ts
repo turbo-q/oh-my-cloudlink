@@ -56,6 +56,15 @@ function createWindow(): void {
   mainWindow.on('closed', () => {
     mainWindow = null
   })
+
+  // ⌘W / Ctrl+W: intercept before OS/menu closes the window; renderer closes the active session tab.
+  mainWindow.webContents.on('before-input-event', (event, input) => {
+    if (input.type !== 'keyDown') return
+    if (input.key.toLowerCase() !== 'w') return
+    if (!(input.meta || input.control) || input.alt || input.shift) return
+    event.preventDefault()
+    mainWindow?.webContents.send('shortcut:close-tab')
+  })
 }
 
 function safeHandle(
@@ -463,6 +472,14 @@ function registerIpcHandlers(): void {
   safeHandle('theme:setSource', (_e, source: 'system' | 'light' | 'dark') => {
     nativeTheme.themeSource = source
     return nativeTheme.shouldUseDarkColors
+  })
+
+  safeHandle('window:close', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.close()
+      return true
+    }
+    return false
   })
 
   console.log('[main] IPC handlers registered (local:home, local:list ready)')

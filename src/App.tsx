@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import { useAppData } from './hooks/useAppData'
 import { SessionTabBar } from './components/SessionTabBar'
@@ -229,6 +229,24 @@ export default function App() {
   const closeSession = useCallback((sessionId: string) => {
     closeSessionsByIds([sessionId])
   }, [closeSessionsByIds])
+
+  // ⌘W / Ctrl+W — main intercepts before window close; close active session or the window
+  const activeSessionIdRef = useRef(activeSessionId)
+  const closeSessionRef = useRef(closeSession)
+  activeSessionIdRef.current = activeSessionId
+  closeSessionRef.current = closeSession
+
+  useEffect(() => {
+    if (!window.electronAPI?.onCloseTabShortcut) return
+    return window.electronAPI.onCloseTabShortcut(() => {
+      const id = activeSessionIdRef.current
+      if (id) {
+        closeSessionRef.current(id)
+        return
+      }
+      void window.electronAPI.closeWindow()
+    })
+  }, [])
 
   const closeOtherSessions = useCallback((sessionId: string) => {
     closeSessionsByIds(sessions.filter((s) => s.id !== sessionId).map((s) => s.id))

@@ -173,6 +173,8 @@ export interface ElectronAPI {
   localList: (dirPath: string) => Promise<RemoteFileEntry[]>
   getPathForFile: (file: File) => string
   setNativeTheme: (source: 'system' | 'light' | 'dark') => Promise<boolean>
+  onCloseTabShortcut: (callback: () => void) => () => void
+  closeWindow: () => Promise<boolean>
 }
 
 declare global {
