@@ -318,7 +318,7 @@ function registerIpcHandlers(): void {
       const host = dataStore.getHosts().find((h) => h.id === hostId)
       if (!host) throw new Error('主机不存在')
       const protocol = fileProtocol ?? (host.protocol === 'ftp' ? 'ftp' : 'sftp')
-      return fileManager.connect(sessionId, host, dataStore.getKeys(), protocol)
+      return fileManager.connect(sessionId, host, dataStore.getKeys(), protocol, mainWindow)
     },
   )
 

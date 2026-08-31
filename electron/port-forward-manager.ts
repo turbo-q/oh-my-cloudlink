@@ -2,6 +2,7 @@ import net from 'net'
 import { BrowserWindow } from 'electron'
 import { Client, type ConnectConfig, type ClientChannel } from 'ssh2'
 import { buildSshConnectConfig } from './auth-config'
+import { attachHostKeyVerification } from './host-key'
 import type { StoredHost, StoredKey, StoredPortForward } from './data-store'
 
 export type ForwardRuntimeStatus = 'stopped' | 'starting' | 'running' | 'error'
@@ -188,6 +189,11 @@ export class PortForwardManager {
       keepaliveInterval: 15000,
       keepaliveCountMax: 3,
     }
+    attachHostKeyVerification(config, {
+      hostname: host.hostname,
+      port: host.port,
+      parentWindow: win,
+    })
 
     const active: ActiveForward = {
       rule,

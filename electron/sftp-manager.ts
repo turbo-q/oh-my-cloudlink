@@ -1,5 +1,6 @@
 import fs from 'fs'
 import path from 'path'
+import type { BrowserWindow } from 'electron'
 import { Client, type SFTPWrapper } from 'ssh2'
 import {
   buildSshConnectConfig,
@@ -10,6 +11,7 @@ import {
   type ConnectOptions,
   type RemoteFileEntry,
 } from './auth-config'
+import { attachHostKeyVerification } from './host-key'
 import {
   countLocalTree,
   type TransferProgressCallback,
@@ -32,12 +34,21 @@ interface TransferState {
 export class SftpManager {
   private sessions = new Map<string, SftpSession>()
 
-  async connect(sessionId: string, options: ConnectOptions): Promise<string> {
+  async connect(
+    sessionId: string,
+    options: ConnectOptions,
+    parentWindow?: BrowserWindow | null,
+  ): Promise<string> {
     if (this.sessions.has(sessionId)) {
       await this.disconnect(sessionId)
     }
 
     const config = buildSshConnectConfig(options.host, options.keys)
+    attachHostKeyVerification(config, {
+      hostname: options.host.hostname,
+      port: options.host.port,
+      parentWindow,
+    })
 
     return new Promise((resolve, reject) => {
       const client = new Client()

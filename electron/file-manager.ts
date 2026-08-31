@@ -3,6 +3,7 @@ import { FtpManager } from './ftp-manager'
 import { SftpManager } from './sftp-manager'
 import type { RemoteFileEntry } from './auth-config'
 import type { TransferProgressCallback } from './transfer-progress'
+import type { BrowserWindow } from 'electron'
 
 interface FileSessionMeta {
   protocol: 'sftp' | 'ftp'
@@ -19,12 +20,13 @@ export class FileManager {
     host: StoredHost,
     keys: StoredKey[],
     fileProtocol?: 'sftp' | 'ftp',
+    parentWindow?: BrowserWindow | null,
   ): Promise<string> {
     const protocol =
       fileProtocol ?? (host.protocol === 'ftp' ? 'ftp' : 'sftp')
 
     if (protocol === 'sftp') {
-      const homePath = await this.sftp.connect(sessionId, { host, keys })
+      const homePath = await this.sftp.connect(sessionId, { host, keys }, parentWindow)
       this.meta.set(sessionId, { protocol: 'sftp', homePath })
       return homePath
     }
