@@ -50,13 +50,16 @@ export interface ElectronAPI {
 
   exportData: () => Promise<{
     format: 'oh-my-cloudlink-backup'
-    version: 2
+    version: 2 | 3
     alg: 'aes-256-gcm'
+    kdf?: 'scrypt'
+    salt?: string
+    kdfParams?: { N: number; r: number; p: number }
     iv: string
     tag: string
     ciphertext: string
   }>
-  importData: (data: unknown) => Promise<boolean>
+  importData: (data: unknown, backupPassword?: string) => Promise<boolean>
   listBackups: () => Promise<
     {
       fileName: string
@@ -81,8 +84,21 @@ export interface ElectronAPI {
     portForwards: number
     snippets: number
   }>
-  restoreBackup: (fileName: string) => Promise<boolean>
-  restoreBackupFromFile: () => Promise<boolean>
+  restoreBackup: (fileName: string, backupPassword?: string) => Promise<boolean>
+  restoreBackupFromFile: (backupPassword?: string) => Promise<
+    | { ok: true; cancelled: false }
+    | { ok: false; cancelled: true }
+    | { ok: false; cancelled: false; needPassword: true; filePath: string }
+  >
+  restoreBackupAtPath: (filePath: string, backupPassword?: string) => Promise<boolean>
+
+  vaultStatus: () => Promise<{
+    needsSetup: boolean
+    isLocked: boolean
+    canRememberOnDevice: boolean
+  }>
+  vaultSetup: (password: string) => Promise<boolean>
+  vaultUnlock: (password: string) => Promise<boolean>
 
   openFileDialog: (options?: {
     title?: string

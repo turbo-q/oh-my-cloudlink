@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { VaultPasswordModal } from './VaultPasswordModal'
 import { useTheme } from '../hooks/useTheme'
 import { useI18n } from '../i18n/I18nProvider'
 import { dateLocaleTag, type LocalePreference } from '../i18n'
@@ -28,6 +29,9 @@ export function SettingsPanel({ onExport, onImport, onDataRestored }: SettingsPa
   const [backups, setBackups] = useState<BackupInfo[]>([])
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
+  const [backupPasswordPrompt, setBackupPasswordPrompt] = useState<{
+    onSubmit: (password: string) => Promise<void>
+  } | null>(null)
 
   const themeOptions: { value: ThemeMode; label: string; description: string }[] = [
     { value: 'system', label: t('settings.themeSystem'), description: t('settings.themeSystemDesc') },
@@ -54,7 +58,8 @@ export function SettingsPanel({ onExport, onImport, onDataRestored }: SettingsPa
     if (
       msg.includes('BACKUP_DECRYPT_FAILED') ||
       msg.includes('BACKUP_INVALID') ||
-      msg.includes('SECRET_CORRUPT')
+      msg.includes('SECRET_CORRUPT') ||
+      msg.includes('BACKUP_PASSWORD_REQUIRED')
     ) {
       return t('settings.restoreFailDecrypt')
     }
@@ -110,14 +115,41 @@ export function SettingsPanel({ onExport, onImport, onDataRestored }: SettingsPa
     setBusy(true)
     setMessage(null)
     try {
-      const ok = await window.electronAPI.restoreBackupFromFile()
-      if (!ok) {
+      const result = await window.electronAPI.restoreBackupFromFile()
+      if (result.cancelled) {
         setMessage(t('settings.restoreCancelled'))
         return
       }
-      await onDataRestored()
-      setMessage(t('settings.restoreFileOk'))
-      await refreshBackups()
+      if ('needPassword' in result && result.needPassword && result.filePath) {
+        const filePath = result.filePath
+        setBusy(false)
+        await new Promise<void>((resolve, reject) => {
+          setBackupPasswordPrompt({
+            onSubmit: async (password) => {
+              try {
+                setBusy(true)
+                await window.electronAPI.restoreBackupAtPath(filePath, password)
+                await onDataRestored()
+                setMessage(t('settings.restoreFileOk'))
+                await refreshBackups()
+                resolve()
+              } catch (retryErr) {
+                reject(retryErr)
+              } finally {
+                setBusy(false)
+              }
+            },
+          })
+        }).catch((retryErr) => {
+          setMessage(restoreErrorMessage(retryErr, t('settings.restoreFileFail')))
+        })
+        return
+      }
+      if (result.ok) {
+        await onDataRestored()
+        setMessage(t('settings.restoreFileOk'))
+        await refreshBackups()
+      }
     } catch (err) {
       setMessage(restoreErrorMessage(err, t('settings.restoreFileFail')))
     } finally {
@@ -319,6 +351,15 @@ export function SettingsPanel({ onExport, onImport, onDataRestored }: SettingsPa
           </div>
         </div>
       </div>
+
+      {backupPasswordPrompt && (
+        <VaultPasswordModal
+          mode="backup"
+          onSuccess={() => setBackupPasswordPrompt(null)}
+          onCancel={() => setBackupPasswordPrompt(null)}
+          onSubmitBackup={backupPasswordPrompt.onSubmit}
+        />
+      )}
     </div>
   )
 }

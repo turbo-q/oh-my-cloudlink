@@ -5,14 +5,39 @@ import { randomUUID } from 'crypto'
 import { DatabaseSync } from 'node:sqlite'
 import { LEGACY_USER_DATA_NAMES } from './app-paths'
 import {
+  createVaultCheckBlob,
   CryptoVaultError,
   decryptSecret,
+  deriveKeyFromPassword,
   encryptSecret,
+  generateSalt,
   isEncryptedSecret,
+  isVaultUnlocked,
+  lockVault,
   sealDataFile,
+  setVaultKey,
   unsealDataFile,
-  type EncryptedBackup,
+  verifyVaultCheckBlob,
+  type EncryptedBackupV3,
 } from './crypto-vault'
+import {
+  clearDeviceWrap,
+  isDeviceWrapAvailable,
+  loadDeviceWrap,
+  saveDeviceWrap,
+} from './vault-device-store'
+
+export interface VaultStatus {
+  needsSetup: boolean
+  isLocked: boolean
+  /** OS keychain can remember unlock on this device (macOS/Windows/libsecret). */
+  canRememberOnDevice: boolean
+}
+
+const META_MASTER_PASSWORD = 'master_password_set'
+const META_VAULT_SALT = 'vault_salt'
+const META_VAULT_CHECK = 'vault_check'
+const MIN_MASTER_PASSWORD_LENGTH = 8
 
 export interface StoredHost {
   id: string
@@ -167,6 +192,7 @@ export class DataStore {
   private userData: string
   private backupsDir: string
   private legacyBackupPath: string
+  private autoUnlockAttempted = false
 
   constructor() {
     const userData = app.getPath('userData')
@@ -190,7 +216,154 @@ export class DataStore {
     this.migrateFromJsonIfNeeded(userData)
     this.migrateSecretsIfNeeded()
     this.seedLegacyBackupIntoTimed()
+  }
+
+  /** Called after setup or unlock — deferred timed backup while vault is locked. */
+  onVaultUnlocked(): void {
     this.createTimedBackup({ force: true })
+  }
+
+  getVaultStatus(): VaultStatus {
+    this.tryAutoUnlockFromDeviceOnce()
+    const needsSetup = this.getMeta(META_MASTER_PASSWORD) !== '1'
+    return {
+      needsSetup,
+      isLocked: !needsSetup && !isVaultUnlocked(),
+      canRememberOnDevice: isDeviceWrapAvailable(),
+    }
+  }
+
+  /** Try silent unlock using OS-protected device wrap (same machine only). */
+  private tryAutoUnlockFromDeviceOnce(): void {
+    if (this.autoUnlockAttempted) return
+    this.autoUnlockAttempted = true
+
+    if (this.getMeta(META_MASTER_PASSWORD) !== '1') return
+    if (isVaultUnlocked()) return
+
+    const key = loadDeviceWrap()
+    if (!key) return
+
+    const check = this.getMeta(META_VAULT_CHECK)
+    if (!check || !verifyVaultCheckBlob(check, key)) {
+      clearDeviceWrap()
+      return
+    }
+
+    setVaultKey(key)
+    this.onVaultUnlocked()
+  }
+
+  private persistDeviceWrap(key: Buffer): void {
+    saveDeviceWrap(key)
+  }
+
+  private assertVaultUnlocked(): void {
+    if (this.getVaultStatus().needsSetup) {
+      throw new CryptoVaultError('VAULT_NEEDS_SETUP')
+    }
+    if (!isVaultUnlocked()) {
+      throw new CryptoVaultError('VAULT_LOCKED')
+    }
+  }
+
+  private getVaultSaltB64(): string {
+    const salt = this.getMeta(META_VAULT_SALT)
+    if (!salt) throw new CryptoVaultError('VAULT_NOT_CONFIGURED')
+    return salt
+  }
+
+  setupMasterPassword(password: string): void {
+    if (this.getMeta(META_MASTER_PASSWORD) === '1') {
+      throw new CryptoVaultError('VAULT_ALREADY_CONFIGURED')
+    }
+    if (password.length < MIN_MASTER_PASSWORD_LENGTH) {
+      throw new CryptoVaultError('VAULT_PASSWORD_TOO_SHORT')
+    }
+
+    const salt = generateSalt()
+    const key = deriveKeyFromPassword(password, salt)
+    setVaultKey(key)
+
+    this.db.exec('BEGIN')
+    try {
+      this.setMeta(META_VAULT_SALT, salt.toString('base64'))
+      this.setMeta(META_VAULT_CHECK, createVaultCheckBlob(key))
+      this.migrateSecretsToPasswordVault()
+      this.setMeta(META_MASTER_PASSWORD, '1')
+      this.setMeta('secrets_encrypted', '1')
+      this.db.exec('COMMIT')
+    } catch (err) {
+      this.db.exec('ROLLBACK')
+      lockVault()
+      throw err
+    }
+
+    this.onVaultUnlocked()
+    this.persistDeviceWrap(key)
+  }
+
+  unlockVault(password: string): boolean {
+    if (this.getVaultStatus().needsSetup) {
+      throw new CryptoVaultError('VAULT_NEEDS_SETUP')
+    }
+
+    const saltB64 = this.getMeta(META_VAULT_SALT)
+    const check = this.getMeta(META_VAULT_CHECK)
+    if (!saltB64 || !check) {
+      throw new CryptoVaultError('VAULT_NOT_CONFIGURED')
+    }
+
+    const key = deriveKeyFromPassword(password, Buffer.from(saltB64, 'base64'))
+    if (!verifyVaultCheckBlob(check, key)) {
+      lockVault()
+      return false
+    }
+
+    setVaultKey(key)
+    this.onVaultUnlocked()
+    this.persistDeviceWrap(key)
+    return true
+  }
+
+  /** Re-encrypt omcl1 / plaintext secrets with the password-derived vault key. */
+  private migrateSecretsToPasswordVault(): void {
+    const hosts = this.db.prepare('SELECT id, password FROM hosts').all() as unknown as {
+      id: string
+      password: string | null
+    }[]
+    const updateHost = this.db.prepare('UPDATE hosts SET password = ? WHERE id = ?')
+    for (const row of hosts) {
+      if (!row.password) continue
+      const plain = decryptSecret(row.password)
+      if (plain !== undefined) {
+        updateHost.run(encryptSecret(plain), row.id)
+      }
+    }
+
+    const keys = this.db
+      .prepare('SELECT id, private_key, passphrase FROM keys')
+      .all() as unknown as {
+      id: string
+      private_key: string
+      passphrase: string | null
+    }[]
+    const updateKey = this.db.prepare(
+      'UPDATE keys SET private_key = ?, passphrase = ? WHERE id = ?',
+    )
+    for (const row of keys) {
+      const privatePlain = decryptSecret(row.private_key)
+      const passPlain =
+        row.passphrase != null && row.passphrase !== ''
+          ? decryptSecret(row.passphrase)
+          : row.passphrase
+      if (privatePlain === undefined) continue
+      updateKey.run(
+        encryptSecret(privatePlain) ?? '',
+        passPlain != null && passPlain !== '' ? encryptSecret(passPlain) : row.passphrase,
+        row.id,
+      )
+    }
   }
 
   /** One-time: promote old data.backup.json into backups/ if folder is empty. */
@@ -491,11 +664,11 @@ export class DataStore {
       })
   }
 
-  private readDataFile(jsonPath: string): DataFile | null {
+  private readDataFile(jsonPath: string, backupPassword?: string): DataFile | null {
     try {
       const raw = fs.readFileSync(jsonPath, 'utf-8')
       const parsed = JSON.parse(raw) as unknown
-      return unsealDataFile(parsed)
+      return unsealDataFile(parsed, backupPassword)
     } catch (err) {
       if (err instanceof CryptoVaultError) throw err
       console.error('[data-store] readDataFile failed:', jsonPath, err)
@@ -504,7 +677,8 @@ export class DataStore {
   }
 
   private writeSealedBackup(filePath: string, data: DataFile): void {
-    const sealed = sealDataFile(data)
+    this.assertVaultUnlocked()
+    const sealed = sealDataFile(data, this.getVaultSaltB64())
     fs.writeFileSync(filePath, JSON.stringify(sealed, null, 2), 'utf-8')
   }
 
@@ -617,7 +791,7 @@ export class DataStore {
       })
   }
 
-  restoreBackupFile(fileName: string): DataFile {
+  restoreBackupFile(fileName: string, backupPassword?: string): DataFile {
     const safeName = path.basename(fileName)
     if (safeName !== fileName || !/^backup-.*\.json$/i.test(safeName)) {
       throw new Error('无效的备份文件名')
@@ -626,11 +800,11 @@ export class DataStore {
     if (!fs.existsSync(filePath)) {
       throw new Error('备份文件不存在')
     }
-    return this.restoreFromAbsolutePath(filePath)
+    return this.restoreFromAbsolutePath(filePath, backupPassword)
   }
 
-  restoreFromAbsolutePath(filePath: string): DataFile {
-    const data = this.readDataFile(filePath)
+  restoreFromAbsolutePath(filePath: string, backupPassword?: string): DataFile {
+    const data = this.readDataFile(filePath, backupPassword)
     if (!data) throw new Error('备份文件格式不正确')
     if (
       data.hosts.length +
@@ -751,6 +925,14 @@ export class DataStore {
     }
   }
 
+  private sealSecretForStorage(value: string | null | undefined): string | null {
+    if (value == null) return null
+    if (value === '') return ''
+    if (isVaultUnlocked()) return encryptSecret(value)
+    if (isEncryptedSecret(value)) return value
+    return value
+  }
+
   private replaceAll(data: DataFile, options?: { skipBackup?: boolean }): void {
     this.db.exec('BEGIN')
     try {
@@ -775,9 +957,9 @@ export class DataStore {
         insertKey.run(
           k.id,
           k.name,
-          encryptSecret(k.privateKey) ?? '',
+          this.sealSecretForStorage(k.privateKey) ?? '',
           k.publicKey ?? null,
-          encryptSecret(k.passphrase ?? null),
+          this.sealSecretForStorage(k.passphrase ?? null),
           k.createdAt,
         )
       }
@@ -797,7 +979,7 @@ export class DataStore {
           h.username,
           h.protocol,
           h.authType,
-          encryptSecret(h.password ?? null),
+          this.sealSecretForStorage(h.password ?? null),
           h.keyId ?? null,
           h.groupId ?? null,
           JSON.stringify(h.tags ?? []),
@@ -856,11 +1038,13 @@ export class DataStore {
   }
 
   getHosts(): StoredHost[] {
+    this.assertVaultUnlocked()
     const rows = this.db.prepare('SELECT * FROM hosts ORDER BY name COLLATE NOCASE').all() as unknown as HostRow[]
     return rows.map((r) => this.mapHost(r))
   }
 
   saveHost(host: Omit<StoredHost, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }): StoredHost {
+    this.assertVaultUnlocked()
     const now = new Date().toISOString()
     if (host.id) {
       const existing = this.db.prepare('SELECT * FROM hosts WHERE id = ?').get(host.id) as unknown as
@@ -1021,11 +1205,13 @@ export class DataStore {
   }
 
   getKeys(): StoredKey[] {
+    this.assertVaultUnlocked()
     const rows = this.db.prepare('SELECT * FROM keys ORDER BY name COLLATE NOCASE').all() as unknown as KeyRow[]
     return rows.map((r) => this.mapKey(r))
   }
 
   saveKey(key: Omit<StoredKey, 'id' | 'createdAt'> & { id?: string }): StoredKey {
+    this.assertVaultUnlocked()
     const now = new Date().toISOString()
     if (key.id) {
       const existing = this.db.prepare('SELECT * FROM keys WHERE id = ?').get(key.id) as unknown as
@@ -1269,13 +1455,15 @@ export class DataStore {
     }
   }
 
-  /** Sealed backup envelope for export / timed backups (app-bound ciphertext). */
-  exportSealedBackup(): EncryptedBackup {
-    return sealDataFile(this.exportData())
+  /** Sealed v3 backup envelope for export / timed backups (portable with master password). */
+  exportSealedBackup(): EncryptedBackupV3 {
+    this.assertVaultUnlocked()
+    return sealDataFile(this.exportData(), this.getVaultSaltB64())
   }
 
-  importData(data: unknown): void {
-    const plain = unsealDataFile(data)
+  importData(data: unknown, backupPassword?: string): void {
+    const plain = unsealDataFile(data, backupPassword)
+    this.assertVaultUnlocked()
     this.replaceAll({
       hosts: plain.hosts ?? [],
       groups: plain.groups ?? [],

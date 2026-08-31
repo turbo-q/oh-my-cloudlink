@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import { useAppData } from './hooks/useAppData'
 import { SessionTabBar } from './components/SessionTabBar'
@@ -12,11 +12,15 @@ import { HostFormModal, GroupFormModal, KeyFormModal, DiscoverKeysModal, PortFor
 import { PortForwardsPanel } from './components/PortForwardsPanel'
 import { SnippetsPanel } from './components/SnippetsPanel'
 import { SshConfigConnectModal } from './components/SshConfigConnectModal'
+import { VaultGate, VaultPasswordModal } from './components/VaultPasswordModal'
 import type { Host, Group, SSHKey, AppSession, DiscoveredKey, PortForward, Snippet, SshConfigHost } from './types'
 import type { AppPanel } from './types/app'
 import { isFileProtocol, isSshHost, getHostFileProtocol, GROUP_COLORS } from './types'
 import { filterHosts, type GroupFilter } from './utils/filterHosts'
+import { backupNeedsPassword, isVaultErrorCode } from './utils/backupCrypto'
 import { useI18n } from './i18n/I18nProvider'
+
+type VaultScreen = 'checking' | 'setup' | 'unlock' | 'ready'
 
 type ModalState =
   | { type: 'none' }
@@ -30,6 +34,26 @@ type ModalState =
 
 export default function App() {
   const { t } = useI18n()
+  const [vaultScreen, setVaultScreen] = useState<VaultScreen>('checking')
+  const importCancelRef = useRef<(() => void) | null>(null)
+  const [backupPasswordPrompt, setBackupPasswordPrompt] = useState<{
+    onSubmit: (password: string) => Promise<void>
+  } | null>(null)
+
+  useEffect(() => {
+    if (!window.electronAPI?.vaultStatus) {
+      setVaultScreen('ready')
+      return
+    }
+    void window.electronAPI.vaultStatus().then((status) => {
+      if (status.needsSetup) setVaultScreen('setup')
+      else if (status.isLocked) setVaultScreen('unlock')
+      else setVaultScreen('ready')
+    })
+  }, [])
+
+  const vaultReady = vaultScreen === 'ready'
+
   const {
     hosts,
     groups,
@@ -50,7 +74,7 @@ export default function App() {
     deleteSnippet,
     exportData,
     importData,
-  } = useAppData()
+  } = useAppData({ enabled: vaultReady })
 
   const [searchQuery, setSearchQuery] = useState('')
   const [groupFilter, setGroupFilter] = useState<GroupFilter>(null)
@@ -307,14 +331,31 @@ export default function App() {
         const text = await file.text()
         const data = JSON.parse(text)
         if (!confirm(t('app.importOverwrite'))) return
-        await importData(data)
-        alert(t('app.importOk'))
+
+        if (backupNeedsPassword(data)) {
+          await new Promise<void>((resolve, reject) => {
+            importCancelRef.current = () => reject(new Error('IMPORT_CANCELLED'))
+            setBackupPasswordPrompt({
+              onSubmit: async (backupPassword) => {
+                await importData(data, backupPassword)
+                alert(t('app.importOk'))
+                importCancelRef.current = null
+                resolve()
+              },
+            })
+          })
+        } else {
+          await importData(data)
+          alert(t('app.importOk'))
+        }
       } catch (err) {
+        if (err instanceof Error && err.message === 'IMPORT_CANCELLED') return
         const msg = err instanceof Error ? err.message : ''
         if (
-          msg.includes('BACKUP_DECRYPT_FAILED') ||
-          msg.includes('BACKUP_INVALID') ||
-          msg.includes('SECRET_CORRUPT')
+          isVaultErrorCode(msg, 'BACKUP_DECRYPT_FAILED') ||
+          isVaultErrorCode(msg, 'BACKUP_INVALID') ||
+          isVaultErrorCode(msg, 'SECRET_CORRUPT') ||
+          isVaultErrorCode(msg, 'BACKUP_PASSWORD_REQUIRED')
         ) {
           alert(t('app.importFailDecrypt'))
         } else {
@@ -333,6 +374,22 @@ export default function App() {
         publicKey: key.publicKey,
       })
     }
+  }
+
+  if (vaultScreen === 'checking') {
+    return (
+      <div className="h-screen flex items-center justify-center bg-app text-app-muted">
+        {t('common.loading')}
+      </div>
+    )
+  }
+
+  if (vaultScreen === 'setup') {
+    return <VaultGate mode="setup" onReady={() => setVaultScreen('ready')} />
+  }
+
+  if (vaultScreen === 'unlock') {
+    return <VaultGate mode="unlock" onReady={() => setVaultScreen('ready')} />
   }
 
   if (loading) {
@@ -523,6 +580,19 @@ export default function App() {
         onConnect={connectSshConfigHost}
         onClose={() => setModal({ type: 'none' })}
       />
+
+      {backupPasswordPrompt && (
+        <VaultPasswordModal
+          mode="backup"
+          onSuccess={() => setBackupPasswordPrompt(null)}
+          onCancel={() => {
+            importCancelRef.current?.()
+            importCancelRef.current = null
+            setBackupPasswordPrompt(null)
+          }}
+          onSubmitBackup={backupPasswordPrompt.onSubmit}
+        />
+      )}
     </div>
   )
 }

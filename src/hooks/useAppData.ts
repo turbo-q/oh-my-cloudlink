@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { Group, Host, PortForward, Snippet, SSHKey, HostOsId } from '../types'
 
-export function useAppData() {
+export function useAppData(options?: { enabled?: boolean }) {
+  const enabled = options?.enabled !== false
   const [hosts, setHosts] = useState<Host[]>([])
   const [groups, setGroups] = useState<Group[]>([])
   const [keys, setKeys] = useState<SSHKey[]>([])
@@ -27,8 +28,8 @@ export function useAppData() {
   }, [])
 
   useEffect(() => {
-    void refresh()
-  }, [refresh])
+    if (enabled) void refresh()
+  }, [refresh, enabled])
 
   useEffect(() => {
     if (!window.electronAPI?.onHostOsUpdated) return
@@ -106,8 +107,8 @@ export function useAppData() {
     return window.electronAPI.exportData()
   }
 
-  const importData = async (data: unknown) => {
-    await window.electronAPI.importData(data)
+  const importData = async (data: unknown, backupPassword?: string) => {
+    await window.electronAPI.importData(data, backupPassword)
     await refresh()
   }
 

@@ -62,12 +62,28 @@ const electronAPI = {
   sshConfigOpen: () => ipcRenderer.invoke('sshConfig:open'),
 
   // 数据导入导出 / 备份恢复
+  vaultStatus: () =>
+    ipcRenderer.invoke('vault:status') as Promise<{
+      needsSetup: boolean
+      isLocked: boolean
+      canRememberOnDevice: boolean
+    }>,
+  vaultSetup: (password: string) => ipcRenderer.invoke('vault:setup', password) as Promise<boolean>,
+  vaultUnlock: (password: string) => ipcRenderer.invoke('vault:unlock', password) as Promise<boolean>,
+
   exportData: () => ipcRenderer.invoke('data:export'),
-  importData: (data: unknown) => ipcRenderer.invoke('data:import', data),
+  importData: (data: unknown, backupPassword?: string) =>
+    ipcRenderer.invoke('data:import', data, backupPassword),
   listBackups: () => ipcRenderer.invoke('data:listBackups'),
   createBackup: () => ipcRenderer.invoke('data:createBackup'),
-  restoreBackup: (fileName: string) => ipcRenderer.invoke('data:restoreBackup', fileName),
-  restoreBackupFromFile: () => ipcRenderer.invoke('data:restoreBackupFromFile'),
+  restoreBackup: (fileName: string, backupPassword?: string) =>
+    ipcRenderer.invoke('data:restoreBackup', fileName, backupPassword),
+  restoreBackupFromFile: (backupPassword?: string) =>
+    ipcRenderer.invoke('data:restoreBackupFromFile', backupPassword) as Promise<
+      { ok: boolean; cancelled: boolean }
+    >,
+  restoreBackupAtPath: (filePath: string, backupPassword?: string) =>
+    ipcRenderer.invoke('data:restoreBackupAtPath', filePath, backupPassword) as Promise<boolean>,
 
   // 系统对话框
   openFileDialog: (options?: { title?: string; multi?: boolean }) =>
