@@ -413,16 +413,15 @@ export function KeyFormModal({ open, keyItem, onSave, onClose }: KeyFormModalPro
   }, [keyItem, open])
 
   const handleImportFromFile = async () => {
-    const files = await window.electronAPI.openFileDialog({
-      title: t('modal.dialogSelectKey'),
-      filters: [
-        { name: t('modal.filterSshKey'), extensions: ['pem', 'key'] },
-        { name: t('modal.filterAllFiles'), extensions: ['*'] },
-      ],
-    })
-    if (!files?.[0]) return
     try {
-      const key = await window.electronAPI.readKeyFile(files[0])
+      const key = await window.electronAPI.pickKeyFile({
+        title: t('modal.dialogSelectKey'),
+        filters: [
+          { name: t('modal.filterSshKey'), extensions: ['pem', 'key'] },
+          { name: t('modal.filterAllFiles'), extensions: ['*'] },
+        ],
+      })
+      if (!key) return
       setName(key.name)
       setPrivateKey(key.privateKey)
       setPublicKey(key.publicKey ?? '')

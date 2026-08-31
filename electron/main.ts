@@ -118,7 +118,28 @@ function registerIpcHandlers(): void {
 
   // 本机密钥发现
   safeHandle('keys:discover', () => discoverLocalKeys())
-  safeHandle('keys:readFile', (_e, filePath: string) => readKeyFromFile(filePath))
+  safeHandle(
+    'keys:pickKeyFile',
+    async (
+      _e,
+      options?: {
+        title?: string
+        filters?: { name: string; extensions: string[] }[]
+      },
+    ) => {
+      if (!mainWindow) return null
+      const result = await dialog.showOpenDialog(mainWindow, {
+        title: options?.title ?? '选择 SSH 私钥',
+        properties: ['openFile'],
+        filters: options?.filters ?? [
+          { name: 'SSH 私钥', extensions: ['pem', 'key'] },
+          { name: '所有文件', extensions: ['*'] },
+        ],
+      })
+      if (result.canceled || !result.filePaths[0]) return null
+      return readKeyFromFile(result.filePaths[0])
+    },
+  )
 
   // ~/.ssh/config 快速连接
   safeHandle('sshConfig:list', () => listSshConfigHosts())

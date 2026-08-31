@@ -22,7 +22,10 @@ export interface ElectronAPI {
   saveKey: (key: Partial<SSHKey> & { name: string; privateKey: string }) => Promise<SSHKey>
   deleteKey: (id: string) => Promise<boolean>
   discoverLocalKeys: () => Promise<DiscoveredKey[]>
-  readKeyFile: (filePath: string) => Promise<DiscoveredKey>
+  pickKeyFile: (options?: {
+    title?: string
+    filters?: { name: string; extensions: string[] }[]
+  }) => Promise<DiscoveredKey | null>
   sshConfigList: () => Promise<SshConfigHost[]>
   sshConfigOpen: () => Promise<boolean>
 

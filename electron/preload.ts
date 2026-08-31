@@ -58,7 +58,10 @@ const electronAPI = {
   },
 
   discoverLocalKeys: () => ipcRenderer.invoke('keys:discover'),
-  readKeyFile: (filePath: string) => ipcRenderer.invoke('keys:readFile', filePath),
+  pickKeyFile: (options?: {
+    title?: string
+    filters?: { name: string; extensions: string[] }[]
+  }) => ipcRenderer.invoke('keys:pickKeyFile', options),
   sshConfigList: () => ipcRenderer.invoke('sshConfig:list'),
   sshConfigOpen: () => ipcRenderer.invoke('sshConfig:open'),
 
