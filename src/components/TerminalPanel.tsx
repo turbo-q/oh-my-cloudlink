@@ -198,6 +198,8 @@ export function TerminalPanel({
 
     /** Cap background-tab backlog so a hidden `cat` of a huge file cannot blow memory. */
     const INACTIVE_BUFFER_MAX = 512 * 1024
+    /** Below this, write xterm immediately so keystroke echo is not delayed a frame. */
+    const INTERACTIVE_WRITE_CHARS = 256
     let writeBuffer = ''
     let inactiveBuffer = ''
     let writeRaf = 0
@@ -223,6 +225,11 @@ export function TerminalPanel({
         return
       }
       writeBuffer += data
+      // Interactive echo: skip RAF so display tracks typing without a frame of lag.
+      if (writeBuffer.length <= INTERACTIVE_WRITE_CHARS) {
+        flushTerminalWrite()
+        return
+      }
       if (!writeRaf) {
         writeRaf = requestAnimationFrame(flushTerminalWrite)
       }

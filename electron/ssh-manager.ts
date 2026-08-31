@@ -4,9 +4,18 @@ import { buildSshConnectConfig, type ConnectOptions } from './auth-config'
 import { attachHostKeyVerification } from './host-key'
 import { detectRemoteOs } from './os-detect'
 
-/** Coalesce PTY chunks before IPC to cut main↔renderer traffic under burst output. */
-const OUTPUT_FLUSH_MS = 12
+/**
+ * Adaptive PTY→IPC flush:
+ * - tiny backlog (keystroke echo): sync flush for minimal latency
+ * - modest backlog: next-tick coalesce (same-tick PTY chunks merge, ~0ms wait)
+ * - large burst (cat / yes): short timer + hard size cap to cut IPC chatter
+ */
+const OUTPUT_INTERACTIVE_CHARS = 128
+const OUTPUT_IMMEDIATE_CHARS = 4 * 1024
+const OUTPUT_FLUSH_MS = 8
 const OUTPUT_FLUSH_CHARS = 32 * 1024
+
+type FlushHandle = ReturnType<typeof setTimeout> | ReturnType<typeof setImmediate>
 
 interface ActiveSession {
   client: Client
@@ -15,7 +24,8 @@ interface ActiveSession {
   hooks?: SshSessionHooks
   pendingChunks: string[]
   pendingChars: number
-  flushTimer: ReturnType<typeof setTimeout> | null
+  flushHandle: FlushHandle | null
+  flushKind: 'immediate' | 'timeout' | null
 }
 
 export interface SshSessionHooks {
@@ -125,7 +135,8 @@ export class SshManager {
             hooks,
             pendingChunks: [],
             pendingChars: 0,
-            flushTimer: null,
+            flushHandle: null,
+            flushKind: null,
           }
           this.sessions.set(sessionId, session)
 
@@ -220,6 +231,39 @@ export class SshManager {
     }
   }
 
+  private clearFlushHandle(session: ActiveSession): void {
+    if (session.flushHandle == null) return
+    if (session.flushKind === 'immediate') {
+      clearImmediate(session.flushHandle as ReturnType<typeof setImmediate>)
+    } else {
+      clearTimeout(session.flushHandle as ReturnType<typeof setTimeout>)
+    }
+    session.flushHandle = null
+    session.flushKind = null
+  }
+
+  private scheduleFlush(sessionId: string, session: ActiveSession, kind: 'immediate' | 'timeout'): void {
+    if (session.flushHandle != null) {
+      if (session.flushKind === kind) return
+      // Upgrade immediate → timeout when backlog grows into burst territory.
+      this.clearFlushHandle(session)
+    }
+    session.flushKind = kind
+    if (kind === 'immediate') {
+      session.flushHandle = setImmediate(() => {
+        session.flushHandle = null
+        session.flushKind = null
+        this.flushOutput(sessionId)
+      })
+    } else {
+      session.flushHandle = setTimeout(() => {
+        session.flushHandle = null
+        session.flushKind = null
+        this.flushOutput(sessionId)
+      }, OUTPUT_FLUSH_MS)
+    }
+  }
+
   private enqueueOutput(sessionId: string, text: string): void {
     const session = this.sessions.get(sessionId)
     if (!session || !text) return
@@ -232,22 +276,25 @@ export class SshManager {
       return
     }
 
-    if (session.flushTimer == null) {
-      session.flushTimer = setTimeout(() => {
-        session.flushTimer = null
-        this.flushOutput(sessionId)
-      }, OUTPUT_FLUSH_MS)
+    // Keystroke echo / short replies: paint as soon as PTY delivers.
+    if (session.pendingChars <= OUTPUT_INTERACTIVE_CHARS) {
+      this.flushOutput(sessionId)
+      return
     }
+
+    if (session.pendingChars <= OUTPUT_IMMEDIATE_CHARS) {
+      this.scheduleFlush(sessionId, session, 'immediate')
+      return
+    }
+
+    this.scheduleFlush(sessionId, session, 'timeout')
   }
 
   private flushOutput(sessionId: string): void {
     const session = this.sessions.get(sessionId)
     if (!session) return
 
-    if (session.flushTimer != null) {
-      clearTimeout(session.flushTimer)
-      session.flushTimer = null
-    }
+    this.clearFlushHandle(session)
 
     if (session.pendingChunks.length === 0) return
 
@@ -255,10 +302,11 @@ export class SshManager {
     session.pendingChunks = []
     session.pendingChars = 0
 
-    session.hooks?.onOutput?.(text)
+    // Deliver to the terminal first — session logging must not delay echo.
     if (!session.win.isDestroyed()) {
       session.win.webContents.send('ssh:data', sessionId, text)
     }
+    session.hooks?.onOutput?.(text)
   }
 
   private bumpGeneration(sessionId: string): number {
