@@ -125,7 +125,8 @@ npm run lint         # oxlint
 - **组件**：现有面板模式（`*Panel.tsx`），优先扩展而非新造平行体系
 - **Tailwind**：跟现有 utility / `index.css` 变量；不要引入另一套设计系统
 - **类型**：改 IPC 必须同步 `preload.ts` 与 `electron.d.ts`
-- **范围**：只改任务相关文件；不顺手大重构、不主动写未要求的 markdown（文档任务除外）
+- **范围**：只改任务相关文件；不顺手大重构
+- **导读对齐**：功能性修改或约定变更时，同步更新 [`docs/AGENTS.md`](./AGENTS.md)（见下「持续对齐」）
 
 ## Git / 提交
 
@@ -152,6 +153,20 @@ macOS Rust/NSView 终端 spike 主要在 **`opt/speed`** 等分支（`native-ter
 
 在 `dev` / 默认产品路径上改终端时，优先动 xterm + `terminalSearch` / WebGL，不要假设 native-term 一定在树里。
 
+## 持续对齐（维护本导读）
+
+`docs/AGENTS.md` 是给后续 Agent 的项目地图，**须与代码保持同步**：
+
+| 改动类型 | 是否更新本文件 |
+|----------|----------------|
+| 新功能 / 行为变更、架构或目录职责变化 | **要** |
+| IPC / preload API、数据路径、日志 / 加密策略 | **要** |
+| 终端默认路径、热路径、打包必须知道的产物 | **要** |
+| 纯 UI 文案、无关紧要的局部 bugfix | 一般不必 |
+| 仅改本文件或其它 docs 的文档任务 | 按需 |
+
+更新原则：只改过时段落，保持短、可执行；细节仍指向源码与专题 `docs/`。Cursor 规则 `.cursor/rules/read-agents-doc.mdc` 强制「先读 + 改完对齐」。
+
 ## 改动前检查清单
 
 1. 影响主进程还是渲染进程？IPC / 类型是否要一起改？
@@ -160,6 +175,7 @@ macOS Rust/NSView 终端 spike 主要在 **`opt/speed`** 等分支（`native-ter
 4. 是否误用另一套 userData 路径解释「数据丢了」？
 5. 终端搜索 / WebGL / MessagePort：读现有 util，勿重复造轮子
 6. 提交与 push：确认用户意愿
+7. **本轮功能性 / 约定变更是否已反映到 `docs/AGENTS.md`？**
 
 ## 推荐阅读顺序
 
@@ -176,4 +192,5 @@ macOS Rust/NSView 终端 spike 主要在 **`opt/speed`** 等分支（`native-ter
 - 在多标签间滥用 WebGL `clearTextureAtlas()`（共享 atlas 会串台）
 - 把 secrets、本机密钥、用户 `userData` 打进仓库
 - 为「整洁」做与任务无关的大范围格式化 / 重命名
+- 功能性改完却不更新 `docs/AGENTS.md`，导致后续 Agent 按过时约定改代码
 - 未经验证就声称开发与安装包「一定」使用不同数据目录（先核对 `oh-my-cloudlink` 路径）
