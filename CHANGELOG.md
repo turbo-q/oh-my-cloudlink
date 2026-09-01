@@ -6,9 +6,14 @@
 
 ## [Unreleased]
 
+### 变更
+
+- **终端性能 Phase A/B 起步**：xterm WebGL 渲染（失败自动回退）；会话日志 `log:append` 节流；SSH 高流量 I/O 默认 MessagePort（失败回退 IPC）。路线图见 `docs/TERMINAL_PERF_ROADMAP.md`
+
 ### 计划中
 
 - Windows / Linux 安装包
+- 终端性能 Phase B 完善 / Phase C UtilityProcess（见 `docs/TERMINAL_PERF_ROADMAP.md`）
 
 ---
 

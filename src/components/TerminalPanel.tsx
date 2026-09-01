@@ -6,7 +6,8 @@ import { WebLinksAddon } from '@xterm/addon-web-links'
 import { getStoredTheme, getTerminalTheme, resolveTheme, THEME_CHANGE_EVENT } from '../theme'
 import type { Host, Snippet } from '../types'
 import { insertSnippetToSession } from '../utils/snippets'
-import { subscribeSshData } from '../utils/sshDataBus'
+import { attachTerminalWebgl } from '../utils/attachTerminalWebgl'
+import { subscribeSshData, writeSshData } from '../utils/sshDataBus'
 import { TerminalSearchBar, useTerminalSearchShortcut } from './TerminalSearchBar'
 import { TerminalSnippetPicker, useTerminalSnippetShortcut } from './TerminalSnippetPicker'
 import { useI18n } from '../i18n/I18nProvider'
@@ -133,6 +134,7 @@ export function TerminalPanel({
     term.loadAddon(searchAddon)
     term.loadAddon(new WebLinksAddon())
     term.open(containerRef.current)
+    const disposeWebgl = attachTerminalWebgl(term)
     fitAddon.fit()
 
     terminalRef.current = term
@@ -192,7 +194,7 @@ export function TerminalPanel({
 
     term.onData((data) => {
       if (connectedRef.current) {
-        window.electronAPI.sshWrite(sessionId, data)
+        writeSshData(sessionId, data)
       }
     })
 
@@ -312,6 +314,7 @@ export function TerminalPanel({
       unsubData()
       unsubClose()
       unsubError()
+      disposeWebgl()
       void window.electronAPI.sshDisconnect(sessionId)
       term.dispose()
       terminalRef.current = null
