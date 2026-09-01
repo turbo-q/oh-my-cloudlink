@@ -1,0 +1,14 @@
+---
+description: 动手前须先阅读 docs/AGENTS.md，建立项目基本认知
+alwaysApply: true
+---
+
+# 先读项目导读
+
+在对本仓库做任何代码调研、设计或修改之前：
+
+1. **先阅读** [`docs/AGENTS.md`](docs/AGENTS.md)（根目录 `AGENTS.md` 仅为入口指针）。
+2. 至少理解：主进程 vs 渲染进程边界、userData 路径、SSH 终端热路径、i18n / IPC 约定、提交与「不要做」项。
+3. 若任务涉及终端性能或实验特性，再按该文档「推荐阅读顺序」打开对应 `docs/` 与源码。
+
+未阅读 `docs/AGENTS.md` 时，不要假设目录职责、数据路径或终端实现细节。
