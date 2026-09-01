@@ -3,6 +3,7 @@ import { Client, type ConnectConfig, type ClientChannel } from 'ssh2'
 import { buildSshConnectConfig, type ConnectOptions } from './auth-config'
 import { attachHostKeyVerification } from './host-key'
 import { detectRemoteOs } from './os-detect'
+import { tryPostSshData, unbindSshIoPort } from './ssh-io-ports'
 
 /**
  * Adaptive PTY→IPC flush:
@@ -303,7 +304,8 @@ export class SshManager {
     session.pendingChars = 0
 
     // Deliver to the terminal first — session logging must not delay echo.
-    if (!session.win.isDestroyed()) {
+    // Prefer MessagePort (Phase B); fall back to ipc send.
+    if (!tryPostSshData(sessionId, text) && !session.win.isDestroyed()) {
       session.win.webContents.send('ssh:data', sessionId, text)
     }
     session.hooks?.onOutput?.(text)
@@ -329,6 +331,7 @@ export class SshManager {
   private cleanup(sessionId: string): void {
     // Always flush coalesced PTY output before dropping the session (disconnect timeout, etc.).
     this.flushOutput(sessionId)
+    unbindSshIoPort(sessionId)
     this.sessions.delete(sessionId)
   }
 }

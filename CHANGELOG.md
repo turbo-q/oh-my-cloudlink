@@ -9,6 +9,25 @@
 ### 计划中
 
 - Windows / Linux 安装包
+- 终端性能 Phase C UtilityProcess（见 `docs/TERMINAL_PERF_ROADMAP.md`）
+
+---
+
+## [0.3.2] - 2026-09-01
+
+### 变更
+
+- **终端性能 Phase A/B**：xterm WebGL 渲染（context loss / 初始化失败自动回退 Canvas）；会话日志 `log:append` 约 80ms 节流，进一步离开热路径；SSH 高流量 I/O 默认 MessagePort（失败回退 IPC）。路线图见 `docs/TERMINAL_PERF_ROADMAP.md`
+
+### 发布产物
+
+| 文件 | 说明 |
+|------|------|
+| `OhMyCloudLink-0.3.2-arm64.dmg` | macOS 安装镜像（Apple Silicon） |
+| `OhMyCloudLink-0.3.2-arm64.zip` | macOS 应用包压缩包 |
+
+> **macOS 提示「已损坏」**：未签名导致的 Gatekeeper 拦截，执行  
+> `xattr -cr "/Applications/oh-my-cloudlink.app"` 后再打开即可。
 
 ---
 
