@@ -325,7 +325,7 @@ export function SettingsPanel({ onExport, onImport, onDataRestored }: SettingsPa
                 {t('settings.about')}
               </h3>
               <div className="text-sm text-app-muted space-y-1 rounded-xl border border-app-strong bg-app-card p-5">
-                <p className="text-app font-medium">Oh My CloudLink v0.3.2</p>
+                <p className="text-app font-medium">Oh My CloudLink v0.3.3-alpha.1</p>
                 <p className="text-app-subtle">{t('settings.aboutBlurb')}</p>
               </div>
             </section>

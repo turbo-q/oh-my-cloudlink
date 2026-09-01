@@ -6,14 +6,29 @@
 
 ## [Unreleased]
 
-### 变更
-
-- **终端性能 Phase E spike（macOS）**：可选 Native 终端渲染（Rust NSView + `alacritty_terminal`），设置中切换；失败回退 WebGL。见 `docs/NATIVE_TERM_SPIKE.md`
-
 ### 计划中
 
 - Windows / Linux 安装包
 - 终端性能 Phase C UtilityProcess（见 `docs/TERMINAL_PERF_ROADMAP.md`）
+
+---
+
+## [0.3.3-alpha.1] - 2026-09-01
+
+### 变更
+
+- **终端性能 Phase E spike（macOS）**：可选 Native 终端渲染（Rust NSView + `alacritty_terminal`），设置中切换；失败回退 WebGL。见 `docs/NATIVE_TERM_SPIKE.md`
+- 打包纳入 `native-term` 运行时（`asarUnpack`），packaged 下设置可选 Native
+
+### 发布产物
+
+| 文件 | 说明 |
+|------|------|
+| `OhMyCloudLink-0.3.3-alpha.1-arm64.dmg` | macOS 安装镜像（Apple Silicon） |
+| `OhMyCloudLink-0.3.3-alpha.1-arm64.zip` | macOS 应用包压缩包 |
+
+> **macOS 提示「已损坏」**：未签名导致的 Gatekeeper 拦截，执行  
+> `xattr -cr "/Applications/oh-my-cloudlink.app"` 后再打开即可。
 
 ---
 
