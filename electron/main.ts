@@ -12,6 +12,8 @@ import { PortForwardManager } from './port-forward-manager'
 import { discoverLocalKeys, readKeyFromFile } from './key-discovery'
 import { SessionLogStore } from './session-log-store'
 import { getSshConfigPath, listSshConfigHosts, resolveSshConnectConfig } from './ssh-config'
+import { clearLogAppend, enqueueLogAppend, flushLogAppend } from './log-append-bus'
+import { bindSshIoPort, setSshIoWriteHandler, unbindAllSshIoPorts } from './ssh-io-ports'
 
 // Must run before DataStore reads userData (keep path ASCII-only)
 ensureAppPaths()
@@ -25,6 +27,44 @@ const sshManager = new SshManager()
 const fileManager = new FileManager()
 const localFileManager = new LocalFileManager()
 const portForwardManager = new PortForwardManager()
+
+setSshIoWriteHandler((sessionId, data) => {
+  sshManager.write(sessionId, data)
+})
+
+function emitLogAppend(sessionId: string, chunk: string): void {
+  if (!chunk || !mainWindow || mainWindow.isDestroyed()) return
+  mainWindow.webContents.send('log:append', sessionId, chunk)
+}
+
+function makeSessionLogHooks(sessionId: string, extras?: {
+  onOsDetected?: (osId: string) => void
+}): {
+  onOutput: (data: string) => void
+  onClose: () => void
+  onError: (message: string) => void
+  onOsDetected?: (osId: string) => void
+} {
+  return {
+    onOutput: (data: string) => {
+      const logged = sessionLogStore.append(sessionId, data)
+      if (logged) enqueueLogAppend(sessionId, logged, emitLogAppend)
+    },
+    onClose: () => {
+      flushLogAppend(sessionId, emitLogAppend)
+      clearLogAppend(sessionId)
+      sessionLogStore.endSession(sessionId, 'disconnected')
+    },
+    onError: (message: string) => {
+      const logged = sessionLogStore.append(sessionId, `\r\n\x1b[31m[错误] ${message}\x1b[0m\r\n`)
+      if (logged) enqueueLogAppend(sessionId, logged, emitLogAppend)
+      flushLogAppend(sessionId, emitLogAppend)
+      clearLogAppend(sessionId)
+      sessionLogStore.endSession(sessionId, 'error')
+    },
+    onOsDetected: extras?.onOsDetected,
+  }
+}
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -301,17 +341,7 @@ function registerIpcHandlers(): void {
         username: host.username,
       })
 
-      const logHooks = {
-        onOutput: (data: string) => {
-          const logged = sessionLogStore.append(sessionId, data)
-          if (logged) mainWindow?.webContents.send('log:append', sessionId, logged)
-        },
-        onClose: () => sessionLogStore.endSession(sessionId, 'disconnected'),
-        onError: (message: string) => {
-          const logged = sessionLogStore.append(sessionId, `\r\n\x1b[31m[错误] ${message}\x1b[0m\r\n`)
-          if (logged) mainWindow?.webContents.send('log:append', sessionId, logged)
-          sessionLogStore.endSession(sessionId, 'error')
-        },
+      const logHooks = makeSessionLogHooks(sessionId, {
         onOsDetected: (osId: string) => {
           if (host.osId === osId) return
           const updated = dataStore.updateHostOsId(host.id, osId)
@@ -319,7 +349,7 @@ function registerIpcHandlers(): void {
             mainWindow?.webContents.send('host:osUpdated', host.id, osId)
           }
         },
-      }
+      })
 
       try {
         await sshManager.connect(
@@ -329,6 +359,7 @@ function registerIpcHandlers(): void {
           logHooks,
           parseTerminalSize(size),
         )
+        bindSshIoPort(sessionId, mainWindow)
         sessionLogStore.updateStatus(sessionId, 'connected')
       } catch (err) {
         sessionLogStore.endSession(sessionId, 'error')
@@ -342,18 +373,7 @@ function registerIpcHandlers(): void {
     async (_e, sessionId: string, target: string, size?: { cols: number; rows: number }) => {
       if (!mainWindow) throw new Error('窗口未就绪')
       const { config } = resolveSshConnectConfig(target)
-      const logHooks = {
-        onOutput: (data: string) => {
-          const logged = sessionLogStore.append(sessionId, data)
-          if (logged) mainWindow?.webContents.send('log:append', sessionId, logged)
-        },
-        onClose: () => sessionLogStore.endSession(sessionId, 'disconnected'),
-        onError: (message: string) => {
-          const logged = sessionLogStore.append(sessionId, `\r\n\x1b[31m[错误] ${message}\x1b[0m\r\n`)
-          if (logged) mainWindow?.webContents.send('log:append', sessionId, logged)
-          sessionLogStore.endSession(sessionId, 'error')
-        },
-      }
+      const logHooks = makeSessionLogHooks(sessionId)
       try {
         await sshManager.connectWithConfig(
           sessionId,
@@ -362,6 +382,7 @@ function registerIpcHandlers(): void {
           logHooks,
           parseTerminalSize(size),
         )
+        bindSshIoPort(sessionId, mainWindow)
         sessionLogStore.updateStatus(sessionId, 'connected')
       } catch (err) {
         sessionLogStore.endSession(sessionId, 'error')
@@ -419,7 +440,7 @@ function registerIpcHandlers(): void {
   })
   safeHandle('sessionLog:append', (_e, sessionId: string, text: string) => {
     const logged = sessionLogStore.append(sessionId, text)
-    if (logged) mainWindow?.webContents.send('log:append', sessionId, logged)
+    if (logged) enqueueLogAppend(sessionId, logged, emitLogAppend)
     return true
   })
 
@@ -545,6 +566,7 @@ app.on('before-quit', () => {
   dataStore.close()
   sessionLogStore.close()
   portForwardManager.stopAll()
+  unbindAllSshIoPorts()
   sshManager.disconnectAll()
   fileManager.disconnectAll()
 })

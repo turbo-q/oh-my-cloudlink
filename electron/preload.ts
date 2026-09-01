@@ -230,4 +230,15 @@ const electronAPI = {
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPI)
 
+// Forward SSH I/O MessagePort into the page (contextIsolation-safe).
+ipcRenderer.on('ssh:io-port', (event, payload: { sessionId: string }) => {
+  const port = event.ports[0]
+  if (!port || !payload?.sessionId) return
+  window.postMessage(
+    { type: 'oh-my-cloudlink:ssh-io-port', sessionId: payload.sessionId },
+    '*',
+    [port],
+  )
+})
+
 export type ElectronAPI = typeof electronAPI

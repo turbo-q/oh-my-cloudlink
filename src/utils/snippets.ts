@@ -1,4 +1,5 @@
 import type { AppSession, Host, Snippet } from '../types'
+import { writeSshData } from './sshDataBus'
 
 /** Prepare snippet text for PTY: newlines → CR; optionally append Enter. */
 export function prepareSnippetPayload(command: string, run: boolean): string {
@@ -79,5 +80,5 @@ export async function insertSnippetToSession(
     host: options.host,
   })
   const payload = prepareSnippetPayload(expanded, options.run === true)
-  window.electronAPI.sshWrite(sessionId, payload)
+  writeSshData(sessionId, payload)
 }
