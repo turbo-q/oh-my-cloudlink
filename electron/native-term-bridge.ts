@@ -66,21 +66,32 @@ function focusWebContents(): void {
 function loadBinding(): NativeTermBinding | null {
   if (binding) return binding
   if (process.platform !== 'darwin') return null
-  try {
-    // dist-electron/native-term-bridge.js → ../native-term
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    binding = require(path.join(__dirname, '..', 'native-term')) as NativeTermBinding
-    if (!binding.isAvailable()) {
-      console.warn('[native-term] addon reports unavailable:', binding.loadError?.())
-      binding = null
-      return null
+
+  // Dev: <repo>/dist-electron → ../native-term
+  // Packaged: app.asar/dist-electron → ../native-term (may be asar.unpacked)
+  const candidates = [
+    path.join(__dirname, '..', 'native-term'),
+    path.join(process.resourcesPath, 'app.asar.unpacked', 'native-term'),
+  ]
+
+  const errors: string[] = []
+  for (const dir of candidates) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const mod = require(dir) as NativeTermBinding
+      if (!mod?.isAvailable?.()) {
+        errors.push(`${dir}: ${mod?.loadError?.() ?? 'unavailable'}`)
+        continue
+      }
+      binding = mod
+      return binding
+    } catch (err) {
+      errors.push(`${dir}: ${err instanceof Error ? err.message : String(err)}`)
     }
-    return binding
-  } catch (err) {
-    console.warn('[native-term] failed to load addon:', err)
-    binding = null
-    return null
   }
+  console.warn('[native-term] failed to load addon:', errors.join(' | '))
+  binding = null
+  return null
 }
 
 export function isNativeTermAvailable(): boolean {

@@ -21,6 +21,8 @@ npm run build:native-term
 
 产物：`native-term/native-term.darwin-arm64.node`（或对应 arch）。
 
+`npm run package` / `bun run package` 会先编 native-term，并把 `native-term/{index.js,*.node,…}` 打进 asar，且 `asarUnpack` 解出 `.node`（否则设置里 Native 会因 `termNativeAvailable=false` 被禁用）。
+
 ## 启用
 
 1. 设置 → **终端渲染（实验）** → **Native（macOS spike）**

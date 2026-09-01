@@ -17,7 +17,7 @@
     "preview": "vite preview",
     "lint": "oxlint",
     "icons": "bash scripts/generate-icons.sh",
-    "package": "npm run build && electron-builder"
+    "package": "npm run build:native-term && npm run build && electron-builder"
   },
   "dependencies": {
     "@xterm/addon-fit": "^0.11.0",
@@ -60,7 +60,20 @@
       "main.cjs",
       "dist/**/*",
       "dist-electron/**/*",
-      "package.json"
+      "package.json",
+      {
+        "from": "native-term",
+        "to": "native-term",
+        "filter": [
+          "index.js",
+          "index.d.ts",
+          "package.json",
+          "*.node"
+        ]
+      }
+    ],
+    "asarUnpack": [
+      "native-term/**"
     ],
     "extraMetadata": {
       "name": "oh-my-cloudlink"
