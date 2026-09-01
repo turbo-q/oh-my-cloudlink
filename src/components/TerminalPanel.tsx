@@ -8,6 +8,12 @@ import type { Host, Snippet } from '../types'
 import { insertSnippetToSession } from '../utils/snippets'
 import { attachTerminalWebgl } from '../utils/attachTerminalWebgl'
 import { subscribeSshData, writeSshData } from '../utils/sshDataBus'
+import {
+  applyTerminalSearchTheme,
+  endTerminalSearch,
+  patchTerminalSearchForeground,
+  runTerminalFind,
+} from '../utils/terminalSearch'
 import { TerminalSearchBar, useTerminalSearchShortcut } from './TerminalSearchBar'
 import { TerminalSnippetPicker, useTerminalSnippetShortcut } from './TerminalSnippetPicker'
 import { useI18n } from '../i18n/I18nProvider'
@@ -61,13 +67,14 @@ export function TerminalPanel({
   const [query, setQuery] = useState('')
   const [snippetOpen, setSnippetOpen] = useState(false)
   const [searchFocusNonce, setSearchFocusNonce] = useState(0)
+  const searchOpenRef = useRef(false)
+  searchOpenRef.current = searchOpen
 
   const runSearch = useCallback(
     (direction: 'next' | 'prev') => {
       const addon = searchAddonRef.current
       if (!addon || !query.trim()) return
-      if (direction === 'next') addon.findNext(query, { caseSensitive: false })
-      else addon.findPrevious(query, { caseSensitive: false })
+      runTerminalFind(addon, query, direction)
     },
     [query],
   )
@@ -76,8 +83,13 @@ export function TerminalPanel({
     setSnippetOpen(false)
     setSearchOpen(true)
     setSearchFocusNonce((n) => n + 1)
+    const term = terminalRef.current
+    if (term) applyTerminalSearchTheme(term)
   }, [])
-  const closeSearch = useCallback(() => setSearchOpen(false), [])
+  const closeSearch = useCallback(() => {
+    endTerminalSearch(searchAddonRef.current, terminalRef.current)
+    setSearchOpen(false)
+  }, [])
 
   const openSnippet = useCallback(() => {
     setSearchOpen(false)
@@ -126,7 +138,9 @@ export function TerminalPanel({
       fontFamily: '"JetBrains Mono", "SF Mono", Menlo, Monaco, "Courier New", monospace',
       theme: getTerminalTheme(resolveTheme(getStoredTheme())),
       allowProposedApi: true,
+      overviewRulerWidth: 12,
     })
+    patchTerminalSearchForeground(term)
 
     const fitAddon = new FitAddon()
     const searchAddon = new SearchAddon()
@@ -277,6 +291,10 @@ export function TerminalPanel({
 
     const handleThemeChange = (event: Event) => {
       const { resolved } = (event as CustomEvent<{ resolved: 'light' | 'dark' }>).detail
+      if (searchOpenRef.current) {
+        applyTerminalSearchTheme(term)
+        return
+      }
       term.options.theme = getTerminalTheme(resolved)
     }
 

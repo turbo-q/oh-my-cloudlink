@@ -6,6 +6,12 @@ import { WebLinksAddon } from '@xterm/addon-web-links'
 import { getStoredTheme, getTerminalTheme, resolveTheme, THEME_CHANGE_EVENT } from '../theme'
 import { TerminalSearchBar, useTerminalSearchShortcut } from './TerminalSearchBar'
 import { useI18n } from '../i18n/I18nProvider'
+import {
+  applyTerminalSearchTheme,
+  endTerminalSearch,
+  patchTerminalSearchForeground,
+  runTerminalFind,
+} from '../utils/terminalSearch'
 import 'xterm/css/xterm.css'
 
 interface LogViewerProps {
@@ -26,13 +32,14 @@ export function LogViewer({ logId, title, live = false }: LogViewerProps) {
   const [searchOpen, setSearchOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [searchFocusNonce, setSearchFocusNonce] = useState(0)
+  const searchOpenRef = useRef(false)
+  searchOpenRef.current = searchOpen
 
   const runSearch = useCallback(
     (direction: 'next' | 'prev') => {
       const addon = searchAddonRef.current
       if (!addon || !query.trim()) return
-      if (direction === 'next') addon.findNext(query, { caseSensitive: false })
-      else addon.findPrevious(query, { caseSensitive: false })
+      runTerminalFind(addon, query, direction)
     },
     [query],
   )
@@ -40,8 +47,13 @@ export function LogViewer({ logId, title, live = false }: LogViewerProps) {
   const openSearch = useCallback(() => {
     setSearchOpen(true)
     setSearchFocusNonce((n) => n + 1)
+    const term = terminalRef.current
+    if (term) applyTerminalSearchTheme(term)
   }, [])
-  const closeSearch = useCallback(() => setSearchOpen(false), [])
+  const closeSearch = useCallback(() => {
+    endTerminalSearch(searchAddonRef.current, terminalRef.current)
+    setSearchOpen(false)
+  }, [])
 
   useTerminalSearchShortcut(Boolean(logId), searchOpen, openSearch, closeSearch)
 
@@ -57,7 +69,9 @@ export function LogViewer({ logId, title, live = false }: LogViewerProps) {
       fontFamily: '"JetBrains Mono", "SF Mono", Menlo, Monaco, "Courier New", monospace',
       theme: getTerminalTheme(resolveTheme(getStoredTheme())),
       allowProposedApi: true,
+      overviewRulerWidth: 12,
     })
+    patchTerminalSearchForeground(term)
 
     const fitAddon = new FitAddon()
     const searchAddon = new SearchAddon()
@@ -73,6 +87,10 @@ export function LogViewer({ logId, title, live = false }: LogViewerProps) {
 
     const handleThemeChange = (event: Event) => {
       const { resolved } = (event as CustomEvent<{ resolved: 'light' | 'dark' }>).detail
+      if (searchOpenRef.current) {
+        applyTerminalSearchTheme(term)
+        return
+      }
       term.options.theme = getTerminalTheme(resolved)
     }
     window.addEventListener(THEME_CHANGE_EVENT, handleThemeChange)
