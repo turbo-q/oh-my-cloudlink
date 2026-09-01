@@ -357,7 +357,8 @@ export function TerminalPanel({
           onClose={closeSnippet}
           onInsert={handleInsertSnippet}
         />
-        <div ref={containerRef} className="absolute inset-0 p-2" tabIndex={0} />
+        {/* Keep an equal gutter on every side; xterm measures this inset box. */}
+        <div ref={containerRef} className="absolute inset-1" tabIndex={0} />
       </div>
     </div>
   )
