@@ -6,6 +6,11 @@ import { useI18n } from '../i18n/I18nProvider'
 import { dateLocaleTag, type LocalePreference } from '../i18n'
 import { isVaultErrorCode } from '../utils/backupCrypto'
 import type { ThemeMode } from '../theme'
+import {
+  getTerminalRendererPreference,
+  setTerminalRendererPreference,
+  type TerminalRendererMode,
+} from '../utils/terminalRenderer'
 
 interface BackupInfo {
   fileName: string
@@ -31,6 +36,16 @@ export function SettingsPanel({ onExport, onImport, onDataRestored }: SettingsPa
   const [backups, setBackups] = useState<BackupInfo[]>([])
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
+  const [termRenderer, setTermRenderer] = useState<TerminalRendererMode>(() =>
+    getTerminalRendererPreference(),
+  )
+  const [nativeAvailable, setNativeAvailable] = useState(false)
+
+  useEffect(() => {
+    void window.electronAPI.termNativeAvailable().then(setNativeAvailable).catch(() => {
+      setNativeAvailable(false)
+    })
+  }, [])
 
   const themeOptions: { value: ThemeMode; label: string; description: string }[] = [
     { value: 'system', label: t('settings.themeSystem'), description: t('settings.themeSystemDesc') },
@@ -312,6 +327,39 @@ export function SettingsPanel({ onExport, onImport, onDataRestored }: SettingsPa
               <div className="text-sm text-app-muted space-y-1 rounded-xl border border-app-strong bg-app-card p-5">
                 <p className="text-app font-medium">Oh My CloudLink v0.3.2</p>
                 <p className="text-app-subtle">{t('settings.aboutBlurb')}</p>
+              </div>
+            </section>
+
+            <section>
+              <h3 className="text-sm font-medium text-app-muted uppercase tracking-wider mb-4">
+                {t('settings.terminalRenderer')}
+              </h3>
+              <div className="rounded-xl border border-app-strong bg-app-card p-5 space-y-3">
+                <p className="text-sm text-app-muted">{t('settings.terminalRendererHelp')}</p>
+                <div className="flex flex-wrap gap-2">
+                  {(
+                    [
+                      { value: 'webgl', label: t('settings.terminalRendererWebgl') },
+                      { value: 'native', label: t('settings.terminalRendererNative') },
+                    ] as const
+                  ).map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      disabled={opt.value === 'native' && !nativeAvailable}
+                      onClick={() => {
+                        setTerminalRendererPreference(opt.value)
+                        setTermRenderer(opt.value)
+                        setMessage(t('settings.terminalRendererReload'))
+                      }}
+                      className={`btn-secondary px-4 py-2 ${
+                        termRenderer === opt.value ? 'ring-2 ring-emerald-400/60' : ''
+                      } disabled:opacity-40`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
               </div>
             </section>
 

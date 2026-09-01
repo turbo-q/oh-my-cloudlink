@@ -29,6 +29,14 @@ export function SessionTabRenameModal({
 
   useEffect(() => {
     if (!open) return
+    window.electronAPI.termNativeSetChromeOverlay?.(true)
+    return () => {
+      window.electronAPI.termNativeSetChromeOverlay?.(false)
+    }
+  }, [open])
+
+  useEffect(() => {
+    if (!open) return
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') onClose()
     }

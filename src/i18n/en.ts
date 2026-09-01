@@ -162,6 +162,12 @@ export const en: Messages = {
     import: 'Import',
     about: 'About',
     aboutBlurb: 'SSH / SFTP connection manager inspired by Termius',
+    terminalRenderer: 'Terminal renderer (experimental)',
+    terminalRendererHelp:
+      'Default WebGL (xterm). On macOS, try Native (Rust NSView) to compare typing latency. Applies to new tabs; falls back automatically on failure.',
+    terminalRendererWebgl: 'WebGL (default)',
+    terminalRendererNative: 'Native (macOS spike)',
+    terminalRendererReload: 'Saved — open a new terminal tab to verify',
     roadmap: 'Roadmap',
     roadmapItems: {
       ssh: 'SSH terminal',

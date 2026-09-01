@@ -158,6 +158,12 @@ export const zh = {
     import: '导入配置',
     about: '关于',
     aboutBlurb: '类 Termius 的 SSH / SFTP 连接管理工具',
+    terminalRenderer: '终端渲染（实验）',
+    terminalRendererHelp:
+      '默认 WebGL（xterm）。macOS 可切换 Native（Rust NSView）对比跟手感；新开标签后生效。失败自动回退。',
+    terminalRendererWebgl: 'WebGL（默认）',
+    terminalRendererNative: 'Native（macOS spike）',
+    terminalRendererReload: '已保存，请新开终端标签验证',
     roadmap: '路线图',
     roadmapItems: {
       ssh: 'SSH 终端连接',

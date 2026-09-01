@@ -6,6 +6,10 @@
 
 ## [Unreleased]
 
+### 变更
+
+- **终端性能 Phase E spike（macOS）**：可选 Native 终端渲染（Rust NSView + `alacritty_terminal`），设置中切换；失败回退 WebGL。见 `docs/NATIVE_TERM_SPIKE.md`
+
 ### 计划中
 
 - Windows / Linux 安装包

@@ -1,0 +1,26 @@
+{
+  "name": "@oh-my-cloudlink/native-term",
+  "version": "0.1.0",
+  "private": true,
+  "description": "macOS native terminal view for Oh My CloudLink (Phase E spike)",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "napi": {
+    "binaryName": "native-term",
+    "targets": [
+      "aarch64-apple-darwin",
+      "x86_64-apple-darwin"
+    ]
+  },
+  "scripts": {
+    "build": "napi build --platform --release",
+    "build:debug": "napi build --platform",
+    "build:electron": "node ./build-electron.mjs"
+  },
+  "devDependencies": {
+    "@napi-rs/cli": "^3.8.6"
+  },
+  "engines": {
+    "node": ">= 18"
+  }
+}

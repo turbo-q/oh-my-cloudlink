@@ -32,7 +32,7 @@
 | **B** | MessagePort 直连（旁路冗长 IPC 序列化路径） | 降按键与回显延迟 | 中 | **原型已通（IPC 回退）** |
 | **C** | UtilityProcess 承载 ssh2 | 多会话/大输出不堵 UI 主进程 | 中高 | 规划 |
 | **D** | 可选 Local Echo（默认关） | 高 RTT 场景体感 | 中（交互债） | 暂缓 |
-| **E** | 原生/混合引擎（可选） | 逼近系统终端上限 | 很高 | 产品决策 |
+| **E** | 原生/混合引擎（可选） | 逼近系统终端上限 | 很高 | **macOS 原型进行中**（见 `docs/NATIVE_TERM_SPIKE.md`） |
 
 参考实现：
 
@@ -113,7 +113,7 @@ Renderer ←─ MessagePort ─→ Main(ssh-manager)
 若 Phase B/C 后仍不满足：
 
 1. **接受 Electron 上限**，对标 Tabby/VS Code Remote  
-2. **混合**：UI Electron，终端区嵌原生 view（维护成本高）  
+2. **混合**：UI Electron，终端区嵌原生 view — **macOS spike 已起步**（`native-term/` + 设置切换；细节见 [`NATIVE_TERM_SPIKE.md`](./NATIVE_TERM_SPIKE.md)）  
 3. **双客户端**：极致性能版 Tauri/原生；CloudLink 保留管理/SFTP
 
 ---

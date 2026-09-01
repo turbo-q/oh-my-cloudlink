@@ -8,8 +8,10 @@ import type { Host, Snippet } from '../types'
 import { insertSnippetToSession } from '../utils/snippets'
 import { attachTerminalWebgl } from '../utils/attachTerminalWebgl'
 import { subscribeSshData, writeSshData } from '../utils/sshDataBus'
+import { getTerminalRendererPreference } from '../utils/terminalRenderer'
 import { TerminalSearchBar, useTerminalSearchShortcut } from './TerminalSearchBar'
 import { TerminalSnippetPicker, useTerminalSnippetShortcut } from './TerminalSnippetPicker'
+import { NativeTerminalPanel } from './NativeTerminalPanel'
 import { useI18n } from '../i18n/I18nProvider'
 import { getStoredLocalePreference, resolveLocale, translate } from '../i18n'
 import 'xterm/css/xterm.css'
@@ -24,11 +26,57 @@ interface TerminalPanelProps {
   active: boolean
   hosts: Host[]
   snippets: Snippet[]
-  onStatusChange: (sessionId: string, status: 'connecting' | 'connected' | 'disconnected' | 'error', error?: string) => void
+  onStatusChange: (
+    sessionId: string,
+    status: 'connecting' | 'connected' | 'disconnected' | 'error',
+    error?: string,
+  ) => void
   onPendingSnippetConsumed?: () => void
 }
 
-export function TerminalPanel({
+export function TerminalPanel(props: TerminalPanelProps) {
+  const [mode, setMode] = useState<'pending' | 'webgl' | 'native'>('pending')
+  const onNativeFailed = useCallback(() => setMode('webgl'), [])
+
+  useEffect(() => {
+    let cancelled = false
+    const pick = async () => {
+      const pref = getTerminalRendererPreference()
+      if (pref === 'native') {
+        try {
+          const available = await window.electronAPI.termNativeAvailable()
+          if (available) {
+            // Probe attach up-front so ObjC/load failures fall back before mount.
+            const attached = await window.electronAPI.termNativeAttach()
+            if (!cancelled && attached) {
+              setMode('native')
+              return
+            }
+          }
+        } catch (err) {
+          console.warn('[terminal] native probe failed, using webgl', err)
+        }
+      }
+      if (!cancelled) setMode('webgl')
+    }
+    void pick()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  if (mode === 'pending') {
+    return <div className={`absolute inset-0 bg-app ${props.active ? 'block' : 'hidden'}`} />
+  }
+
+  if (mode === 'native') {
+    return <NativeTerminalPanel {...props} onNativeFailed={onNativeFailed} />
+  }
+
+  return <WebglTerminalPanel {...props} />
+}
+
+function WebglTerminalPanel({
   sessionId,
   hostId,
   hostName,
@@ -49,7 +97,6 @@ export function TerminalPanel({
   const connectedRef = useRef(false)
   const activeRef = useRef(active)
   activeRef.current = active
-  /** Drain inactive-tab buffer when this panel becomes visible. */
   const flushInactiveRef = useRef<(() => void) | null>(null)
   const pendingSnippetRef = useRef(pendingSnippet)
   pendingSnippetRef.current = pendingSnippet
@@ -145,52 +192,61 @@ export function TerminalPanel({
       ? window.electronAPI.sessionLogPrepareConfig(sessionId, sshConfigTarget)
       : window.electronAPI.sessionLogPrepare(sessionId, hostId)
 
-    void prepareLog.then(() => {
-      if (disposed) return
+    void prepareLog
+      .then(() => {
+        if (disposed) return
 
-      const banner = `\x1b[38;2;16;185;129mOh My CloudLink\x1b[0m — ${connectingText}\r\n`
-      term.writeln(banner)
-      appendLog(banner)
-      onStatusChange(sessionId, 'connecting')
+        const banner = `\x1b[38;2;16;185;129mOh My CloudLink\x1b[0m — ${connectingText}\r\n`
+        term.writeln(banner)
+        appendLog(banner)
+        onStatusChange(sessionId, 'connecting')
 
-      const size = { cols: term.cols, rows: term.rows }
-      const connect = sshConfigTarget
-        ? window.electronAPI.sshConnectConfig(sessionId, sshConfigTarget, size)
-        : window.electronAPI.sshConnect(sessionId, hostId, size)
-      void connect
-        .then(() => {
-          if (disposed) return
-          connectedRef.current = true
-          onStatusChange(sessionId, 'connected')
-          fitAddon.fit()
-          const { cols, rows } = term
-          window.electronAPI.sshResize(sessionId, cols, rows)
+        const size = { cols: term.cols, rows: term.rows }
+        const connect = sshConfigTarget
+          ? window.electronAPI.sshConnectConfig(sessionId, sshConfigTarget, size)
+          : window.electronAPI.sshConnect(sessionId, hostId, size)
+        void connect
+          .then(() => {
+            if (disposed) return
+            connectedRef.current = true
+            onStatusChange(sessionId, 'connected')
+            fitAddon.fit()
+            const { cols, rows } = term
+            window.electronAPI.sshResize(sessionId, cols, rows)
 
-          const pending = pendingSnippetRef.current
-          if (pending) {
-            const host = hosts.find((h) => h.id === hostId) ?? null
-            void insertSnippetToSession(sessionId, pending.command, {
-              run: pending.run,
-              session: { id: sessionId, hostId, hostName, hostname, protocol: 'ssh', status: 'connected' },
-              host,
-            }).finally(() => {
-              onPendingSnippetConsumedRef.current?.()
-            })
-          }
-        })
-        .catch((err: Error) => {
-          if (disposed) return
-          const fail = `\r\n\x1b[31m${msg('terminal.connectFail', { message: err.message })}\x1b[0m\r\n`
-          term.writeln(fail)
-          appendLog(fail)
-          onStatusChange(sessionId, 'error', err.message)
-        })
-    }).catch((err: Error) => {
-      if (disposed) return
-      const message = err instanceof Error ? err.message : String(err)
-      term.writeln(`\r\n\x1b[31m${msg('terminal.connectFail', { message })}\x1b[0m\r\n`)
-      onStatusChange(sessionId, 'error', message)
-    })
+            const pending = pendingSnippetRef.current
+            if (pending) {
+              const host = hosts.find((h) => h.id === hostId) ?? null
+              void insertSnippetToSession(sessionId, pending.command, {
+                run: pending.run,
+                session: {
+                  id: sessionId,
+                  hostId,
+                  hostName,
+                  hostname,
+                  protocol: 'ssh',
+                  status: 'connected',
+                },
+                host,
+              }).finally(() => {
+                onPendingSnippetConsumedRef.current?.()
+              })
+            }
+          })
+          .catch((err: Error) => {
+            if (disposed) return
+            const fail = `\r\n\x1b[31m${msg('terminal.connectFail', { message: err.message })}\x1b[0m\r\n`
+            term.writeln(fail)
+            appendLog(fail)
+            onStatusChange(sessionId, 'error', err.message)
+          })
+      })
+      .catch((err: Error) => {
+        if (disposed) return
+        const message = err instanceof Error ? err.message : String(err)
+        term.writeln(`\r\n\x1b[31m${msg('terminal.connectFail', { message })}\x1b[0m\r\n`)
+        onStatusChange(sessionId, 'error', message)
+      })
 
     term.onData((data) => {
       if (connectedRef.current) {
@@ -198,9 +254,7 @@ export function TerminalPanel({
       }
     })
 
-    /** Cap background-tab backlog so a hidden `cat` of a huge file cannot blow memory. */
     const INACTIVE_BUFFER_MAX = 512 * 1024
-    /** Below this, write xterm immediately so keystroke echo is not delayed a frame. */
     const INTERACTIVE_WRITE_CHARS = 256
     let writeBuffer = ''
     let inactiveBuffer = ''
@@ -227,7 +281,6 @@ export function TerminalPanel({
         return
       }
       writeBuffer += data
-      // Interactive echo: skip RAF so display tracks typing without a frame of lag.
       if (writeBuffer.length <= INTERACTIVE_WRITE_CHARS) {
         flushTerminalWrite()
         return
@@ -254,9 +307,9 @@ export function TerminalPanel({
           inactiveBuffer = ''
         }
         flushTerminalWrite()
-        const msg = `\r\n\x1b[90m${disconnectedText}\x1b[0m`
-        term.writeln(msg)
-        appendLog(`${msg}\r\n`)
+        const line = `\r\n\x1b[90m${disconnectedText}\x1b[0m`
+        term.writeln(line)
+        appendLog(`${line}\r\n`)
       }
     })
 
@@ -269,9 +322,9 @@ export function TerminalPanel({
           inactiveBuffer = ''
         }
         flushTerminalWrite()
-        const msg = `\r\n\x1b[31m${translate(resolveLocale(getStoredLocalePreference()), 'terminal.error', { message: error })}\x1b[0m`
-        term.writeln(msg)
-        appendLog(`${msg}\r\n`)
+        const line = `\r\n\x1b[31m${translate(resolveLocale(getStoredLocalePreference()), 'terminal.error', { message: error })}\x1b[0m`
+        term.writeln(line)
+        appendLog(`${line}\r\n`)
       }
     })
 
@@ -321,7 +374,7 @@ export function TerminalPanel({
       fitAddonRef.current = null
       searchAddonRef.current = null
     }
-  }, [sessionId, hostId, sshConfigTarget, onStatusChange])
+  }, [sessionId, hostId, sshConfigTarget, onStatusChange, hosts, hostName, hostname])
 
   useEffect(() => {
     if (!active) return

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, nativeTheme, shell, type IpcMainEvent, type IpcMainInvokeEvent } from 'electron'
+import { app, BrowserWindow, clipboard, ipcMain, dialog, nativeTheme, shell, type IpcMainEvent, type IpcMainInvokeEvent } from 'electron'
 import fs from 'fs'
 import path from 'path'
 import { ensureAppPaths } from './app-paths'
@@ -14,6 +14,33 @@ import { SessionLogStore } from './session-log-store'
 import { getSshConfigPath, listSshConfigHosts, resolveSshConnectConfig } from './ssh-config'
 import { clearLogAppend, enqueueLogAppend, flushLogAppend } from './log-append-bus'
 import { bindSshIoPort, setSshIoWriteHandler, unbindAllSshIoPorts } from './ssh-io-ports'
+import {
+  attachNativeTerm,
+  detachNativeTerm,
+  getNativeKeyboardCaptureSession,
+  isNativeTermAvailable,
+  mapElectronInputToPty,
+  nativeTermCellMetrics,
+  nativeTermClearSearch,
+  nativeTermClearSelection,
+  nativeTermFind,
+  nativeTermFocus,
+  nativeTermGetSelectedText,
+  nativeTermResize,
+  nativeTermScrollToBottom,
+  nativeTermSetActive,
+  nativeTermSetBounds,
+  nativeTermSetChromeOverlay,
+  nativeTermSetTheme,
+  nativeTermSetVisible,
+  nativeTermUiActivate,
+  nativeTermUiDeactivate,
+  registerNativeSession,
+  setNativeKeyboardCapture,
+  setNativeTermWriteHandler,
+  unregisterNativeSession,
+  writeNativeBanner,
+} from './native-term-bridge'
 
 // Must run before DataStore reads userData (keep path ASCII-only)
 ensureAppPaths()
@@ -29,6 +56,9 @@ const localFileManager = new LocalFileManager()
 const portForwardManager = new PortForwardManager()
 
 setSshIoWriteHandler((sessionId, data) => {
+  sshManager.write(sessionId, data)
+})
+setNativeTermWriteHandler((sessionId, data) => {
   sshManager.write(sessionId, data)
 })
 
@@ -94,16 +124,67 @@ function createWindow(): void {
   }
 
   mainWindow.on('closed', () => {
+    detachNativeTerm()
     mainWindow = null
   })
 
-  // ⌘W / Ctrl+W: intercept before OS/menu closes the window; renderer closes the active session tab.
+  // ⌘W / Ctrl+W: close tab. Native terminal: capture keys while session is active
+  // (Chromium keeps focus; NSView keyDown is unreliable under Electron).
   mainWindow.webContents.on('before-input-event', (event, input) => {
     if (input.type !== 'keyDown') return
-    if (input.key.toLowerCase() !== 'w') return
-    if (!(input.meta || input.control) || input.alt || input.shift) return
+
+    if (
+      input.key.toLowerCase() === 'w' &&
+      (input.meta || input.control) &&
+      !input.alt &&
+      !input.shift
+    ) {
+      event.preventDefault()
+      mainWindow?.webContents.send('shortcut:close-tab')
+      return
+    }
+
+    const captureSid = getNativeKeyboardCaptureSession()
+    if (!captureSid) return
+
+    // Copy / paste while native terminal captures keys
+    if ((input.meta || input.control) && !input.alt && !input.shift) {
+      const k = input.key.toLowerCase()
+      if (k === 'c') {
+        const text = nativeTermGetSelectedText()
+        if (text) {
+          event.preventDefault()
+          clipboard.writeText(text)
+          return
+        }
+        // no selection → fall through to Ctrl+C interrupt if control (not meta)
+        if (input.control && !input.meta) {
+          event.preventDefault()
+          nativeTermScrollToBottom(captureSid)
+          sshManager.write(captureSid, '\x03')
+          nativeTermClearSelection()
+          return
+        }
+        return
+      }
+      if (k === 'v') {
+        const text = clipboard.readText()
+        if (text) {
+          event.preventDefault()
+          nativeTermScrollToBottom(captureSid)
+          sshManager.write(captureSid, text.replace(/\r\n/g, '\n').replace(/\n/g, '\r'))
+          nativeTermClearSelection()
+        }
+        return
+      }
+    }
+
+    const pty = mapElectronInputToPty(input)
+    if (pty == null) return
     event.preventDefault()
-    mainWindow?.webContents.send('shortcut:close-tab')
+    nativeTermScrollToBottom(captureSid)
+    nativeTermClearSelection()
+    sshManager.write(captureSid, pty)
   })
 }
 
@@ -535,6 +616,100 @@ function registerIpcHandlers(): void {
     return false
   })
 
+  // Phase E — native terminal (macOS spike)
+  safeHandle('termNative:available', () => isNativeTermAvailable())
+  safeHandle('termNative:attach', () => {
+    if (!mainWindow || mainWindow.isDestroyed()) return false
+    return attachNativeTerm(mainWindow)
+  })
+  safeHandle(
+    'termNative:createSession',
+    (_e, sessionId: string, cols: number, rows: number) => {
+      if (typeof sessionId !== 'string') return false
+      return registerNativeSession(sessionId, Math.floor(cols) || 80, Math.floor(rows) || 24)
+    },
+  )
+  safeHandle('termNative:destroySession', (_e, sessionId: string) => {
+    if (typeof sessionId !== 'string') return false
+    unregisterNativeSession(sessionId)
+    return true
+  })
+  safeOn(
+    'termNative:setBounds',
+    (_e, payload: { x: number; y: number; width: number; height: number; scaleFactor: number }) => {
+      if (!payload || typeof payload !== 'object') return
+      nativeTermSetBounds(
+        Number(payload.x) || 0,
+        Number(payload.y) || 0,
+        Number(payload.width) || 1,
+        Number(payload.height) || 1,
+        Number(payload.scaleFactor) || 1,
+      )
+    },
+  )
+  safeOn('termNative:setVisible', (_e, visible: boolean) => {
+    nativeTermSetVisible(Boolean(visible))
+  })
+  safeOn('termNative:setActive', (_e, sessionId: string | null) => {
+    nativeTermSetActive(typeof sessionId === 'string' ? sessionId : null)
+  })
+  safeOn('termNative:uiActivate', (_e, sessionId: string) => {
+    if (typeof sessionId !== 'string') return
+    nativeTermUiActivate(sessionId)
+  })
+  safeOn('termNative:uiDeactivate', (_e, sessionId: string) => {
+    if (typeof sessionId !== 'string') return
+    nativeTermUiDeactivate(sessionId)
+  })
+  safeOn('termNative:setChromeOverlay', (_e, open: boolean) => {
+    nativeTermSetChromeOverlay(Boolean(open))
+  })
+  safeOn('termNative:focus', () => {
+    nativeTermFocus()
+  })
+  safeOn('termNative:resize', (_e, sessionId: string, cols: number, rows: number) => {
+    if (typeof sessionId !== 'string') return
+    nativeTermResize(sessionId, Math.floor(cols) || 80, Math.floor(rows) || 24)
+  })
+  safeHandle('termNative:cellMetrics', () => nativeTermCellMetrics())
+  safeOn('termNative:write', (_e, sessionId: string, data: string) => {
+    if (typeof sessionId !== 'string' || typeof data !== 'string') return
+    writeNativeBanner(sessionId, data)
+  })
+  safeOn('termNative:setKeyboardCapture', (_e, sessionId: string | null) => {
+    setNativeKeyboardCapture(typeof sessionId === 'string' ? sessionId : null)
+  })
+  safeOn(
+    'termNative:setTheme',
+    (
+      _e,
+      theme: {
+        background: string
+        foreground: string
+        cursor: string
+        black: string
+        red: string
+        green: string
+        yellow: string
+        blue: string
+        magenta: string
+        cyan: string
+        white: string
+      },
+    ) => {
+      if (!theme || typeof theme !== 'object') return
+      nativeTermSetTheme(theme)
+    },
+  )
+  safeHandle('termNative:find', (_e, query: string, forward: boolean) => {
+    if (typeof query !== 'string') return false
+    return nativeTermFind(query, forward !== false)
+  })
+  safeOn('termNative:clearSearch', () => {
+    nativeTermClearSearch()
+    nativeTermClearSelection()
+  })
+
   console.log('[main] IPC handlers registered (local:home, local:list ready)')
 }
 
@@ -567,6 +742,7 @@ app.on('before-quit', () => {
   sessionLogStore.close()
   portForwardManager.stopAll()
   unbindAllSshIoPorts()
+  detachNativeTerm()
   sshManager.disconnectAll()
   fileManager.disconnectAll()
 })

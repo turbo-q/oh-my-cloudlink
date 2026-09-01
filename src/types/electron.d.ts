@@ -183,6 +183,43 @@ export interface ElectronAPI {
   setNativeTheme: (source: 'system' | 'light' | 'dark') => Promise<boolean>
   onCloseTabShortcut: (callback: () => void) => () => void
   closeWindow: () => Promise<boolean>
+
+  termNativeAvailable: () => Promise<boolean>
+  termNativeAttach: () => Promise<boolean>
+  termNativeCreateSession: (sessionId: string, cols: number, rows: number) => Promise<boolean>
+  termNativeDestroySession: (sessionId: string) => Promise<boolean>
+  termNativeSetBounds: (payload: {
+    x: number
+    y: number
+    width: number
+    height: number
+    scaleFactor: number
+  }) => void
+  termNativeSetVisible: (visible: boolean) => void
+  termNativeSetActive: (sessionId: string | null) => void
+  termNativeUiActivate: (sessionId: string) => void
+  termNativeUiDeactivate: (sessionId: string) => void
+  termNativeSetChromeOverlay: (open: boolean) => void
+  termNativeFocus: () => void
+  termNativeResize: (sessionId: string, cols: number, rows: number) => void
+  termNativeCellMetrics: () => Promise<{ width: number; height: number }>
+  termNativeWrite: (sessionId: string, data: string) => void
+  termNativeSetKeyboardCapture: (sessionId: string | null) => void
+  termNativeSetTheme: (theme: {
+    background: string
+    foreground: string
+    cursor: string
+    black: string
+    red: string
+    green: string
+    yellow: string
+    blue: string
+    magenta: string
+    cyan: string
+    white: string
+  }) => void
+  termNativeFind: (query: string, forward: boolean) => Promise<boolean>
+  termNativeClearSearch: () => void
 }
 
 declare global {

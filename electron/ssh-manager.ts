@@ -4,6 +4,7 @@ import { buildSshConnectConfig, type ConnectOptions } from './auth-config'
 import { attachHostKeyVerification } from './host-key'
 import { detectRemoteOs } from './os-detect'
 import { tryPostSshData, unbindSshIoPort } from './ssh-io-ports'
+import { tryFeedNativeTerm } from './native-term-bridge'
 
 /**
  * Adaptive PTY→IPC flush:
@@ -304,8 +305,10 @@ export class SshManager {
     session.pendingChars = 0
 
     // Deliver to the terminal first — session logging must not delay echo.
-    // Prefer MessagePort (Phase B); fall back to ipc send.
-    if (!tryPostSshData(sessionId, text) && !session.win.isDestroyed()) {
+    // Native view (Phase E) → MessagePort (Phase B) → ipc send.
+    if (tryFeedNativeTerm(sessionId, text)) {
+      // painted by native-term
+    } else if (!tryPostSshData(sessionId, text) && !session.win.isDestroyed()) {
       session.win.webContents.send('ssh:data', sessionId, text)
     }
     session.hooks?.onOutput?.(text)

@@ -226,6 +226,72 @@ const electronAPI = {
   },
 
   closeWindow: () => ipcRenderer.invoke('window:close') as Promise<boolean>,
+
+  // Phase E — native terminal spike (macOS)
+  termNativeAvailable: () => ipcRenderer.invoke('termNative:available') as Promise<boolean>,
+  termNativeAttach: () => ipcRenderer.invoke('termNative:attach') as Promise<boolean>,
+  termNativeCreateSession: (sessionId: string, cols: number, rows: number) =>
+    ipcRenderer.invoke('termNative:createSession', sessionId, cols, rows) as Promise<boolean>,
+  termNativeDestroySession: (sessionId: string) =>
+    ipcRenderer.invoke('termNative:destroySession', sessionId) as Promise<boolean>,
+  termNativeSetBounds: (payload: {
+    x: number
+    y: number
+    width: number
+    height: number
+    scaleFactor: number
+  }) => {
+    ipcRenderer.send('termNative:setBounds', payload)
+  },
+  termNativeSetVisible: (visible: boolean) => {
+    ipcRenderer.send('termNative:setVisible', visible)
+  },
+  termNativeSetActive: (sessionId: string | null) => {
+    ipcRenderer.send('termNative:setActive', sessionId)
+  },
+  termNativeUiActivate: (sessionId: string) => {
+    ipcRenderer.send('termNative:uiActivate', sessionId)
+  },
+  termNativeUiDeactivate: (sessionId: string) => {
+    ipcRenderer.send('termNative:uiDeactivate', sessionId)
+  },
+  termNativeSetChromeOverlay: (open: boolean) => {
+    ipcRenderer.send('termNative:setChromeOverlay', open)
+  },
+  termNativeFocus: () => {
+    ipcRenderer.send('termNative:focus')
+  },
+  termNativeResize: (sessionId: string, cols: number, rows: number) => {
+    ipcRenderer.send('termNative:resize', sessionId, cols, rows)
+  },
+  termNativeCellMetrics: () =>
+    ipcRenderer.invoke('termNative:cellMetrics') as Promise<{ width: number; height: number }>,
+  termNativeWrite: (sessionId: string, data: string) => {
+    ipcRenderer.send('termNative:write', sessionId, data)
+  },
+  termNativeSetKeyboardCapture: (sessionId: string | null) => {
+    ipcRenderer.send('termNative:setKeyboardCapture', sessionId)
+  },
+  termNativeSetTheme: (theme: {
+    background: string
+    foreground: string
+    cursor: string
+    black: string
+    red: string
+    green: string
+    yellow: string
+    blue: string
+    magenta: string
+    cyan: string
+    white: string
+  }) => {
+    ipcRenderer.send('termNative:setTheme', theme)
+  },
+  termNativeFind: (query: string, forward: boolean) =>
+    ipcRenderer.invoke('termNative:find', query, forward) as Promise<boolean>,
+  termNativeClearSearch: () => {
+    ipcRenderer.send('termNative:clearSearch')
+  },
 }
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPI)

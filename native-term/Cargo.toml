@@ -1,0 +1,38 @@
+[package]
+name = "native-term"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+napi = { version = "2.16", default-features = false, features = ["napi6"] }
+napi-derive = "2.16"
+parking_lot = "0.12"
+once_cell = "1.21"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+alacritty_terminal = "0.25"
+objc2 = "0.6"
+objc2-foundation = { version = "0.3", features = ["NSGeometry", "NSString", "NSValue", "NSThread"] }
+objc2-app-kit = { version = "0.3", features = [
+  "NSView",
+  "NSWindow",
+  "NSColor",
+  "NSEvent",
+  "NSFont",
+  "NSGraphics",
+  "NSResponder",
+  "NSApplication",
+  "NSTextInputClient",
+] }
+dispatch2 = "0.3"
+
+[build-dependencies]
+napi-build = "2.1"
+
+[profile.release]
+lto = true
+strip = "symbols"

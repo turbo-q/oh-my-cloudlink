@@ -22,6 +22,14 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
+    // Native NSView sits above Chromium; hide it while the menu is open.
+    window.electronAPI.termNativeSetChromeOverlay?.(true)
+    return () => {
+      window.electronAPI.termNativeSetChromeOverlay?.(false)
+    }
+  }, [])
+
+  useEffect(() => {
     const handlePointerDown = (e: MouseEvent) => {
       if (menuRef.current?.contains(e.target as Node)) return
       onClose()
