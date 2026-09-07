@@ -54,7 +54,11 @@ collect_binaries() {
   shopt -u nullglob
 }
 
-mapfile -t BINARIES < <(collect_binaries | sort -u)
+BINARIES=()
+while IFS= read -r line; do
+  [[ -n "$line" ]] || continue
+  BINARIES+=("$line")
+done < <(collect_binaries | sort -u)
 
 if [[ ${#BINARIES[@]} -eq 0 ]]; then
   echo "No release binaries found for ${PREFIX}-* under ${RELEASE_DIR}/"
