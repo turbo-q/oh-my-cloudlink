@@ -230,7 +230,7 @@ export default function App() {
     closeSessionsByIds([sessionId])
   }, [closeSessionsByIds])
 
-  // ⌘W / Ctrl+W — main intercepts before window close; close active session or the window
+  // ⌘W (macOS) / Ctrl+W (Win/Linux) — main intercepts before window close; close active session or the window
   const activeSessionIdRef = useRef(activeSessionId)
   const closeSessionRef = useRef(closeSession)
   activeSessionIdRef.current = activeSessionId

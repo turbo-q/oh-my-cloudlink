@@ -97,11 +97,19 @@ function createWindow(): void {
     mainWindow = null
   })
 
-  // ⌘W / Ctrl+W: intercept before OS/menu closes the window; renderer closes the active session tab.
+  // ⌘W (macOS) / Ctrl+W (Win/Linux): close active session tab before the OS closes the window.
+  // On macOS, Ctrl+W must NOT be intercepted — readline/xterm uses it as kill-word.
   mainWindow.webContents.on('before-input-event', (event, input) => {
     if (input.type !== 'keyDown') return
     if (input.key.toLowerCase() !== 'w') return
-    if (!(input.meta || input.control) || input.alt || input.shift) return
+    if (input.alt || input.shift) return
+
+    const closeTab =
+      process.platform === 'darwin'
+        ? Boolean(input.meta && !input.control)
+        : Boolean(input.control && !input.meta)
+    if (!closeTab) return
+
     event.preventDefault()
     mainWindow?.webContents.send('shortcut:close-tab')
   })
