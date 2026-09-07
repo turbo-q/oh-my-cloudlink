@@ -139,6 +139,7 @@ npm run lint         # oxlint
 ## 打包注意
 
 - `npm run package` → `release/`；产物名 `OhMyCloudLink-${version}-${arch}.*`
+- 发布：`scripts/publish-release.sh`（按版本自动收集已有 `.dmg` / `.zip` / `.exe` / `.AppImage` 等 + 源码包上传 GitHub Release）
 - macOS 发布包通常未公证；文档中有 `xattr -cr` 说明
 - `electron-builder` 的 `files` 默认含 `main.cjs`、`dist/**`、`dist-electron/**`；若增加原生 `.node`，必须同时配置打包纳入与 `asarUnpack`（见实验分支上的 native-term 实践）
 
