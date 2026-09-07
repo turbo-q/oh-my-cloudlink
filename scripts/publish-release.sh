@@ -5,7 +5,7 @@
 #
 # Usage:
 #   ./scripts/publish-release.sh           # version from package.json
-#   ./scripts/publish-release.sh 0.3.2     # explicit version
+#   ./scripts/publish-release.sh 0.4.0     # explicit version
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"

@@ -8,8 +8,40 @@
 
 ### 计划中
 
-- Windows / Linux 安装包
+- Linux 安装包
 - 终端性能 Phase C UtilityProcess（见 `docs/TERMINAL_PERF_ROADMAP.md`）
+
+---
+
+## [0.4.0] - 2026-09-07
+
+### 新增
+
+- **Windows 安装包**：支持打包 NSIS `.exe`（`OhMyCloudLink-{version}-x64.exe`）
+- **通用发布脚本**：`scripts/publish-release.sh` 按版本自动收集已有 `.dmg` / `.zip` / `.exe` 等产物并上传 GitHub Release
+
+### 变更
+
+- **命令片段编辑**：底部改为显式「保存」；「运行」收进目标主机侧小按钮（试跑不自动保存）；新建片段默认作用范围为全部主机；弱化分割线并提升浅色模式下运行目标提示对比度
+- **主机列表**：卡片始终展示 `user@hostname`（非默认端口带端口号），分组/标签不再挤掉地址，便于小窗口辨认
+- **Agent 协作文档**：`docs/AGENTS.md` 约定先读后改，功能/约定变更须同步导读
+
+### 修复
+
+- **macOS 快捷键**：仅 `⌘W` 关闭会话标签；`Ctrl+W` 交给终端（readline 删词），不再被关标签拦截
+- **终端搜索高亮**：增强对比度（当前命中 / 全部命中），避免 theme 刷新清掉装饰字色
+- **终端边距**：容器四边留白一致，减轻 xterm 尺寸测量偏差
+
+### 发布产物
+
+| 文件 | 说明 |
+|------|------|
+| `OhMyCloudLink-0.4.0-arm64.dmg` | macOS 安装镜像（Apple Silicon） |
+| `OhMyCloudLink-0.4.0-arm64.zip` | macOS 应用包压缩包 |
+| `OhMyCloudLink-0.4.0-x64.exe` | Windows 安装包（NSIS） |
+
+> **macOS 提示「已损坏」**：未签名导致的 Gatekeeper 拦截，执行  
+> `xattr -cr "/Applications/oh-my-cloudlink.app"` 后再打开即可。
 
 ---
 
