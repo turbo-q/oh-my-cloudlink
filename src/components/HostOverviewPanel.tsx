@@ -1,9 +1,17 @@
 import { useMemo } from 'react'
 import { useI18n } from '../i18n/I18nProvider'
 import type { Host, Group } from '../types'
+import { getDefaultPort } from '../types'
 import type { AppPanel } from '../types/app'
 import { filterHosts, type GroupFilter } from '../utils/filterHosts'
 import { HostOsIcon } from './HostOsIcon'
+
+/** Always-visible connect target for picking hosts in a narrow window. */
+function formatHostEndpoint(host: Host): string {
+  const endpoint = `${host.username}@${host.hostname}`
+  const defaultPort = getDefaultPort(host.protocol)
+  return host.port !== defaultPort ? `${endpoint}:${host.port}` : endpoint
+}
 
 interface HostOverviewPanelProps {
   panel: AppPanel
@@ -317,7 +325,8 @@ function HostCard({
   onDelete: () => void
 }) {
   const { t } = useI18n()
-  const subtitle = [group?.name, ...host.tags].filter(Boolean).join(', ')
+  const endpoint = formatHostEndpoint(host)
+  const meta = [group?.name, ...host.tags].filter(Boolean).join(' · ')
 
   return (
     <div
@@ -337,10 +346,20 @@ function HostCard({
           size="md"
         />
         <div className="flex-1 min-w-0 pt-0.5">
-          <h3 className="font-semibold text-app truncate leading-tight" title={host.name}>{host.name}</h3>
-          <p className="text-xs text-app-subtle mt-1.5 truncate" title={subtitle || `${host.username}@${host.hostname}`}>
-            {subtitle || `${host.username}@${host.hostname}`}
+          <h3 className="font-semibold text-app truncate leading-tight" title={host.name}>
+            {host.name}
+          </h3>
+          <p
+            className="text-xs font-mono text-app-muted mt-1.5 truncate tracking-tight"
+            title={endpoint}
+          >
+            {endpoint}
           </p>
+          {meta ? (
+            <p className="text-[11px] text-app-subtle mt-1 truncate" title={meta}>
+              {meta}
+            </p>
+          ) : null}
         </div>
       </div>
       <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 flex gap-1 bg-surface/90 backdrop-blur-sm rounded-lg pl-1">
