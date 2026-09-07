@@ -11,6 +11,7 @@ interface SnippetFormModalProps {
   snippet?: Snippet | null
   hosts: Host[]
   groups: Group[]
+  /** Preferred run target when opening a new snippet; scope still defaults to all hosts. */
   defaultHostId?: string | null
   onSave: (data: Partial<Snippet> & { name: string; command: string }) => Promise<unknown>
   onRun: (opts: {
@@ -39,8 +40,8 @@ export function SnippetFormModal({
   const [selectedHostIds, setSelectedHostIds] = useState<string[]>([])
   const [runHostId, setRunHostId] = useState('')
   const [tags, setTags] = useState('')
+  const [saving, setSaving] = useState(false)
   const [running, setRunning] = useState(false)
-  const [dismissing, setDismissing] = useState(false)
 
   const allHostIds = useMemo(() => sshHosts.map((h) => h.id), [sshHosts])
   const allSelected =
@@ -58,19 +59,21 @@ export function SnippetFormModal({
       const initial =
         ids.length === 0 ? allHostIds : ids.filter((id) => allHostIds.includes(id))
       setSelectedHostIds(initial)
-      setRunHostId(initial[0] ?? allHostIds[0] ?? '')
+      const preferred =
+        defaultHostId && initial.includes(defaultHostId) ? defaultHostId : initial[0]
+      setRunHostId(preferred ?? allHostIds[0] ?? '')
       setTags(snippet.tags.join(', '))
       return
     }
+    // New snippet: always all hosts (empty hostIds = global). Prefer selected host only as run target.
     setName('')
     setCommand('')
-    if (defaultHostId && allHostIds.includes(defaultHostId)) {
-      setSelectedHostIds([defaultHostId])
-      setRunHostId(defaultHostId)
-    } else {
-      setSelectedHostIds(allHostIds)
-      setRunHostId(allHostIds[0] ?? '')
-    }
+    setSelectedHostIds(allHostIds)
+    setRunHostId(
+      defaultHostId && allHostIds.includes(defaultHostId)
+        ? defaultHostId
+        : (allHostIds[0] ?? ''),
+    )
     setTags('')
   }, [open, snippet, defaultHostId, allHostIds])
 
@@ -90,6 +93,7 @@ export function SnippetFormModal({
 
   if (!open) return null
 
+  const busy = saving || running
   const resolveCommand = () => command.replace(/\r\n/g, '\n')
 
   const buildSavePayload = () => ({
@@ -103,28 +107,29 @@ export function SnippetFormModal({
       .filter(Boolean),
   })
 
-  const saveAndClose = async () => {
-    if (running || dismissing) return
+  const handleSave = async () => {
+    if (busy) return
     if (!command.trim()) {
-      onClose()
+      alert(t('modal.commandRequired'))
       return
     }
     if (selectedHostIds.length === 0) {
       alert(t('modal.scopeRequired'))
       return
     }
-    setDismissing(true)
+    setSaving(true)
     try {
       await onSave(buildSavePayload())
       onClose()
     } catch (err) {
       alert(err instanceof Error ? err.message : String(err))
     } finally {
-      setDismissing(false)
+      setSaving(false)
     }
   }
 
-  const handleRun = async () => {
+  const handleRun = () => {
+    if (busy) return
     if (!command.trim()) {
       alert(t('modal.commandRequired'))
       return
@@ -135,19 +140,28 @@ export function SnippetFormModal({
     }
     setRunning(true)
     try {
-      await onSave(buildSavePayload())
       const tabLabel = name.trim() || command.trim().slice(0, 40)
       onRun({ host: runHost, tabLabel, command: resolveCommand() })
       onClose()
-    } catch (err) {
-      alert(err instanceof Error ? err.message : String(err))
     } finally {
       setRunning(false)
     }
   }
 
+  const runButton = (
+    <button
+      type="button"
+      disabled={busy || !runHost || !command.trim()}
+      className="btn-secondary text-xs px-2.5 py-1 shrink-0"
+      onClick={handleRun}
+      title={runHost ? t('snippets.runTarget', { name: runHost.name }) : undefined}
+    >
+      {t('snippets.run')}
+    </button>
+  )
+
   const targetsPanel = (
-    <aside className="w-full lg:w-72 shrink-0 flex flex-col min-h-0 lg:border-l lg:border-app/30 lg:bg-app-card/15">
+    <aside className="w-full lg:w-72 shrink-0 flex flex-col min-h-0 lg:border-l lg:border-app lg:bg-app-card/15">
       <div className="flex items-center justify-between px-4 py-3 lg:px-5 shrink-0">
         <span className="text-sm font-medium text-app-muted">{t('snippets.targetsLabel')}</span>
         <button
@@ -160,7 +174,7 @@ export function SnippetFormModal({
         </button>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-4 lg:px-5 lg:pb-5">
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-3 lg:px-5">
         {sshHosts.length === 0 ? (
           <p className="text-xs text-app-subtle py-4">{t('modal.noHosts')}</p>
         ) : selectedHostIds.length === 0 ? (
@@ -172,20 +186,20 @@ export function SnippetFormModal({
             {t('snippets.targetsEmpty')}
           </button>
         ) : allSelected ? (
-          <div className="rounded-xl border border-app/60 bg-app-card/50 px-3 py-3">
+          <div className="rounded-xl border border-app bg-app-card/50 px-3 py-3">
             <div className="flex items-start gap-2.5">
               <div className="w-8 h-8 rounded-lg bg-app-hover flex items-center justify-center shrink-0 mt-0.5">
                 <svg className="w-4 h-4 text-app-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2" />
                 </svg>
               </div>
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium text-app">{t('snippets.scopeAll')}</p>
-                <p className="text-xs text-app-faint mt-0.5">
+                <p className="text-xs text-app-subtle mt-0.5">
                   {t('snippets.targetsAllSummary', { n: sshHosts.length })}
                 </p>
                 {runHost && (
-                  <p className="text-xs text-emerald-400/90 mt-2">
+                  <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-2">
                     {t('snippets.runTarget', { name: runHost.name })}
                   </p>
                 )}
@@ -218,12 +232,12 @@ export function SnippetFormModal({
                       <div className="flex items-center gap-1.5">
                         <span className="text-sm font-medium text-app truncate">{h.name}</span>
                         {isRunTarget && (
-                          <span className="text-[10px] px-1 py-0.5 rounded bg-emerald-500/20 text-emerald-400 shrink-0">
+                          <span className="text-[10px] px-1 py-0.5 rounded bg-emerald-500/15 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400 shrink-0">
                             {t('snippets.runTargetBadge')}
                           </span>
                         )}
                       </div>
-                      <p className="text-[11px] text-app-faint truncate">
+                      <p className="text-[11px] text-app-subtle truncate">
                         {h.username}@{h.hostname}
                         {group ? ` · ${group.name}` : ''}
                       </p>
@@ -235,13 +249,28 @@ export function SnippetFormModal({
           </ul>
         )}
       </div>
+
+      {selectedHostIds.length > 0 && (
+        <div className="px-4 pb-4 lg:px-5 lg:pb-5 shrink-0 flex items-center justify-between gap-2 pt-1">
+          <p
+            className={`text-[11px] min-w-0 truncate ${
+              runHost ? 'text-emerald-600 dark:text-emerald-400' : 'text-app-muted'
+            }`}
+          >
+            {runHost
+              ? t('snippets.runTarget', { name: runHost.name })
+              : t('snippets.runHostHint')}
+          </p>
+          {runButton}
+        </div>
+      )}
     </aside>
   )
 
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--app-overlay)] backdrop-blur-sm p-4"
-      onClick={() => void saveAndClose()}
+      onClick={onClose}
     >
       <div
         className="bg-elevated border border-app-strong rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden"
@@ -265,8 +294,8 @@ export function SnippetFormModal({
               </h2>
               <button
                 type="button"
-                onClick={() => void saveAndClose()}
-                disabled={dismissing || running}
+                onClick={onClose}
+                disabled={busy}
                 className="text-app-muted hover:text-app p-1"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -318,11 +347,11 @@ export function SnippetFormModal({
               <div className="px-6 pb-6 pt-2 shrink-0">
                 <button
                   type="button"
-                  disabled={running || dismissing || !runHost}
+                  disabled={busy || selectedHostIds.length === 0}
                   className="btn-primary w-full py-2.5"
-                  onClick={() => void handleRun()}
+                  onClick={() => void handleSave()}
                 >
-                  {running ? t('modal.saving') : t('snippets.run')}
+                  {saving ? t('common.saving') : t('common.save')}
                 </button>
               </div>
             </div>
