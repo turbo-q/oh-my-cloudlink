@@ -1295,6 +1295,11 @@ export class DataStore {
       backupPassword: options.backupPassword,
       allowPlaintext: options.allowPlaintext,
     })
+    return this.previewPlainData(plain, options)
+  }
+
+  /** Preview against already-unsealed data (do not pass through unseal again). */
+  private previewPlainData(plain: DataFile, options: ImportOptions): ImportPreviewResult {
     this.assertVaultUnlocked()
     const local = this.exportData()
     return computeImportPreview(local, plain, options.mode, options.conflict ?? 'skip')
@@ -1314,7 +1319,9 @@ export class DataStore {
       allowPlaintext: options.allowPlaintext,
     })
     if (!data) throw new Error('备份文件格式不正确')
-    return this.importPreview(data, options)
+    // readDataFile already unsealed — calling importPreview again would treat
+    // the plaintext DataFile as a legacy unencrypted backup (BACKUP_PLAINTEXT).
+    return this.previewPlainData(data, options)
   }
 
   getHosts(): StoredHost[] {
@@ -1741,7 +1748,8 @@ export class DataStore {
       allowPlaintext: options.allowPlaintext,
     })
     if (!data) throw new Error('备份文件格式不正确')
-    return this.importPreview(data, options)
+    // Same as previewBackupFile: already unsealed, skip second unseal.
+    return this.previewPlainData(data, options)
   }
 
   /** Sealed v3 backup envelope for export / timed backups (portable with master password). */
