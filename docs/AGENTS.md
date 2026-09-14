@@ -111,6 +111,7 @@ npm run lint         # oxlint
 - 最多保留最近 **20** 条（`MAX_SESSION_LOGS`），超出 prune 旧项，不是「满 20 全清」
 - 单条约 **2MB** 上限
 - UI 列表来自 `manifest.json`；磁盘上可能残留孤儿 `.log`
+- 面板可导出当前日志：`logs:export`（`.log` 保留 ANSI；`.txt` 去颜色码）
 
 ### 安全相关
 

@@ -34,6 +34,14 @@ const MANIFEST_FLUSH_MS = 500
 const SESSION_LOG_ID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
+/** Strip CSI / OSC / simple ESC sequences for plain-text export. */
+function stripAnsiSequences(input: string): string {
+  return input
+    .replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, '')
+    .replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, '')
+    .replace(/\x1b[()][A-Za-z0-9]/g, '')
+    .replace(/\x1b./g, '')
+}
 export class SessionLogStore {
   private logsDir: string
   private manifestPath: string
@@ -269,6 +277,39 @@ export class SessionLogStore {
     if (!fs.existsSync(filePath)) return ''
     // Sanitize again so older logs recorded before clear-stripping still keep history on replay.
     return stripScreenClearSequences(fs.readFileSync(filePath, 'utf-8'))
+  }
+
+  /** Flush in-flight WriteStream so export sees the latest bytes. */
+  private flushStream(id: string): Promise<void> {
+    const stream = this.writeStreams.get(id)
+    if (!stream || stream.destroyed) return Promise.resolve()
+    return new Promise((resolve, reject) => {
+      stream.write('', (err) => (err ? reject(err) : resolve()))
+    })
+  }
+
+  /**
+   * Export a session log to an absolute path.
+   * `.txt` → strip ANSI and normalize newlines for editors;
+   * otherwise keep terminal sequences (minus screen-clear sanitization).
+   */
+  async exportLog(id: string, destPath: string): Promise<void> {
+    this.assertSafeLogId(id)
+    if (!destPath || typeof destPath !== 'string') {
+      throw new Error('无效的导出路径')
+    }
+    const resolved = path.resolve(destPath)
+    if (!path.isAbsolute(resolved)) {
+      throw new Error('无效的导出路径')
+    }
+
+    await this.flushStream(id)
+    let content = this.getContent(id)
+    const lower = resolved.toLowerCase()
+    if (lower.endsWith('.txt')) {
+      content = stripAnsiSequences(content).replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+    }
+    fs.writeFileSync(resolved, content, 'utf-8')
   }
 
   deleteLog(id: string): boolean {

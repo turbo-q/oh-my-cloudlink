@@ -114,7 +114,11 @@ export interface ElectronAPI {
     filters?: { name: string; extensions: string[] }[]
   }) => Promise<string[] | null>
   openDirectoryDialog: (options?: { title?: string }) => Promise<string | null>
-  saveFileDialog: (options?: { title?: string; defaultPath?: string }) => Promise<string | null>
+  saveFileDialog: (options?: {
+    title?: string
+    defaultPath?: string
+    filters?: { name: string; extensions: string[] }[]
+  }) => Promise<string | null>
 
   sshConnect: (
     sessionId: string,
@@ -149,6 +153,7 @@ export interface ElectronAPI {
     }[]
   >
   logsGet: (id: string) => Promise<string>
+  logsExport: (id: string, destPath: string) => Promise<boolean>
   logsDelete: (id: string) => Promise<boolean>
   logsClear: () => Promise<boolean>
   sessionLogPrepare: (sessionId: string, hostId: string) => Promise<boolean>

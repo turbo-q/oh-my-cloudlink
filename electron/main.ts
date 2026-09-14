@@ -325,11 +325,16 @@ function registerIpcHandlers(): void {
     return result.canceled ? null : result.filePaths[0] ?? null
   })
 
-  safeHandle('dialog:saveFile', async (_e, options?: { title?: string; defaultPath?: string }) => {
+  safeHandle('dialog:saveFile', async (_e, options?: {
+    title?: string
+    defaultPath?: string
+    filters?: { name: string; extensions: string[] }[]
+  }) => {
     if (!mainWindow) return null
     const result = await dialog.showSaveDialog(mainWindow, {
       title: options?.title ?? '保存文件',
       defaultPath: options?.defaultPath,
+      filters: options?.filters,
     })
     return result.canceled ? null : result.filePath ?? null
   })
@@ -420,6 +425,10 @@ function registerIpcHandlers(): void {
   // 连接日志
   safeHandle('logs:list', () => sessionLogStore.list())
   safeHandle('logs:get', (_e, id: string) => sessionLogStore.getContent(id))
+  safeHandle('logs:export', async (_e, id: string, destPath: string) => {
+    await sessionLogStore.exportLog(id, destPath)
+    return true
+  })
   safeHandle('logs:delete', (_e, id: string) => sessionLogStore.deleteLog(id))
   safeHandle('logs:clear', () => {
     sessionLogStore.clearAll()
