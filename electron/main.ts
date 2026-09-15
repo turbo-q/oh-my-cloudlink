@@ -182,13 +182,15 @@ function registerIpcHandlers(): void {
     if (!rule) throw new Error('转发规则不存在')
     const host = dataStore.getHosts().find((h) => h.id === rule.hostId)
     if (!host) throw new Error('关联主机不存在')
-    return portForwardManager.start(
+    const info = await portForwardManager.start(
       rule,
       host,
       dataStore.getKeys(),
       dataStore.getPasswords(),
       mainWindow,
     )
+    dataStore.touchPortForwardConnected(ruleId)
+    return info
   })
   safeHandle('forward:stop', async (_e, ruleId: string) => {
     await portForwardManager.stop(ruleId, mainWindow)

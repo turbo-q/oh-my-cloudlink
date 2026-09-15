@@ -137,6 +137,8 @@ export interface PortForward {
   localPort: number
   remoteHost?: string
   remotePort?: number
+  /** 最近一次成功启动时间（ISO） */
+  lastConnectedAt?: string
   createdAt: string
   updatedAt: string
 }

@@ -241,6 +241,10 @@ export const zh = {
     helpRemote: '远程转发：远端机器访问你指定的远端端口时，流量转到本机服务（需服务器允许 GatewayPorts）。',
     helpDynamic: '动态 SOCKS5：本机开一个 SOCKS5 代理，浏览器/工具走代理即可访问远端网络。',
     connections: ' · {n} 连接',
+    searchPlaceholder: '筛选名称、主机…',
+    noMatch: '没有匹配的转发规则',
+    lastConnectedAt: '最近连接：{time}',
+    neverConnected: '最近连接：从未',
   },
   snippets: {
     title: '命令片段',

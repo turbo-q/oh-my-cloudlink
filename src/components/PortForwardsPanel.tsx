@@ -9,6 +9,8 @@ interface PortForwardsPanelProps {
   onAdd: () => void
   onEdit: (forward: PortForward) => void
   onDelete: (forward: PortForward) => void
+  /** Refresh persisted list after a successful start (updates lastConnectedAt / sort). */
+  onConnected?: () => void | Promise<void>
 }
 
 function describeRule(f: PortForward, boundPort?: number): string {
@@ -82,22 +84,61 @@ function statusBadgeClass(status: PortForwardRuntime['status'] | undefined): str
   }
 }
 
+function formatLastConnected(
+  iso: string | undefined,
+  t: (key: string, params?: Record<string, string | number>) => string,
+  locale: string,
+): string {
+  if (!iso) return t('forwards.neverConnected')
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return t('forwards.neverConnected')
+  try {
+    return t('forwards.lastConnectedAt', {
+      time: d.toLocaleString(locale === 'zh' ? 'zh-CN' : 'en-US', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+      }),
+    })
+  } catch {
+    return t('forwards.lastConnectedAt', { time: iso })
+  }
+}
+
+function sortForwards(list: PortForward[]): PortForward[] {
+  return [...list].sort((a, b) => {
+    const aT = a.lastConnectedAt ? Date.parse(a.lastConnectedAt) : 0
+    const bT = b.lastConnectedAt ? Date.parse(b.lastConnectedAt) : 0
+    if (aT !== bT) return bT - aT
+    return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+  })
+}
+
 export function PortForwardsPanel({
   hosts,
   forwards,
   onAdd,
   onEdit,
   onDelete,
+  onConnected,
 }: PortForwardsPanelProps) {
-  const { t } = useI18n()
+  const { t, locale } = useI18n()
   const [runtime, setRuntime] = useState<Record<string, PortForwardRuntime>>({})
   const [busyId, setBusyId] = useState<string | null>(null)
+  const [query, setQuery] = useState('')
 
   const sshHosts = useMemo(() => hosts.filter(isSshHost), [hosts])
   const hostName = useMemo(() => {
     const map = new Map(hosts.map((h) => [h.id, h.name]))
     return (id: string) => map.get(id) ?? t('common.unknownHost')
   }, [hosts, t])
+
+  const hostHostname = useMemo(() => {
+    const map = new Map(hosts.map((h) => [h.id, h.hostname]))
+    return (id: string) => map.get(id) ?? ''
+  }, [hosts])
 
   useEffect(() => {
     void window.electronAPI.forwardList().then((list) => {
@@ -117,11 +158,24 @@ export function PortForwardsPanel({
     })
   }, [])
 
+  const filteredForwards = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    const sorted = sortForwards(forwards)
+    if (!q) return sorted
+    return sorted.filter((f) => {
+      const name = f.name.toLowerCase()
+      const hName = hostName(f.hostId).toLowerCase()
+      const hostname = hostHostname(f.hostId).toLowerCase()
+      return name.includes(q) || hName.includes(q) || hostname.includes(q)
+    })
+  }, [forwards, query, hostName, hostHostname])
+
   const handleStart = async (forward: PortForward) => {
     setBusyId(forward.id)
     try {
       const info = await window.electronAPI.forwardStart(forward.id)
       setRuntime((prev) => ({ ...prev, [forward.id]: info }))
+      await onConnected?.()
     } catch (err) {
       alert(err instanceof Error ? err.message : String(err))
     } finally {
@@ -189,86 +243,116 @@ export function PortForwardsPanel({
         ) : forwards.length === 0 ? (
           <div className="text-center py-16 text-app-subtle">
             <p className="mb-2">{t('forwards.empty')}</p>
-            <p className="text-sm text-app-faint mb-6">
-              {t('forwards.emptyHint')}
-            </p>
+            <p className="text-sm text-app-faint mb-6">{t('forwards.emptyHint')}</p>
             <button onClick={onAdd} className="btn-primary text-sm px-4 py-2">
               {t('forwards.newRule')}
             </button>
           </div>
         ) : (
           <div className="space-y-3 max-w-4xl">
-            {forwards.map((f) => {
-              const rt = runtime[f.id]
-              const status = rt?.status
-              const busy = busyId === f.id
-              const running = status === 'running' || status === 'starting'
+            <div className="relative">
+              <input
+                type="search"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder={t('forwards.searchPlaceholder')}
+                className="input-field pl-9"
+                aria-label={t('forwards.searchPlaceholder')}
+              />
+              <svg
+                className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-app-faint pointer-events-none"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M21 21l-4.35-4.35M10.5 18a7.5 7.5 0 100-15 7.5 7.5 0 000 15z"
+                />
+              </svg>
+            </div>
 
-              return (
-                <div
-                  key={f.id}
-                  className="panel-card rounded-xl px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-4 transition-all hover:-translate-y-0.5 hover:border-app-emphasis"
-                >
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center flex-wrap gap-2 mb-1">
-                      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${statusColor(status)}`} />
-                      <span className="text-sm font-medium text-app truncate">{f.name}</span>
-                      <span
-                        className={`text-[10px] font-semibold tracking-wide px-2 py-0.5 rounded-md border shrink-0 ${forwardTypeBadgeClass(f.type)}`}
-                      >
-                        {forwardTypeLabel(f.type, t)}
-                      </span>
-                      <span
-                        className={`text-[10px] font-medium px-2 py-0.5 rounded-md border shrink-0 ${statusBadgeClass(status)}`}
-                      >
-                        {statusLabel(status, t)}
-                      </span>
+            {filteredForwards.length === 0 ? (
+              <div className="text-center py-12 text-app-subtle">
+                <p>{t('forwards.noMatch')}</p>
+              </div>
+            ) : (
+              filteredForwards.map((f) => {
+                const rt = runtime[f.id]
+                const status = rt?.status
+                const busy = busyId === f.id
+                const running = status === 'running' || status === 'starting'
+
+                return (
+                  <div
+                    key={f.id}
+                    className="panel-card rounded-xl px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-4 transition-all hover:-translate-y-0.5 hover:border-app-emphasis"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center flex-wrap gap-2 mb-1">
+                        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${statusColor(status)}`} />
+                        <span className="text-sm font-medium text-app truncate">{f.name}</span>
+                        <span
+                          className={`text-[10px] font-semibold tracking-wide px-2 py-0.5 rounded-md border shrink-0 ${forwardTypeBadgeClass(f.type)}`}
+                        >
+                          {forwardTypeLabel(f.type, t)}
+                        </span>
+                        <span
+                          className={`text-[10px] font-medium px-2 py-0.5 rounded-md border shrink-0 ${statusBadgeClass(status)}`}
+                        >
+                          {statusLabel(status, t)}
+                        </span>
+                      </div>
+                      <p className="text-xs text-app-muted truncate">
+                        {hostName(f.hostId)} · {describeRule(f, rt?.boundPort)}
+                        {rt && rt.connections > 0
+                          ? t('forwards.connections', { n: rt.connections })
+                          : ''}
+                      </p>
+                      <p className="text-xs text-app-faint mt-1 truncate">
+                        {formatLastConnected(f.lastConnectedAt, t, locale)}
+                      </p>
+                      {status === 'error' && rt?.error && (
+                        <p className="text-xs text-red-400 mt-1 truncate">{rt.error}</p>
+                      )}
                     </div>
-                    <p className="text-xs text-app-muted truncate">
-                      {hostName(f.hostId)} · {describeRule(f, rt?.boundPort)}
-                      {rt && rt.connections > 0 ? t('forwards.connections', { n: rt.connections }) : ''}
-                    </p>
-                    {status === 'error' && rt?.error && (
-                      <p className="text-xs text-red-400 mt-1 truncate">{rt.error}</p>
-                    )}
-                  </div>
 
-                  <div className="flex items-center gap-2 shrink-0">
-                    {running ? (
+                    <div className="flex items-center gap-2 shrink-0">
+                      {running ? (
+                        <button
+                          className="btn-secondary text-xs px-3 py-1.5"
+                          disabled={busy}
+                          onClick={() => void handleStop(f)}
+                        >
+                          {t('forwards.stop')}
+                        </button>
+                      ) : (
+                        <button
+                          className="btn-primary text-xs px-3 py-1.5"
+                          disabled={busy}
+                          onClick={() => void handleStart(f)}
+                        >
+                          {t('forwards.start')}
+                        </button>
+                      )}
                       <button
-                        className="btn-secondary text-xs px-3 py-1.5"
-                        disabled={busy}
-                        onClick={() => void handleStop(f)}
+                        className="inline-action"
+                        onClick={() => onEdit(f)}
+                        disabled={running}
+                        title={running ? t('forwards.editDisabled') : t('common.edit')}
                       >
-                        {t('forwards.stop')}
+                        {t('common.edit')}
                       </button>
-                    ) : (
-                      <button
-                        className="btn-primary text-xs px-3 py-1.5"
-                        disabled={busy}
-                        onClick={() => void handleStart(f)}
-                      >
-                        {t('forwards.start')}
+                      <button className="inline-action-danger" onClick={() => onDelete(f)}>
+                        {t('common.delete')}
                       </button>
-                    )}
-                    <button
-                      className="inline-action"
-                      onClick={() => onEdit(f)}
-                      disabled={running}
-                      title={running ? t('forwards.editDisabled') : t('common.edit')}
-                    >
-                      {t('common.edit')}
-                    </button>
-                    <button
-                      className="inline-action-danger"
-                      onClick={() => onDelete(f)}
-                    >
-                      {t('common.delete')}
-                    </button>
+                    </div>
                   </div>
-                </div>
-              )
-            })}
+                )
+              })
+            )}
           </div>
         )}
 

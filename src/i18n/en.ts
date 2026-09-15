@@ -246,6 +246,10 @@ export const en: Messages = {
     helpRemote: 'Remote: traffic to a remote port is sent to a local service (may need GatewayPorts).',
     helpDynamic: 'Dynamic SOCKS5: open a local SOCKS proxy that exits via SSH.',
     connections: ' · {n} conn.',
+    searchPlaceholder: 'Filter by name or host…',
+    noMatch: 'No matching forwards',
+    lastConnectedAt: 'Last connected: {time}',
+    neverConnected: 'Last connected: never',
   },
   snippets: {
     title: 'Snippets',

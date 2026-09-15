@@ -487,6 +487,7 @@ export default function App() {
             onAdd={() => setModal({ type: 'forward' })}
             onEdit={(f) => setModal({ type: 'forward', forward: f })}
             onDelete={handleDeleteForward}
+            onConnected={() => void refresh()}
           />
         )}
 

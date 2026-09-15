@@ -9,7 +9,7 @@
 **Oh My CloudLink**（原「云连 SSH」）是类 Termius 的桌面 SSH 客户端：
 
 - 主机 / 分组 / 标签、SSH 密钥与可复用主机密码（凭证）、多标签终端
-- SFTP（及 FTP）双栏文件、端口转发、命令片段
+- SFTP（及 FTP）双栏文件、端口转发（列表按最近连接排序，可按名称/主机筛选）、命令片段
 - 会话日志回放、导入导出 / 备份、主密码保险库加密
 
 技术栈：**Electron + React 19 + TypeScript + Tailwind 4 + xterm.js + ssh2 + 本地 SQLite**。

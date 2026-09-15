@@ -120,6 +120,8 @@ export interface StoredPortForward {
   remoteHost?: string
   /** 本地转发：远端目标端口；远程转发：远端监听端口；动态：不用 */
   remotePort?: number
+  /** ISO time of last successful start; used for list ordering */
+  lastConnectedAt?: string
   createdAt: string
   updatedAt: string
 }
@@ -212,6 +214,7 @@ interface PortForwardRow {
   local_port: number
   remote_host: string | null
   remote_port: number | null
+  last_connected_at: string | null
   created_at: string
   updated_at: string
 }
@@ -540,6 +543,7 @@ export class DataStore {
     this.migrateSnippetsHostIdsColumn()
     this.migrateHostOsIdColumn()
     this.migrateHostPasswordIdColumn()
+    this.migratePortForwardLastConnectedColumn()
   }
 
   private getMeta(key: string): string | null {
@@ -641,6 +645,19 @@ export class DataStore {
       }
     } catch (err) {
       console.error('[data-store] migrate hosts password_id failed:', err)
+    }
+  }
+
+  private migratePortForwardLastConnectedColumn(): void {
+    try {
+      const cols = this.db
+        .prepare(`PRAGMA table_info(port_forwards)`)
+        .all() as unknown as { name: string }[]
+      if (!cols.some((c) => c.name === 'last_connected_at')) {
+        this.db.exec(`ALTER TABLE port_forwards ADD COLUMN last_connected_at TEXT`)
+      }
+    } catch (err) {
+      console.error('[data-store] migrate port_forwards last_connected_at failed:', err)
     }
   }
 
@@ -1023,6 +1040,7 @@ export class DataStore {
       localPort: row.local_port,
       remoteHost: row.remote_host ?? undefined,
       remotePort: row.remote_port ?? undefined,
+      lastConnectedAt: row.last_connected_at ?? undefined,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     }
@@ -1121,8 +1139,9 @@ export class DataStore {
 
       const insertForward = this.db.prepare(
         `INSERT INTO port_forwards (
-          id, host_id, name, type, local_host, local_port, remote_host, remote_port, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          id, host_id, name, type, local_host, local_port, remote_host, remote_port,
+          last_connected_at, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       for (const f of data.portForwards ?? []) {
         insertForward.run(
@@ -1134,6 +1153,7 @@ export class DataStore {
           f.localPort,
           f.remoteHost ?? null,
           f.remotePort ?? null,
+          f.lastConnectedAt ?? null,
           f.createdAt,
           f.updatedAt,
         )
@@ -1311,8 +1331,9 @@ export class DataStore {
           this.db
             .prepare(
               `INSERT INTO port_forwards (
-                id, host_id, name, type, local_host, local_port, remote_host, remote_port, created_at, updated_at
-              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                id, host_id, name, type, local_host, local_port, remote_host, remote_port,
+                last_connected_at, created_at, updated_at
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             )
             .run(
               f.id,
@@ -1323,6 +1344,7 @@ export class DataStore {
               f.localPort,
               f.remoteHost ?? null,
               f.remotePort ?? null,
+              f.lastConnectedAt ?? null,
               f.createdAt,
               f.updatedAt,
             )
@@ -1335,7 +1357,7 @@ export class DataStore {
             .prepare(
               `UPDATE port_forwards SET
                 host_id = ?, name = ?, type = ?, local_host = ?, local_port = ?,
-                remote_host = ?, remote_port = ?, updated_at = ?
+                remote_host = ?, remote_port = ?, last_connected_at = ?, updated_at = ?
                WHERE id = ?`,
             )
             .run(
@@ -1346,6 +1368,7 @@ export class DataStore {
               f.localPort,
               f.remoteHost ?? null,
               f.remotePort ?? null,
+              f.lastConnectedAt ?? existing.lastConnectedAt ?? null,
               f.updatedAt,
               existing.id,
             )
@@ -1735,14 +1758,18 @@ export class DataStore {
   }
 
   getPortForwards(hostId?: string): StoredPortForward[] {
+    const orderBy = `ORDER BY
+      CASE WHEN last_connected_at IS NULL OR last_connected_at = '' THEN 1 ELSE 0 END,
+      last_connected_at DESC,
+      name COLLATE NOCASE`
     if (hostId) {
       const rows = this.db
-        .prepare('SELECT * FROM port_forwards WHERE host_id = ? ORDER BY name COLLATE NOCASE')
+        .prepare(`SELECT * FROM port_forwards WHERE host_id = ? ${orderBy}`)
         .all(hostId) as unknown as PortForwardRow[]
       return rows.map((r) => this.mapPortForward(r))
     }
     const rows = this.db
-      .prepare('SELECT * FROM port_forwards ORDER BY name COLLATE NOCASE')
+      .prepare(`SELECT * FROM port_forwards ${orderBy}`)
       .all() as unknown as PortForwardRow[]
     return rows.map((r) => this.mapPortForward(r))
   }
@@ -1752,6 +1779,20 @@ export class DataStore {
       | PortForwardRow
       | undefined
     return row ? this.mapPortForward(row) : null
+  }
+
+  /** Mark a forward as recently connected (after successful start). */
+  touchPortForwardConnected(id: string): StoredPortForward | null {
+    const existing = this.db.prepare('SELECT * FROM port_forwards WHERE id = ?').get(id) as unknown as
+      | PortForwardRow
+      | undefined
+    if (!existing) return null
+    const now = new Date().toISOString()
+    this.db
+      .prepare('UPDATE port_forwards SET last_connected_at = ?, updated_at = ? WHERE id = ?')
+      .run(now, now, id)
+    const updated = this.db.prepare('SELECT * FROM port_forwards WHERE id = ?').get(id) as unknown as PortForwardRow
+    return this.mapPortForward(updated)
   }
 
   savePortForward(
@@ -1801,14 +1842,16 @@ export class DataStore {
       localPort: forward.localPort,
       remoteHost: forward.remoteHost,
       remotePort: forward.remotePort,
+      lastConnectedAt: forward.lastConnectedAt,
       createdAt: now,
       updatedAt: now,
     }
     this.db
       .prepare(
         `INSERT INTO port_forwards (
-          id, host_id, name, type, local_host, local_port, remote_host, remote_port, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          id, host_id, name, type, local_host, local_port, remote_host, remote_port,
+          last_connected_at, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         created.id,
@@ -1819,6 +1862,7 @@ export class DataStore {
         created.localPort,
         created.remoteHost ?? null,
         created.remotePort ?? null,
+        created.lastConnectedAt ?? null,
         created.createdAt,
         created.updatedAt,
       )
