@@ -91,6 +91,7 @@ npm run lint         # oxlint
 - `findNext/Previous` 带 SearchAddon `decorations`（黄底 = 全部命中）
 - 通过 patch `registerDecoration` 注入 `foregroundColor: #000`（Addon 本身不支持字色）
 - **不要在每次 find 时重设整份 `term.options.theme`**，否则会刷掉装饰
+- 搜索栏须 `relative` + `z-index`（仅写 `z-10` 无效）；终端区域加 `overflow-hidden`，避免 WebGL canvas 盖住 ✕ 导致只清选区、关不掉搜索框
 
 接入点：`TerminalPanel.tsx`、`LogViewer.tsx`。
 

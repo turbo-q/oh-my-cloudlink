@@ -36,7 +36,8 @@ export function TerminalSearchBar({
   if (!open) return null
 
   return (
-    <div className="shrink-0 flex items-center gap-2 px-3 py-2 border-b border-app bg-app-card z-10">
+    // `relative` is required for z-index — otherwise WebGL/xterm canvases can steal clicks on ✕.
+    <div className="relative z-20 shrink-0 flex items-center gap-2 px-3 py-2 border-b border-app bg-app-card">
       <input
         ref={inputRef}
         value={query}
@@ -60,7 +61,16 @@ export function TerminalSearchBar({
       <button type="button" onClick={() => onSearch('next')} className="btn-secondary px-2 py-1 text-xs">
         ↓
       </button>
-      <button type="button" onClick={onClose} className="text-app-subtle hover:text-app px-2">
+      <button
+        type="button"
+        onMouseDown={(e) => {
+          // Avoid xterm stealing focus/selection before click fires.
+          e.preventDefault()
+        }}
+        onClick={onClose}
+        className="text-app-subtle hover:text-app px-2"
+        aria-label={t('common.close')}
+      >
         ✕
       </button>
     </div>

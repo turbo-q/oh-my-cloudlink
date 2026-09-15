@@ -51,8 +51,12 @@ export function LogViewer({ logId, title, live = false }: LogViewerProps) {
     if (term) applyTerminalSearchTheme(term)
   }, [])
   const closeSearch = useCallback(() => {
-    endTerminalSearch(searchAddonRef.current, terminalRef.current)
     setSearchOpen(false)
+    try {
+      endTerminalSearch(searchAddonRef.current, terminalRef.current)
+    } catch {
+      // Theme / decoration cleanup must not block dismissing the bar.
+    }
   }, [])
 
   useTerminalSearchShortcut(Boolean(logId), searchOpen, openSearch, closeSearch)
