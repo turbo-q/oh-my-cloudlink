@@ -159,6 +159,10 @@ function registerIpcHandlers(): void {
   safeHandle('data:saveKey', (_e, key) => dataStore.saveKey(key))
   safeHandle('data:deleteKey', (_e, id: string) => dataStore.deleteKey(id))
 
+  safeHandle('data:getPasswords', () => dataStore.getPasswords())
+  safeHandle('data:savePassword', (_e, entry) => dataStore.savePassword(entry))
+  safeHandle('data:deletePassword', (_e, id: string) => dataStore.deletePassword(id))
+
   // 端口转发规则 CRUD
   safeHandle('data:getPortForwards', (_e, hostId?: string) => dataStore.getPortForwards(hostId))
   safeHandle('data:savePortForward', (_e, forward) => dataStore.savePortForward(forward))
@@ -178,7 +182,13 @@ function registerIpcHandlers(): void {
     if (!rule) throw new Error('转发规则不存在')
     const host = dataStore.getHosts().find((h) => h.id === rule.hostId)
     if (!host) throw new Error('关联主机不存在')
-    return portForwardManager.start(rule, host, dataStore.getKeys(), mainWindow)
+    return portForwardManager.start(
+      rule,
+      host,
+      dataStore.getKeys(),
+      dataStore.getPasswords(),
+      mainWindow,
+    )
   })
   safeHandle('forward:stop', async (_e, ruleId: string) => {
     await portForwardManager.stop(ruleId, mainWindow)
@@ -367,7 +377,7 @@ function registerIpcHandlers(): void {
       try {
         await sshManager.connect(
           sessionId,
-          { host, keys: dataStore.getKeys() },
+          { host, keys: dataStore.getKeys(), passwords: dataStore.getPasswords() },
           mainWindow,
           logHooks,
           parseTerminalSize(size),
@@ -465,7 +475,13 @@ function registerIpcHandlers(): void {
   safeHandle('file:connect', async (_e, sessionId: string, hostId: string) => {
     const host = dataStore.getHosts().find((h) => h.id === hostId)
     if (!host) throw new Error('主机不存在')
-    return fileManager.connect(sessionId, host, dataStore.getKeys(), mainWindow)
+    return fileManager.connect(
+      sessionId,
+      host,
+      dataStore.getKeys(),
+      dataStore.getPasswords(),
+      mainWindow,
+    )
   })
 
   safeHandle('file:disconnect', async (_e, sessionId: string) => {

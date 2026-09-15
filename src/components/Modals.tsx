@@ -3,6 +3,7 @@ import type {
   Host,
   Group,
   SSHKey,
+  HostPassword,
   AuthType,
   DiscoveredKey,
   PortForward,
@@ -70,10 +71,16 @@ interface HostFormModalProps {
   host?: Host | null
   groups: Group[]
   keys: SSHKey[]
+  passwords: HostPassword[]
   onSave: (data: Partial<Host> & { name: string; hostname: string; username: string }) => Promise<unknown>
+  onSavePassword: (
+    data: Partial<HostPassword> & { name: string; password: string },
+  ) => Promise<HostPassword>
   onCreateGroup: (name: string) => Promise<Group>
   onClose: () => void
 }
+
+const MANUAL_PASSWORD = '__manual__'
 
 const emptyForm = {
   name: '',
@@ -81,27 +88,44 @@ const emptyForm = {
   port: 22,
   username: 'root',
   authType: 'password' as AuthType,
+  passwordSource: MANUAL_PASSWORD,
   password: '',
+  saveToLibrary: false,
+  libraryName: '',
   keyId: '',
   groupId: '',
   tags: '',
   notes: '',
 }
 
-export function HostFormModal({ open, host, groups, keys, onSave, onCreateGroup, onClose }: HostFormModalProps) {
+export function HostFormModal({
+  open,
+  host,
+  groups,
+  keys,
+  passwords,
+  onSave,
+  onSavePassword,
+  onCreateGroup,
+  onClose,
+}: HostFormModalProps) {
   const { t } = useI18n()
   const [form, setForm] = useState(emptyForm)
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     if (host) {
+      const useLibrary = Boolean(host.passwordId)
       setForm({
         name: host.name,
         hostname: host.hostname,
         port: host.port,
         username: host.username,
         authType: host.authType,
-        password: host.password ?? '',
+        passwordSource: useLibrary ? (host.passwordId as string) : MANUAL_PASSWORD,
+        password: useLibrary ? '' : (host.password ?? ''),
+        saveToLibrary: false,
+        libraryName: '',
         keyId: host.keyId ?? '',
         groupId: host.groupId ?? '',
         tags: host.tags.join(', '),
@@ -118,6 +142,38 @@ export function HostFormModal({ open, host, groups, keys, onSave, onCreateGroup,
     e.preventDefault()
     setSaving(true)
     try {
+      let password: string | undefined
+      let passwordId: string | undefined
+      let keyId: string | undefined
+
+      if (form.authType === 'password') {
+        if (form.passwordSource !== MANUAL_PASSWORD) {
+          passwordId = form.passwordSource
+          password = undefined
+        } else {
+          const inline = form.password
+          if (!inline) {
+            alert(t('modal.passwordRequired'))
+            return
+          }
+          if (form.saveToLibrary) {
+            const libName = form.libraryName.trim()
+            if (!libName) {
+              alert(t('modal.passwordLibraryNameRequired'))
+              return
+            }
+            const saved = await onSavePassword({ name: libName, password: inline })
+            passwordId = saved.id
+            password = undefined
+          } else {
+            password = inline
+            passwordId = undefined
+          }
+        }
+      } else {
+        keyId = form.keyId || undefined
+      }
+
       await onSave({
         id: host?.id,
         name: form.name.trim(),
@@ -126,12 +182,13 @@ export function HostFormModal({ open, host, groups, keys, onSave, onCreateGroup,
         username: form.username.trim(),
         protocol: 'ssh',
         authType: form.authType,
-        password: form.authType === 'password' ? form.password : undefined,
-        keyId: form.authType === 'key' ? form.keyId || undefined : undefined,
+        password,
+        passwordId,
+        keyId,
         groupId: form.groupId || undefined,
         tags: form.tags
           .split(',')
-          .map((t) => t.trim())
+          .map((tag) => tag.trim())
           .filter(Boolean),
         notes: form.notes.trim() || undefined,
       })
@@ -155,7 +212,7 @@ export function HostFormModal({ open, host, groups, keys, onSave, onCreateGroup,
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={(e) => void handleSubmit(e)} className="p-6 space-y-4">
           <div>
             <label className="block text-sm text-app-muted mb-1">{t('common.name')}</label>
             <input
@@ -224,15 +281,70 @@ export function HostFormModal({ open, host, groups, keys, onSave, onCreateGroup,
           </div>
 
           {form.authType === 'password' ? (
-            <div>
-              <label className="block text-sm text-app-muted mb-1">{t('modal.labelPassword')}</label>
-              <PasswordInput
-                value={form.password}
-                onChange={(password) => setForm({ ...form, password })}
-                placeholder="••••••••"
-                showLabel={t('modal.showPassword')}
-                hideLabel={t('modal.hidePassword')}
-              />
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm text-app-muted mb-1">{t('modal.labelPasswordSource')}</label>
+                <select
+                  value={form.passwordSource}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      passwordSource: e.target.value,
+                      saveToLibrary: e.target.value === MANUAL_PASSWORD ? form.saveToLibrary : false,
+                    })
+                  }
+                  className="input-field"
+                  required={form.authType === 'password'}
+                >
+                  <option value={MANUAL_PASSWORD}>{t('modal.passwordManual')}</option>
+                  {passwords.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+                {passwords.length === 0 && (
+                  <p className="text-xs text-app-faint mt-1.5">{t('modal.noPasswordsHint')}</p>
+                )}
+              </div>
+              {form.passwordSource === MANUAL_PASSWORD && (
+                <>
+                  <div>
+                    <label className="block text-sm text-app-muted mb-1">{t('modal.labelPassword')}</label>
+                    <PasswordInput
+                      value={form.password}
+                      onChange={(password) => setForm({ ...form, password })}
+                      placeholder="••••••••"
+                      required
+                      showLabel={t('modal.showPassword')}
+                      hideLabel={t('modal.hidePassword')}
+                    />
+                  </div>
+                  <label className="flex items-start gap-2 text-sm text-app-secondary cursor-pointer">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5 rounded border-app-strong"
+                      checked={form.saveToLibrary}
+                      onChange={(e) => setForm({ ...form, saveToLibrary: e.target.checked })}
+                    />
+                    <span>{t('modal.savePasswordToLibrary')}</span>
+                  </label>
+                  {form.saveToLibrary && (
+                    <div>
+                      <label className="block text-sm text-app-muted mb-1">
+                        {t('modal.labelPasswordLibraryName')}
+                      </label>
+                      <input
+                        required
+                        value={form.libraryName}
+                        onChange={(e) => setForm({ ...form, libraryName: e.target.value })}
+                        className="input-field"
+                        placeholder={t('modal.placeholderPasswordLibraryName')}
+                      />
+                    </div>
+                  )}
+                </>
+              )}
             </div>
           ) : (
             <div>
@@ -508,6 +620,89 @@ export function KeyFormModal({ open, keyItem, onSave, onClose }: KeyFormModalPro
               {t('modal.cancel')}
             </button>
             <button type="submit" disabled={saving} className="btn-primary flex-1">
+              {saving ? t('modal.saving') : t('modal.save')}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+interface PasswordFormModalProps {
+  open: boolean
+  entry?: HostPassword | null
+  onSave: (data: Partial<HostPassword> & { name: string; password: string }) => Promise<unknown>
+  onClose: () => void
+}
+
+export function PasswordFormModal({ open, entry, onSave, onClose }: PasswordFormModalProps) {
+  const { t } = useI18n()
+  const [name, setName] = useState('')
+  const [password, setPassword] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    if (entry) {
+      setName(entry.name)
+      setPassword(entry.password)
+    } else {
+      setName('')
+      setPassword('')
+    }
+  }, [entry, open])
+
+  if (!open) return null
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setSaving(true)
+    try {
+      await onSave({
+        id: entry?.id,
+        name: name.trim(),
+        password,
+      })
+      onClose()
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--app-overlay)] backdrop-blur-sm">
+      <div className="bg-elevated border border-app-strong rounded-xl shadow-2xl w-full max-w-md mx-4">
+        <div className="px-6 py-4 border-b border-app-strong">
+          <h2 className="text-lg font-semibold text-app">
+            {entry ? t('modal.passwordEdit') : t('modal.passwordNew')}
+          </h2>
+        </div>
+        <form onSubmit={(e) => void handleSubmit(e)} className="p-6 space-y-4">
+          <div>
+            <label className="block text-sm text-app-muted mb-1">{t('modal.labelPasswordLibraryName')}</label>
+            <input
+              required
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="input-field"
+              placeholder={t('modal.placeholderPasswordLibraryName')}
+            />
+          </div>
+          <div>
+            <label className="block text-sm text-app-muted mb-1">{t('modal.labelPassword')}</label>
+            <PasswordInput
+              value={password}
+              onChange={setPassword}
+              placeholder="••••••••"
+              showLabel={t('modal.showPassword')}
+              hideLabel={t('modal.hidePassword')}
+            />
+          </div>
+          <div className="flex gap-3">
+            <button type="button" onClick={onClose} className="btn-secondary flex-1">
+              {t('modal.cancel')}
+            </button>
+            <button type="submit" disabled={saving || !password} className="btn-primary flex-1">
               {saving ? t('modal.saving') : t('modal.save')}
             </button>
           </div>

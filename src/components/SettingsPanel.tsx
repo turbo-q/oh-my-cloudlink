@@ -15,6 +15,7 @@ interface BackupInfo {
   hosts: number
   groups: number
   keys: number
+  passwords?: number
   portForwards?: number
   snippets?: number
 }
@@ -263,6 +264,9 @@ export function SettingsPanel({ onExport, onImport, onDataRestored }: SettingsPa
                                 groups: b.groups,
                                 keys: b.keys,
                               })}
+                              {b.passwords
+                                ? t('settings.backupPasswords', { n: b.passwords })
+                                : ''}
                               {b.portForwards
                                 ? t('settings.backupForwards', { n: b.portForwards })
                                 : ''}

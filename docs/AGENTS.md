@@ -8,7 +8,7 @@
 
 **Oh My CloudLink**（原「云连 SSH」）是类 Termius 的桌面 SSH 客户端：
 
-- 主机 / 分组 / 标签、SSH 密钥、多标签终端
+- 主机 / 分组 / 标签、SSH 密钥与可复用主机密码（凭证）、多标签终端
 - SFTP（及 FTP）双栏文件、端口转发、命令片段
 - 会话日志回放、导入导出 / 备份、主密码保险库加密
 
@@ -119,6 +119,7 @@ npm run lint         # oxlint
 ### 安全相关
 
 - 主机密码 / 私钥等经 vault 加密入库；导出备份为密封 envelope（见 `crypto-vault.ts`）
+- **凭证库**：导航「凭证」含 SSH 密钥与可复用主机密码；主机通过 `passwordId` 引用密码库，或使用一次性 inline `password`
 - 不要把密钥、`.env`、vault 材料打进 git 或 commit
 - 会话日志 ID 必须是 UUID v4（防路径穿越）
 

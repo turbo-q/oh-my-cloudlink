@@ -1,12 +1,17 @@
 import type { ConnectConfig } from 'ssh2'
-import type { StoredHost, StoredKey } from './data-store'
+import type { StoredHost, StoredKey, StoredPassword } from './data-store'
 
 export interface ConnectOptions {
   host: StoredHost
   keys: StoredKey[]
+  passwords?: StoredPassword[]
 }
 
-export function buildSshConnectConfig(host: StoredHost, keys: StoredKey[]): ConnectConfig {
+export function buildSshConnectConfig(
+  host: StoredHost,
+  keys: StoredKey[],
+  passwords: StoredPassword[] = [],
+): ConnectConfig {
   const config: ConnectConfig = {
     host: host.hostname,
     port: host.port,
@@ -15,10 +20,18 @@ export function buildSshConnectConfig(host: StoredHost, keys: StoredKey[]): Conn
   }
 
   if (host.authType === 'password') {
-    if (!host.password) {
+    let password = host.password
+    if (host.passwordId) {
+      const entry = passwords.find((p) => p.id === host.passwordId)
+      if (!entry) {
+        throw new Error('未找到关联的主机密码')
+      }
+      password = entry.password
+    }
+    if (!password) {
       throw new Error('请配置密码')
     }
-    config.password = host.password
+    config.password = password
   } else if (host.authType === 'key' && host.keyId) {
     const key = keys.find((k) => k.id === host.keyId)
     if (!key) {

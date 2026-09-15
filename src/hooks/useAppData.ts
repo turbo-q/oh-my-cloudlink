@@ -1,28 +1,31 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { ImportOptions } from '../types/import'
-import type { Group, Host, PortForward, Snippet, SSHKey, HostOsId } from '../types'
+import type { Group, Host, HostPassword, PortForward, Snippet, SSHKey, HostOsId } from '../types'
 
 export function useAppData(options?: { enabled?: boolean }) {
   const enabled = options?.enabled !== false
   const [hosts, setHosts] = useState<Host[]>([])
   const [groups, setGroups] = useState<Group[]>([])
   const [keys, setKeys] = useState<SSHKey[]>([])
+  const [passwords, setPasswords] = useState<HostPassword[]>([])
   const [portForwards, setPortForwards] = useState<PortForward[]>([])
   const [snippets, setSnippets] = useState<Snippet[]>([])
   const [loading, setLoading] = useState(true)
 
   const refresh = useCallback(async () => {
     if (!window.electronAPI) return
-    const [h, g, k, f, s] = await Promise.all([
+    const [h, g, k, p, f, s] = await Promise.all([
       window.electronAPI.getHosts(),
       window.electronAPI.getGroups(),
       window.electronAPI.getKeys(),
+      window.electronAPI.getPasswords(),
       window.electronAPI.getPortForwards(),
       window.electronAPI.getSnippets(),
     ])
     setHosts(h as Host[])
     setGroups(g as Group[])
     setKeys(k as SSHKey[])
+    setPasswords(p as HostPassword[])
     setPortForwards(f as PortForward[])
     setSnippets(s as Snippet[])
     setLoading(false)
@@ -74,6 +77,19 @@ export function useAppData(options?: { enabled?: boolean }) {
     await refresh()
   }
 
+  const savePassword = async (
+    entry: Partial<HostPassword> & { name: string; password: string },
+  ) => {
+    const saved = (await window.electronAPI.savePassword(entry)) as HostPassword
+    await refresh()
+    return saved
+  }
+
+  const deletePassword = async (id: string) => {
+    await window.electronAPI.deletePassword(id)
+    await refresh()
+  }
+
   const savePortForward = async (
     forward: Partial<PortForward> & {
       hostId: string
@@ -117,6 +133,7 @@ export function useAppData(options?: { enabled?: boolean }) {
     hosts,
     groups,
     keys,
+    passwords,
     portForwards,
     snippets,
     loading,
@@ -127,6 +144,8 @@ export function useAppData(options?: { enabled?: boolean }) {
     deleteGroup,
     saveKey,
     deleteKey,
+    savePassword,
+    deletePassword,
     savePortForward,
     deletePortForward,
     saveSnippet,

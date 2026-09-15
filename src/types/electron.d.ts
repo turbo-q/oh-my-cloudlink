@@ -2,6 +2,7 @@ import type {
   Host,
   Group,
   SSHKey,
+  HostPassword,
   RemoteFileEntry,
   DiscoveredKey,
   PortForward,
@@ -21,6 +22,11 @@ export interface ElectronAPI {
   getKeys: () => Promise<SSHKey[]>
   saveKey: (key: Partial<SSHKey> & { name: string; privateKey: string }) => Promise<SSHKey>
   deleteKey: (id: string) => Promise<boolean>
+  getPasswords: () => Promise<HostPassword[]>
+  savePassword: (
+    entry: Partial<HostPassword> & { name: string; password: string },
+  ) => Promise<HostPassword>
+  deletePassword: (id: string) => Promise<boolean>
   discoverLocalKeys: () => Promise<DiscoveredKey[]>
   pickKeyFile: (options?: {
     title?: string
@@ -76,6 +82,7 @@ export interface ElectronAPI {
       hosts: number
       groups: number
       keys: number
+      passwords: number
       portForwards: number
       snippets: number
     }[]
@@ -88,6 +95,7 @@ export interface ElectronAPI {
     hosts: number
     groups: number
     keys: number
+    passwords: number
     portForwards: number
     snippets: number
   }>

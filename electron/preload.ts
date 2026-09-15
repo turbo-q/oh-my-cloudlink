@@ -17,6 +17,10 @@ const electronAPI = {
   saveKey: (key: unknown) => ipcRenderer.invoke('data:saveKey', key),
   deleteKey: (id: string) => ipcRenderer.invoke('data:deleteKey', id),
 
+  getPasswords: () => ipcRenderer.invoke('data:getPasswords'),
+  savePassword: (entry: unknown) => ipcRenderer.invoke('data:savePassword', entry),
+  deletePassword: (id: string) => ipcRenderer.invoke('data:deletePassword', id),
+
   // 端口转发规则
   getPortForwards: (hostId?: string) => ipcRenderer.invoke('data:getPortForwards', hostId),
   savePortForward: (forward: unknown) => ipcRenderer.invoke('data:savePortForward', forward),

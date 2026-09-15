@@ -12,11 +12,12 @@ export interface ImportEntityCounts {
   hosts: number
   groups: number
   keys: number
+  passwords: number
   portForwards: number
   snippets: number
 }
 
-export type ImportSampleKind = 'host' | 'key' | 'group' | 'forward' | 'snippet'
+export type ImportSampleKind = 'host' | 'key' | 'password' | 'group' | 'forward' | 'snippet'
 
 export interface ImportPreviewSampleItem {
   kind: ImportSampleKind
@@ -43,7 +44,14 @@ export const DEFAULT_IMPORT_OPTIONS: ImportOptions = {
 }
 
 function countTotal(counts: ImportEntityCounts): number {
-  return counts.hosts + counts.groups + counts.keys + counts.portForwards + counts.snippets
+  return (
+    counts.hosts +
+    counts.groups +
+    counts.keys +
+    counts.passwords +
+    counts.portForwards +
+    counts.snippets
+  )
 }
 
 export function countPreviewItems(counts: ImportEntityCounts): number {

@@ -3,6 +3,7 @@ import type {
   StoredGroup,
   StoredHost,
   StoredKey,
+  StoredPassword,
   StoredPortForward,
   StoredSnippet,
 } from './data-store'
@@ -21,6 +22,7 @@ export interface ImportEntityCounts {
   hosts: number
   groups: number
   keys: number
+  passwords: number
   portForwards: number
   snippets: number
 }
@@ -29,11 +31,12 @@ export const EMPTY_IMPORT_COUNTS: ImportEntityCounts = {
   hosts: 0,
   groups: 0,
   keys: 0,
+  passwords: 0,
   portForwards: 0,
   snippets: 0,
 }
 
-export type ImportSampleKind = 'host' | 'key' | 'group' | 'forward' | 'snippet'
+export type ImportSampleKind = 'host' | 'key' | 'password' | 'group' | 'forward' | 'snippet'
 
 export interface ImportPreviewSampleItem {
   kind: ImportSampleKind
@@ -88,6 +91,8 @@ export interface MergePlan {
   groupIdRemap: Map<string, string>
   keys: Map<string, EntityAction>
   keyIdRemap: Map<string, string>
+  passwords: Map<string, EntityAction>
+  passwordIdRemap: Map<string, string>
   hosts: Map<string, EntityAction>
   hostIdRemap: Map<string, string>
   forwards: Map<string, EntityAction>
@@ -99,6 +104,7 @@ function countEntities(items: {
   hosts: StoredHost[]
   groups: StoredGroup[]
   keys: StoredKey[]
+  passwords: StoredPassword[]
   portForwards: StoredPortForward[]
   snippets: StoredSnippet[]
 }): ImportEntityCounts {
@@ -106,6 +112,7 @@ function countEntities(items: {
     hosts: items.hosts.length,
     groups: items.groups.length,
     keys: items.keys.length,
+    passwords: items.passwords.length,
     portForwards: items.portForwards.length,
     snippets: items.snippets.length,
   }
@@ -127,6 +134,10 @@ function keyBusinessKey(k: StoredKey): string {
   return k.name.trim().toLowerCase()
 }
 
+function passwordBusinessKey(p: StoredPassword): string {
+  return p.name.trim().toLowerCase()
+}
+
 function forwardBusinessKey(hostId: string, name: string): string {
   return `${hostId}\0${name.trim().toLowerCase()}`
 }
@@ -140,6 +151,7 @@ function normalizeIncoming(data: Partial<DataFile>): DataFile {
     hosts: data.hosts ?? [],
     groups: data.groups ?? [],
     keys: data.keys ?? [],
+    passwords: data.passwords ?? [],
     portForwards: data.portForwards ?? [],
     snippets: data.snippets ?? [],
   }
@@ -220,6 +232,36 @@ export function buildMergePlan(
     keyIdRemap.set(k.id, k.id)
     addCount(preview.add, 'keys')
     pushSample(preview.samples, 'add', { kind: 'key', label: k.name })
+  }
+
+  const passwords = new Map<string, EntityAction>()
+  const passwordIdRemap = new Map<string, string>()
+  const localPasswordsById = new Map(local.passwords.map((p) => [p.id, p]))
+  const localPasswordsByKey = new Map(local.passwords.map((p) => [passwordBusinessKey(p), p]))
+
+  for (const p of incoming.passwords) {
+    const byId = localPasswordsById.get(p.id)
+    if (byId) {
+      const action: EntityAction = conflict === 'update' ? 'update' : 'skip'
+      passwords.set(p.id, action)
+      passwordIdRemap.set(p.id, p.id)
+      addCount(preview[action], 'passwords')
+      pushSample(preview.samples, action, { kind: 'password', label: p.name })
+      continue
+    }
+    const byKey = localPasswordsByKey.get(passwordBusinessKey(p))
+    if (byKey) {
+      const action: EntityAction = conflict === 'update' ? 'update' : 'skip'
+      passwords.set(p.id, action)
+      passwordIdRemap.set(p.id, byKey.id)
+      addCount(preview[action], 'passwords')
+      pushSample(preview.samples, action, { kind: 'password', label: p.name })
+      continue
+    }
+    passwords.set(p.id, 'add')
+    passwordIdRemap.set(p.id, p.id)
+    addCount(preview.add, 'passwords')
+    pushSample(preview.samples, 'add', { kind: 'password', label: p.name })
   }
 
   const hosts = new Map<string, EntityAction>()
@@ -326,6 +368,8 @@ export function buildMergePlan(
     groupIdRemap,
     keys,
     keyIdRemap,
+    passwords,
+    passwordIdRemap,
     hosts,
     hostIdRemap,
     forwards,
@@ -346,6 +390,9 @@ export function computeImportPreview(
     const samples: ImportPreviewSamples = { add: [], update: [], skip: [] }
     for (const h of incoming.hosts) pushSample(samples, 'add', hostSample(h))
     for (const k of incoming.keys) pushSample(samples, 'add', { kind: 'key', label: k.name })
+    for (const p of incoming.passwords) {
+      pushSample(samples, 'add', { kind: 'password', label: p.name })
+    }
     for (const g of incoming.groups) pushSample(samples, 'add', { kind: 'group', label: g.name })
     for (const f of incoming.portForwards) {
       const host = incoming.hosts.find((h) => h.id === f.hostId)
@@ -368,11 +415,13 @@ export function hasMergeChanges(preview: ImportPreviewResult): boolean {
     preview.add.hosts +
     preview.add.groups +
     preview.add.keys +
+    preview.add.passwords +
     preview.add.portForwards +
     preview.add.snippets +
     preview.update.hosts +
     preview.update.groups +
     preview.update.keys +
+    preview.update.passwords +
     preview.update.portForwards +
     preview.update.snippets
   return total > 0
