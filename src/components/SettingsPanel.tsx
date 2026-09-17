@@ -32,6 +32,11 @@ export function SettingsPanel({ onExport, onImport, onDataRestored }: SettingsPa
   const [backups, setBackups] = useState<BackupInfo[]>([])
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
+  const [appVersion, setAppVersion] = useState('')
+
+  useEffect(() => {
+    void window.electronAPI.getAppVersion().then(setAppVersion).catch(() => setAppVersion(''))
+  }, [])
 
   const themeOptions: { value: ThemeMode; label: string; description: string }[] = [
     { value: 'system', label: t('settings.themeSystem'), description: t('settings.themeSystemDesc') },
@@ -314,7 +319,9 @@ export function SettingsPanel({ onExport, onImport, onDataRestored }: SettingsPa
                 {t('settings.about')}
               </h3>
               <div className="text-sm text-app-muted space-y-1 rounded-xl border border-app-strong bg-app-card p-5">
-                <p className="text-app font-medium">Oh My CloudLink v0.4.0</p>
+                <p className="text-app font-medium">
+                  Oh My CloudLink{appVersion ? ` v${appVersion}` : ''}
+                </p>
                 <p className="text-app-subtle">{t('settings.aboutBlurb')}</p>
               </div>
             </section>
