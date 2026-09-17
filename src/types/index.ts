@@ -44,6 +44,14 @@ export interface SSHKey {
   createdAt: string
 }
 
+/** 可复用的主机登录密码（凭证库） */
+export interface HostPassword {
+  id: string
+  name: string
+  password: string
+  createdAt: string
+}
+
 /** 主机分组 */
 export interface Group {
   id: string
@@ -63,6 +71,8 @@ export interface Host {
   protocol: ConnectionProtocol
   authType: AuthType
   password?: string
+  /** 凭证库中的可复用密码；优先于 inline password */
+  passwordId?: string
   keyId?: string
   groupId?: string
   tags: string[]
@@ -111,6 +121,9 @@ export type GroupFormData = Omit<Group, 'id' | 'createdAt'>
 /** 新建/编辑密钥表单 */
 export type KeyFormData = Omit<SSHKey, 'id' | 'createdAt'>
 
+/** 新建/编辑主机密码表单 */
+export type PasswordFormData = Omit<HostPassword, 'id' | 'createdAt'>
+
 /** 端口转发类型 */
 export type PortForwardType = 'local' | 'remote' | 'dynamic'
 
@@ -124,6 +137,8 @@ export interface PortForward {
   localPort: number
   remoteHost?: string
   remotePort?: number
+  /** 最近一次成功启动时间（ISO） */
+  lastConnectedAt?: string
   createdAt: string
   updatedAt: string
 }

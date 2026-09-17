@@ -3,7 +3,7 @@ import { BrowserWindow } from 'electron'
 import { Client, type ConnectConfig, type ClientChannel } from 'ssh2'
 import { buildSshConnectConfig } from './auth-config'
 import { attachHostKeyVerification } from './host-key'
-import type { StoredHost, StoredKey, StoredPortForward } from './data-store'
+import type { StoredHost, StoredKey, StoredPassword, StoredPortForward } from './data-store'
 
 export type ForwardRuntimeStatus = 'stopped' | 'starting' | 'running' | 'error'
 
@@ -172,6 +172,7 @@ export class PortForwardManager {
     rule: StoredPortForward,
     host: StoredHost,
     keys: StoredKey[],
+    passwords: StoredPassword[],
     win: BrowserWindow | null,
   ): Promise<ForwardRuntimeInfo> {
     if (host.protocol === 'ftp') {
@@ -185,7 +186,7 @@ export class PortForwardManager {
     this.validateRule(rule)
 
     const config: ConnectConfig = {
-      ...buildSshConnectConfig(host, keys),
+      ...buildSshConnectConfig(host, keys, passwords),
       keepaliveInterval: 15000,
       keepaliveCountMax: 3,
     }

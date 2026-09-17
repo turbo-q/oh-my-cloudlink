@@ -34,6 +34,14 @@ const MANIFEST_FLUSH_MS = 500
 const SESSION_LOG_ID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
+/** Strip CSI / OSC / simple ESC sequences for plain-text export. */
+function stripAnsiSequences(input: string): string {
+  return input
+    .replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, '')
+    .replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, '')
+    .replace(/\x1b[()][A-Za-z0-9]/g, '')
+    .replace(/\x1b./g, '')
+}
 export class SessionLogStore {
   private logsDir: string
   private manifestPath: string
@@ -78,8 +86,66 @@ export class SessionLogStore {
     const before = this.manifest.length
     this.manifest = this.manifest.filter((m) => this.isSafeLogId(m.id))
     if (this.manifest.length !== before) this.saveManifestNow()
+    // Re-index .log files missing from manifest (e.g. empty manifest after crash / bad write).
+    this.reconcileOrphanLogFiles()
     // Previous run may have been force-killed while status was still "connected"
     this.finalizeOrphanSessions()
+  }
+
+  /**
+   * If manifest lost entries but `{uuid}.log` files remain, rebuild metadata from disk
+   * so the Logs UI can show them again. Does not delete extras here — prune() owns caps.
+   */
+  private reconcileOrphanLogFiles(): void {
+    let changed = false
+    const known = new Set(this.manifest.map((m) => m.id))
+    let names: string[] = []
+    try {
+      names = fs.readdirSync(this.logsDir)
+    } catch {
+      return
+    }
+
+    for (const name of names) {
+      const match = /^([0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\.log$/i.exec(
+        name,
+      )
+      if (!match) continue
+      const id = match[1]
+      if (!this.isSafeLogId(id) || known.has(id)) continue
+
+      let st: fs.Stats
+      try {
+        st = fs.statSync(path.join(this.logsDir, name))
+      } catch {
+        continue
+      }
+      if (!st.isFile() || st.size <= 0) continue
+
+      const startedAt = (st.birthtimeMs > 0 ? st.birthtime : st.mtime).toISOString()
+      const endedAt = st.mtime.toISOString()
+      this.manifest.push({
+        id,
+        sessionId: id,
+        hostId: '',
+        hostName: `session-${id.slice(0, 8)}`,
+        hostname: '',
+        username: '',
+        startedAt,
+        endedAt,
+        status: 'disconnected',
+        byteSize: st.size,
+      })
+      known.add(id)
+      changed = true
+    }
+
+    if (!changed) return
+
+    this.manifest.sort(
+      (a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime(),
+    )
+    this.saveManifestNow()
   }
 
   /**
@@ -122,7 +188,21 @@ export class SessionLogStore {
   private flushManifest(): void {
     if (!this.manifestDirty) return
     this.manifestDirty = false
-    fs.writeFileSync(this.manifestPath, JSON.stringify(this.manifest, null, 2), 'utf-8')
+    const payload = `${JSON.stringify(this.manifest, null, 2)}\n`
+    // Atomic replace: avoid truncated manifest.json if the process is killed mid-write
+    // (common when Electron restarts during `npm run dev` / rebuild after a commit).
+    const tmp = path.join(this.logsDir, `.manifest.${process.pid}.tmp`)
+    try {
+      fs.writeFileSync(tmp, payload, 'utf-8')
+      fs.renameSync(tmp, this.manifestPath)
+    } catch {
+      try {
+        if (fs.existsSync(tmp)) fs.unlinkSync(tmp)
+      } catch {
+        // ignore
+      }
+      fs.writeFileSync(this.manifestPath, payload, 'utf-8')
+    }
   }
 
   private logFilePath(id: string): string {
@@ -271,6 +351,51 @@ export class SessionLogStore {
     return stripScreenClearSequences(fs.readFileSync(filePath, 'utf-8'))
   }
 
+  /** Flush in-flight WriteStream so export sees the latest bytes. */
+  private flushStream(id: string): Promise<void> {
+    const stream = this.writeStreams.get(id)
+    if (!stream || stream.destroyed) return Promise.resolve()
+    return new Promise((resolve, reject) => {
+      stream.write('', (err) => (err ? reject(err) : resolve()))
+    })
+  }
+
+  /**
+   * Export a session log to an absolute path.
+   * `.txt` → strip ANSI and normalize newlines for editors;
+   * otherwise keep terminal sequences (minus screen-clear sanitization).
+   */
+  async exportLog(id: string, destPath: string): Promise<void> {
+    this.assertSafeLogId(id)
+    if (!destPath || typeof destPath !== 'string') {
+      throw new Error('无效的导出路径')
+    }
+    const resolved = path.resolve(destPath)
+    if (!path.isAbsolute(resolved)) {
+      throw new Error('无效的导出路径')
+    }
+    // Never allow overwriting the index or live session log store files.
+    const logsRoot = path.resolve(this.logsDir)
+    const rel = path.relative(logsRoot, resolved)
+    if (rel === 'manifest.json' || resolved === this.manifestPath) {
+      throw new Error('不能导出到日志索引文件')
+    }
+    if (rel && !rel.startsWith('..') && !path.isAbsolute(rel) && rel.toLowerCase().endsWith('.log')) {
+      const base = path.basename(rel, '.log')
+      if (this.isSafeLogId(base)) {
+        throw new Error('不能覆盖会话日志目录内的原始日志文件')
+      }
+    }
+
+    await this.flushStream(id)
+    let content = this.getContent(id)
+    const lower = resolved.toLowerCase()
+    if (lower.endsWith('.txt')) {
+      content = stripAnsiSequences(content).replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+    }
+    fs.writeFileSync(resolved, content, 'utf-8')
+  }
+
   deleteLog(id: string): boolean {
     const idx = this.manifest.findIndex((m) => m.id === id)
     if (idx < 0) return false
@@ -285,12 +410,23 @@ export class SessionLogStore {
   }
 
   clearAll(): void {
-    for (const id of this.writeStreams.keys()) {
+    for (const id of [...this.writeStreams.keys()]) {
       this.closeStream(id)
     }
-    for (const meta of this.manifest) {
-      const filePath = this.logFilePath(meta.id)
-      if (fs.existsSync(filePath)) fs.unlinkSync(filePath)
+    // Remove every session log file, including orphans not listed in manifest.
+    let names: string[] = []
+    try {
+      names = fs.readdirSync(this.logsDir)
+    } catch {
+      names = []
+    }
+    for (const name of names) {
+      if (!name.endsWith('.log')) continue
+      try {
+        fs.unlinkSync(path.join(this.logsDir, name))
+      } catch {
+        // ignore
+      }
     }
     this.manifest = []
     this.saveManifestNow()
@@ -301,10 +437,9 @@ export class SessionLogStore {
       (a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime(),
     )
     const keep = new Set(sorted.slice(0, MAX_SESSION_LOGS).map((m) => m.id))
-    for (const meta of this.manifest) {
-      if (!keep.has(meta.id)) {
-        this.deleteLog(meta.id)
-      }
+    const toRemove = this.manifest.filter((m) => !keep.has(m.id)).map((m) => m.id)
+    for (const id of toRemove) {
+      this.deleteLog(id)
     }
   }
 
@@ -313,6 +448,8 @@ export class SessionLogStore {
     for (const sessionId of [...this.writeStreams.keys()]) {
       this.closeStream(sessionId)
     }
+    // Last chance: never persist an empty index over orphan .log files on disk.
+    this.reconcileOrphanLogFiles()
     this.saveManifestNow()
   }
 }

@@ -8,14 +8,14 @@ import { SettingsPanel } from './components/SettingsPanel'
 import { LogsPanel } from './components/LogsPanel'
 import { SftpPanel } from './components/SftpPanel'
 import { TerminalPanel } from './components/TerminalPanel'
-import { HostFormModal, GroupFormModal, KeyFormModal, DiscoverKeysModal, PortForwardFormModal, SnippetFormModal } from './components/Modals'
+import { HostFormModal, GroupFormModal, KeyFormModal, PasswordFormModal, DiscoverKeysModal, PortForwardFormModal, SnippetFormModal } from './components/Modals'
 import { PortForwardsPanel } from './components/PortForwardsPanel'
 import { SnippetsPanel } from './components/SnippetsPanel'
 import { SshConfigConnectModal } from './components/SshConfigConnectModal'
 import { VaultGate } from './components/VaultPasswordModal'
 import { ImportDialogUi } from './components/ImportDialogUi'
 import { useImportDialog } from './hooks/useImportDialog'
-import type { Host, Group, SSHKey, AppSession, DiscoveredKey, PortForward, Snippet, SshConfigHost } from './types'
+import type { Host, Group, SSHKey, HostPassword, AppSession, DiscoveredKey, PortForward, Snippet, SshConfigHost } from './types'
 import type { AppPanel } from './types/app'
 import { isFileProtocol, isSshHost, getHostFileProtocol, GROUP_COLORS } from './types'
 import { filterHosts, type GroupFilter } from './utils/filterHosts'
@@ -29,6 +29,7 @@ type ModalState =
   | { type: 'host'; host?: Host }
   | { type: 'group'; group?: Group }
   | { type: 'key'; key?: SSHKey }
+  | { type: 'password'; entry?: HostPassword }
   | { type: 'discoverKeys' }
   | { type: 'forward'; forward?: PortForward }
   | { type: 'snippet'; snippet?: Snippet }
@@ -56,6 +57,7 @@ export default function App() {
     hosts,
     groups,
     keys,
+    passwords,
     portForwards,
     snippets,
     loading,
@@ -66,6 +68,8 @@ export default function App() {
     deleteGroup,
     saveKey,
     deleteKey,
+    savePassword,
+    deletePassword,
     savePortForward,
     deletePortForward,
     saveSnippet,
@@ -336,6 +340,11 @@ export default function App() {
     await deleteKey(key.id)
   }
 
+  const handleDeletePassword = async (entry: HostPassword) => {
+    if (!confirm(t('app.deletePassword', { name: entry.name }))) return
+    await deletePassword(entry.id)
+  }
+
   const handleDeleteForward = async (forward: PortForward) => {
     if (!confirm(t('app.deleteForward', { name: forward.name }))) return
     await deletePortForward(forward.id)
@@ -460,10 +469,14 @@ export default function App() {
         {!showSession && browsePanel === 'keys' && (
           <KeysPanel
             keys={keys}
+            passwords={passwords}
             onAddKey={() => setModal({ type: 'key' })}
             onDiscoverKeys={() => setModal({ type: 'discoverKeys' })}
             onEditKey={(k) => setModal({ type: 'key', key: k })}
             onDeleteKey={handleDeleteKey}
+            onAddPassword={() => setModal({ type: 'password' })}
+            onEditPassword={(p) => setModal({ type: 'password', entry: p })}
+            onDeletePassword={handleDeletePassword}
           />
         )}
 
@@ -474,6 +487,7 @@ export default function App() {
             onAdd={() => setModal({ type: 'forward' })}
             onEdit={(f) => setModal({ type: 'forward', forward: f })}
             onDelete={handleDeleteForward}
+            onConnected={() => void refresh()}
           />
         )}
 
@@ -543,7 +557,9 @@ export default function App() {
         host={modal.type === 'host' ? modal.host : null}
         groups={groups}
         keys={keys}
+        passwords={passwords}
         onSave={saveHost}
+        onSavePassword={savePassword}
         onCreateGroup={handleCreateGroup}
         onClose={() => setModal({ type: 'none' })}
       />
@@ -557,6 +573,12 @@ export default function App() {
         open={modal.type === 'key'}
         keyItem={modal.type === 'key' ? modal.key : null}
         onSave={saveKey}
+        onClose={() => setModal({ type: 'none' })}
+      />
+      <PasswordFormModal
+        open={modal.type === 'password'}
+        entry={modal.type === 'password' ? modal.entry : null}
+        onSave={savePassword}
         onClose={() => setModal({ type: 'none' })}
       />
       <DiscoverKeysModal

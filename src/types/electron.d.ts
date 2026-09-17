@@ -2,6 +2,7 @@ import type {
   Host,
   Group,
   SSHKey,
+  HostPassword,
   RemoteFileEntry,
   DiscoveredKey,
   PortForward,
@@ -21,6 +22,11 @@ export interface ElectronAPI {
   getKeys: () => Promise<SSHKey[]>
   saveKey: (key: Partial<SSHKey> & { name: string; privateKey: string }) => Promise<SSHKey>
   deleteKey: (id: string) => Promise<boolean>
+  getPasswords: () => Promise<HostPassword[]>
+  savePassword: (
+    entry: Partial<HostPassword> & { name: string; password: string },
+  ) => Promise<HostPassword>
+  deletePassword: (id: string) => Promise<boolean>
   discoverLocalKeys: () => Promise<DiscoveredKey[]>
   pickKeyFile: (options?: {
     title?: string
@@ -76,6 +82,7 @@ export interface ElectronAPI {
       hosts: number
       groups: number
       keys: number
+      passwords: number
       portForwards: number
       snippets: number
     }[]
@@ -88,6 +95,7 @@ export interface ElectronAPI {
     hosts: number
     groups: number
     keys: number
+    passwords: number
     portForwards: number
     snippets: number
   }>
@@ -114,7 +122,11 @@ export interface ElectronAPI {
     filters?: { name: string; extensions: string[] }[]
   }) => Promise<string[] | null>
   openDirectoryDialog: (options?: { title?: string }) => Promise<string | null>
-  saveFileDialog: (options?: { title?: string; defaultPath?: string }) => Promise<string | null>
+  saveFileDialog: (options?: {
+    title?: string
+    defaultPath?: string
+    filters?: { name: string; extensions: string[] }[]
+  }) => Promise<string | null>
 
   sshConnect: (
     sessionId: string,
@@ -149,6 +161,7 @@ export interface ElectronAPI {
     }[]
   >
   logsGet: (id: string) => Promise<string>
+  logsExport: (id: string, destPath: string) => Promise<boolean>
   logsDelete: (id: string) => Promise<boolean>
   logsClear: () => Promise<boolean>
   sessionLogPrepare: (sessionId: string, hostId: string) => Promise<boolean>

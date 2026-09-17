@@ -25,6 +25,7 @@ const COUNT_KEYS: (keyof ImportEntityCounts)[] = [
   'hosts',
   'groups',
   'keys',
+  'passwords',
   'portForwards',
   'snippets',
 ]
@@ -33,6 +34,7 @@ const COUNT_KIND: Record<keyof ImportEntityCounts, ImportPreviewSampleItem['kind
   hosts: 'host',
   groups: 'group',
   keys: 'key',
+  passwords: 'password',
   portForwards: 'forward',
   snippets: 'snippet',
 }

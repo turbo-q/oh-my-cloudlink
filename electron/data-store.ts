@@ -68,6 +68,8 @@ export interface StoredHost {
   protocol: 'ssh' | 'sftp' | 'ftp'
   authType: 'password' | 'key'
   password?: string
+  /** Reusable password library entry (preferred over inline password when set). */
+  passwordId?: string
   keyId?: string
   groupId?: string
   tags: string[]
@@ -94,6 +96,14 @@ export interface StoredKey {
   createdAt: string
 }
 
+/** Named reusable host login password (vault-encrypted at rest). */
+export interface StoredPassword {
+  id: string
+  name: string
+  password: string
+  createdAt: string
+}
+
 export type PortForwardType = 'local' | 'remote' | 'dynamic'
 
 /** SSH 端口转发规则（持久化） */
@@ -110,6 +120,8 @@ export interface StoredPortForward {
   remoteHost?: string
   /** 本地转发：远端目标端口；远程转发：远端监听端口；动态：不用 */
   remotePort?: number
+  /** ISO time of last successful start; used for list ordering */
+  lastConnectedAt?: string
   createdAt: string
   updatedAt: string
 }
@@ -130,6 +142,7 @@ export interface DataFile {
   hosts: StoredHost[]
   groups: StoredGroup[]
   keys: StoredKey[]
+  passwords: StoredPassword[]
   portForwards: StoredPortForward[]
   snippets: StoredSnippet[]
 }
@@ -142,6 +155,7 @@ export interface BackupInfo {
   hosts: number
   groups: number
   keys: number
+  passwords: number
   portForwards: number
   snippets: number
 }
@@ -157,6 +171,7 @@ interface HostRow {
   protocol: string
   auth_type: string
   password: string | null
+  password_id: string | null
   key_id: string | null
   group_id: string | null
   tags: string | null
@@ -183,6 +198,13 @@ interface KeyRow {
   created_at: string
 }
 
+interface PasswordRow {
+  id: string
+  name: string
+  password: string
+  created_at: string
+}
+
 interface PortForwardRow {
   id: string
   host_id: string
@@ -192,6 +214,7 @@ interface PortForwardRow {
   local_port: number
   remote_host: string | null
   remote_port: number | null
+  last_connected_at: string | null
   created_at: string
   updated_at: string
 }
@@ -384,6 +407,19 @@ export class DataStore {
         row.id,
       )
     }
+
+    const passwords = this.db.prepare('SELECT id, password FROM passwords').all() as unknown as {
+      id: string
+      password: string
+    }[]
+    const updatePassword = this.db.prepare('UPDATE passwords SET password = ? WHERE id = ?')
+    for (const row of passwords) {
+      if (!row.password) continue
+      const plain = decryptSecret(row.password)
+      if (plain !== undefined) {
+        updatePassword.run(encryptSecret(plain), row.id)
+      }
+    }
   }
 
   /** One-time: promote old data.backup.json into backups/ if folder is empty. */
@@ -397,6 +433,7 @@ export class DataStore {
         data.hosts.length +
           data.groups.length +
           data.keys.length +
+          (data.passwords?.length ?? 0) +
           data.portForwards.length +
           data.snippets.length ===
           0
@@ -442,6 +479,13 @@ export class DataStore {
         private_key TEXT NOT NULL,
         public_key TEXT,
         passphrase TEXT,
+        created_at TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS passwords (
+        id TEXT PRIMARY KEY NOT NULL,
+        name TEXT NOT NULL,
+        password TEXT NOT NULL,
         created_at TEXT NOT NULL
       );
 
@@ -498,6 +542,8 @@ export class DataStore {
     `)
     this.migrateSnippetsHostIdsColumn()
     this.migrateHostOsIdColumn()
+    this.migrateHostPasswordIdColumn()
+    this.migratePortForwardLastConnectedColumn()
   }
 
   private getMeta(key: string): string | null {
@@ -557,6 +603,17 @@ export class DataStore {
         }
       }
 
+      const passwords = this.db.prepare('SELECT id, password FROM passwords').all() as unknown as {
+        id: string
+        password: string
+      }[]
+      const updatePassword = this.db.prepare('UPDATE passwords SET password = ? WHERE id = ?')
+      for (const row of passwords) {
+        if (row.password && !isEncryptedSecret(row.password)) {
+          updatePassword.run(encryptSecret(row.password), row.id)
+        }
+      }
+
       this.setMeta('secrets_encrypted', '1')
       this.db.exec('COMMIT')
     } catch (err) {
@@ -577,6 +634,30 @@ export class DataStore {
       }
     } catch (err) {
       console.error('[data-store] migrate hosts os_id failed:', err)
+    }
+  }
+
+  private migrateHostPasswordIdColumn(): void {
+    try {
+      const cols = this.db.prepare(`PRAGMA table_info(hosts)`).all() as unknown as { name: string }[]
+      if (!cols.some((c) => c.name === 'password_id')) {
+        this.db.exec(`ALTER TABLE hosts ADD COLUMN password_id TEXT`)
+      }
+    } catch (err) {
+      console.error('[data-store] migrate hosts password_id failed:', err)
+    }
+  }
+
+  private migratePortForwardLastConnectedColumn(): void {
+    try {
+      const cols = this.db
+        .prepare(`PRAGMA table_info(port_forwards)`)
+        .all() as unknown as { name: string }[]
+      if (!cols.some((c) => c.name === 'last_connected_at')) {
+        this.db.exec(`ALTER TABLE port_forwards ADD COLUMN last_connected_at TEXT`)
+      }
+    } catch (err) {
+      console.error('[data-store] migrate port_forwards last_connected_at failed:', err)
     }
   }
 
@@ -742,6 +823,7 @@ export class DataStore {
         data.hosts.length +
           data.groups.length +
           data.keys.length +
+          data.passwords.length +
           data.portForwards.length +
           data.snippets.length ===
         0
@@ -770,6 +852,7 @@ export class DataStore {
         hosts: data.hosts.length,
         groups: data.groups.length,
         keys: data.keys.length,
+        passwords: data.passwords.length,
         portForwards: data.portForwards.length,
         snippets: data.snippets.length,
       }
@@ -786,6 +869,7 @@ export class DataStore {
         let hosts = 0
         let groups = 0
         let keys = 0
+        let passwords = 0
         let portForwards = 0
         let snippets = 0
         try {
@@ -794,6 +878,7 @@ export class DataStore {
             hosts = data.hosts.length
             groups = data.groups.length
             keys = data.keys.length
+            passwords = data.passwords?.length ?? 0
             portForwards = data.portForwards.length
             snippets = data.snippets.length
           }
@@ -808,6 +893,7 @@ export class DataStore {
           hosts,
           groups,
           keys,
+          passwords,
           portForwards,
           snippets,
         }
@@ -836,6 +922,7 @@ export class DataStore {
       data.hosts.length +
         data.groups.length +
         data.keys.length +
+        (data.passwords?.length ?? 0) +
         data.portForwards.length +
         data.snippets.length ===
       0
@@ -902,6 +989,7 @@ export class DataStore {
       protocol: row.protocol as StoredHost['protocol'],
       authType: row.auth_type as StoredHost['authType'],
       password: decryptSecret(row.password) ?? undefined,
+      passwordId: row.password_id ?? undefined,
       keyId: row.key_id ?? undefined,
       groupId: row.group_id ?? undefined,
       tags: this.parseTags(row.tags ?? '[]'),
@@ -933,6 +1021,15 @@ export class DataStore {
     }
   }
 
+  private mapPassword(row: PasswordRow): StoredPassword {
+    return {
+      id: row.id,
+      name: row.name,
+      password: decryptSecret(row.password) ?? '',
+      createdAt: row.created_at,
+    }
+  }
+
   private mapPortForward(row: PortForwardRow): StoredPortForward {
     return {
       id: row.id,
@@ -943,6 +1040,7 @@ export class DataStore {
       localPort: row.local_port,
       remoteHost: row.remote_host ?? undefined,
       remotePort: row.remote_port ?? undefined,
+      lastConnectedAt: row.last_connected_at ?? undefined,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     }
@@ -976,6 +1074,7 @@ export class DataStore {
       this.db.exec('DELETE FROM hosts')
       this.db.exec('DELETE FROM groups')
       this.db.exec('DELETE FROM keys')
+      this.db.exec('DELETE FROM passwords')
 
       const insertGroup = this.db.prepare(
         `INSERT INTO groups (id, name, color, parent_id, created_at) VALUES (?, ?, ?, ?, ?)`,
@@ -999,11 +1098,23 @@ export class DataStore {
         )
       }
 
+      const insertPassword = this.db.prepare(
+        `INSERT INTO passwords (id, name, password, created_at) VALUES (?, ?, ?, ?)`,
+      )
+      for (const p of data.passwords ?? []) {
+        insertPassword.run(
+          p.id,
+          p.name,
+          this.sealSecretForStorage(p.password) ?? '',
+          p.createdAt,
+        )
+      }
+
       const insertHost = this.db.prepare(
         `INSERT INTO hosts (
           id, name, hostname, port, username, protocol, auth_type,
-          password, key_id, group_id, tags, notes, os_id, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          password, password_id, key_id, group_id, tags, notes, os_id, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       for (const h of data.hosts) {
         insertHost.run(
@@ -1015,6 +1126,7 @@ export class DataStore {
           h.protocol,
           h.authType,
           this.sealSecretForStorage(h.password ?? null),
+          h.passwordId ?? null,
           h.keyId ?? null,
           h.groupId ?? null,
           JSON.stringify(h.tags ?? []),
@@ -1027,8 +1139,9 @@ export class DataStore {
 
       const insertForward = this.db.prepare(
         `INSERT INTO port_forwards (
-          id, host_id, name, type, local_host, local_port, remote_host, remote_port, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          id, host_id, name, type, local_host, local_port, remote_host, remote_port,
+          last_connected_at, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       for (const f of data.portForwards ?? []) {
         insertForward.run(
@@ -1040,6 +1153,7 @@ export class DataStore {
           f.localPort,
           f.remoteHost ?? null,
           f.remotePort ?? null,
+          f.lastConnectedAt ?? null,
           f.createdAt,
           f.updatedAt,
         )
@@ -1129,20 +1243,37 @@ export class DataStore {
         }
       }
 
+      for (const p of incoming.passwords) {
+        const action = plan.passwords.get(p.id)
+        if (!action || action === 'skip') continue
+        const targetId = plan.passwordIdRemap.get(p.id) ?? p.id
+        const sealed = this.sealSecretForStorage(p.password) ?? ''
+        if (action === 'add') {
+          this.db
+            .prepare(`INSERT INTO passwords (id, name, password, created_at) VALUES (?, ?, ?, ?)`)
+            .run(p.id, p.name, sealed, p.createdAt)
+        } else {
+          this.db
+            .prepare(`UPDATE passwords SET name = ?, password = ? WHERE id = ?`)
+            .run(p.name, sealed, targetId)
+        }
+      }
+
       for (const h of incoming.hosts) {
         const action = plan.hosts.get(h.id)
         if (!action || action === 'skip') continue
         const targetId = plan.hostIdRemap.get(h.id) ?? h.id
         const groupId = h.groupId ? (plan.groupIdRemap.get(h.groupId) ?? null) : null
         const keyId = h.keyId ? (plan.keyIdRemap.get(h.keyId) ?? null) : null
+        const passwordId = h.passwordId ? (plan.passwordIdRemap.get(h.passwordId) ?? null) : null
         const password = this.sealSecretForStorage(h.password ?? null)
         if (action === 'add') {
           this.db
             .prepare(
               `INSERT INTO hosts (
                 id, name, hostname, port, username, protocol, auth_type,
-                password, key_id, group_id, tags, notes, os_id, created_at, updated_at
-              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                password, password_id, key_id, group_id, tags, notes, os_id, created_at, updated_at
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             )
             .run(
               h.id,
@@ -1153,6 +1284,7 @@ export class DataStore {
               h.protocol,
               h.authType,
               password,
+              passwordId,
               keyId,
               groupId,
               JSON.stringify(h.tags ?? []),
@@ -1166,7 +1298,7 @@ export class DataStore {
             .prepare(
               `UPDATE hosts SET
                 name = ?, hostname = ?, port = ?, username = ?, protocol = ?, auth_type = ?,
-                password = ?, key_id = ?, group_id = ?, tags = ?, notes = ?, os_id = ?, updated_at = ?
+                password = ?, password_id = ?, key_id = ?, group_id = ?, tags = ?, notes = ?, os_id = ?, updated_at = ?
                WHERE id = ?`,
             )
             .run(
@@ -1177,6 +1309,7 @@ export class DataStore {
               h.protocol,
               h.authType,
               password,
+              passwordId,
               keyId,
               groupId,
               JSON.stringify(h.tags ?? []),
@@ -1198,8 +1331,9 @@ export class DataStore {
           this.db
             .prepare(
               `INSERT INTO port_forwards (
-                id, host_id, name, type, local_host, local_port, remote_host, remote_port, created_at, updated_at
-              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                id, host_id, name, type, local_host, local_port, remote_host, remote_port,
+                last_connected_at, created_at, updated_at
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             )
             .run(
               f.id,
@@ -1210,6 +1344,7 @@ export class DataStore {
               f.localPort,
               f.remoteHost ?? null,
               f.remotePort ?? null,
+              f.lastConnectedAt ?? null,
               f.createdAt,
               f.updatedAt,
             )
@@ -1222,7 +1357,7 @@ export class DataStore {
             .prepare(
               `UPDATE port_forwards SET
                 host_id = ?, name = ?, type = ?, local_host = ?, local_port = ?,
-                remote_host = ?, remote_port = ?, updated_at = ?
+                remote_host = ?, remote_port = ?, last_connected_at = ?, updated_at = ?
                WHERE id = ?`,
             )
             .run(
@@ -1233,6 +1368,7 @@ export class DataStore {
               f.localPort,
               f.remoteHost ?? null,
               f.remotePort ?? null,
+              f.lastConnectedAt ?? existing.lastConnectedAt ?? null,
               f.updatedAt,
               existing.id,
             )
@@ -1295,6 +1431,11 @@ export class DataStore {
       backupPassword: options.backupPassword,
       allowPlaintext: options.allowPlaintext,
     })
+    return this.previewPlainData(plain, options)
+  }
+
+  /** Preview against already-unsealed data (do not pass through unseal again). */
+  private previewPlainData(plain: DataFile, options: ImportOptions): ImportPreviewResult {
     this.assertVaultUnlocked()
     const local = this.exportData()
     return computeImportPreview(local, plain, options.mode, options.conflict ?? 'skip')
@@ -1314,7 +1455,9 @@ export class DataStore {
       allowPlaintext: options.allowPlaintext,
     })
     if (!data) throw new Error('备份文件格式不正确')
-    return this.importPreview(data, options)
+    // readDataFile already unsealed — calling importPreview again would treat
+    // the plaintext DataFile as a legacy unencrypted backup (BACKUP_PLAINTEXT).
+    return this.previewPlainData(data, options)
   }
 
   getHosts(): StoredHost[] {
@@ -1335,7 +1478,7 @@ export class DataStore {
           .prepare(
             `UPDATE hosts SET
               name = ?, hostname = ?, port = ?, username = ?, protocol = ?, auth_type = ?,
-              password = ?, key_id = ?, group_id = ?, tags = ?, notes = ?, os_id = ?, updated_at = ?
+              password = ?, password_id = ?, key_id = ?, group_id = ?, tags = ?, notes = ?, os_id = ?, updated_at = ?
              WHERE id = ?`,
           )
           .run(
@@ -1346,6 +1489,7 @@ export class DataStore {
             host.protocol,
             host.authType,
             encryptSecret(host.password ?? null),
+            host.passwordId ?? null,
             host.keyId ?? null,
             host.groupId ?? null,
             JSON.stringify(host.tags ?? []),
@@ -1371,8 +1515,8 @@ export class DataStore {
       .prepare(
         `INSERT INTO hosts (
           id, name, hostname, port, username, protocol, auth_type,
-          password, key_id, group_id, tags, notes, os_id, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          password, password_id, key_id, group_id, tags, notes, os_id, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         created.id,
@@ -1383,6 +1527,7 @@ export class DataStore {
         created.protocol,
         created.authType,
         encryptSecret(created.password ?? null),
+        created.passwordId ?? null,
         created.keyId ?? null,
         created.groupId ?? null,
         JSON.stringify(created.tags),
@@ -1554,15 +1699,77 @@ export class DataStore {
     }
   }
 
+  getPasswords(): StoredPassword[] {
+    this.assertVaultUnlocked()
+    const rows = this.db
+      .prepare('SELECT * FROM passwords ORDER BY name COLLATE NOCASE')
+      .all() as unknown as PasswordRow[]
+    return rows.map((r) => this.mapPassword(r))
+  }
+
+  savePassword(
+    entry: Omit<StoredPassword, 'id' | 'createdAt'> & { id?: string },
+  ): StoredPassword {
+    this.assertVaultUnlocked()
+    const now = new Date().toISOString()
+    if (entry.id) {
+      const existing = this.db
+        .prepare('SELECT * FROM passwords WHERE id = ?')
+        .get(entry.id) as unknown as PasswordRow | undefined
+      if (existing) {
+        this.db
+          .prepare(`UPDATE passwords SET name = ?, password = ? WHERE id = ?`)
+          .run(entry.name, encryptSecret(entry.password) ?? '', entry.id)
+        const updated = this.db
+          .prepare('SELECT * FROM passwords WHERE id = ?')
+          .get(entry.id) as unknown as PasswordRow
+        this.createTimedBackup()
+        return this.mapPassword(updated)
+      }
+    }
+
+    const created: StoredPassword = {
+      ...entry,
+      id: randomUUID(),
+      createdAt: now,
+    }
+    this.db
+      .prepare(`INSERT INTO passwords (id, name, password, created_at) VALUES (?, ?, ?, ?)`)
+      .run(created.id, created.name, encryptSecret(created.password) ?? '', created.createdAt)
+    this.createTimedBackup()
+    return created
+  }
+
+  deletePassword(id: string): boolean {
+    this.db.exec('BEGIN')
+    try {
+      const now = new Date().toISOString()
+      this.db
+        .prepare('UPDATE hosts SET password_id = NULL, updated_at = ? WHERE password_id = ?')
+        .run(now, id)
+      const result = this.db.prepare('DELETE FROM passwords WHERE id = ?').run(id)
+      this.db.exec('COMMIT')
+      if (result.changes > 0) this.createTimedBackup()
+      return result.changes > 0
+    } catch (err) {
+      this.db.exec('ROLLBACK')
+      throw err
+    }
+  }
+
   getPortForwards(hostId?: string): StoredPortForward[] {
+    const orderBy = `ORDER BY
+      CASE WHEN last_connected_at IS NULL OR last_connected_at = '' THEN 1 ELSE 0 END,
+      last_connected_at DESC,
+      name COLLATE NOCASE`
     if (hostId) {
       const rows = this.db
-        .prepare('SELECT * FROM port_forwards WHERE host_id = ? ORDER BY name COLLATE NOCASE')
+        .prepare(`SELECT * FROM port_forwards WHERE host_id = ? ${orderBy}`)
         .all(hostId) as unknown as PortForwardRow[]
       return rows.map((r) => this.mapPortForward(r))
     }
     const rows = this.db
-      .prepare('SELECT * FROM port_forwards ORDER BY name COLLATE NOCASE')
+      .prepare(`SELECT * FROM port_forwards ${orderBy}`)
       .all() as unknown as PortForwardRow[]
     return rows.map((r) => this.mapPortForward(r))
   }
@@ -1572,6 +1779,20 @@ export class DataStore {
       | PortForwardRow
       | undefined
     return row ? this.mapPortForward(row) : null
+  }
+
+  /** Mark a forward as recently connected (after successful start). */
+  touchPortForwardConnected(id: string): StoredPortForward | null {
+    const existing = this.db.prepare('SELECT * FROM port_forwards WHERE id = ?').get(id) as unknown as
+      | PortForwardRow
+      | undefined
+    if (!existing) return null
+    const now = new Date().toISOString()
+    this.db
+      .prepare('UPDATE port_forwards SET last_connected_at = ?, updated_at = ? WHERE id = ?')
+      .run(now, now, id)
+    const updated = this.db.prepare('SELECT * FROM port_forwards WHERE id = ?').get(id) as unknown as PortForwardRow
+    return this.mapPortForward(updated)
   }
 
   savePortForward(
@@ -1621,14 +1842,16 @@ export class DataStore {
       localPort: forward.localPort,
       remoteHost: forward.remoteHost,
       remotePort: forward.remotePort,
+      lastConnectedAt: forward.lastConnectedAt,
       createdAt: now,
       updatedAt: now,
     }
     this.db
       .prepare(
         `INSERT INTO port_forwards (
-          id, host_id, name, type, local_host, local_port, remote_host, remote_port, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          id, host_id, name, type, local_host, local_port, remote_host, remote_port,
+          last_connected_at, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         created.id,
@@ -1639,6 +1862,7 @@ export class DataStore {
         created.localPort,
         created.remoteHost ?? null,
         created.remotePort ?? null,
+        created.lastConnectedAt ?? null,
         created.createdAt,
         created.updatedAt,
       )
@@ -1730,6 +1954,7 @@ export class DataStore {
       hosts: this.getHosts(),
       groups: this.getGroups(),
       keys: this.getKeys(),
+      passwords: this.getPasswords(),
       portForwards: this.getPortForwards(),
       snippets: this.getSnippets(),
     }
@@ -1741,7 +1966,8 @@ export class DataStore {
       allowPlaintext: options.allowPlaintext,
     })
     if (!data) throw new Error('备份文件格式不正确')
-    return this.importPreview(data, options)
+    // Same as previewBackupFile: already unsealed, skip second unseal.
+    return this.previewPlainData(data, options)
   }
 
   /** Sealed v3 backup envelope for export / timed backups (portable with master password). */

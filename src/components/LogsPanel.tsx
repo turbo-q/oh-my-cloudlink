@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useI18n } from '../i18n/I18nProvider'
 import { dateLocaleTag } from '../i18n'
+import { ContextMenu, type ContextMenuItem } from './ContextMenu'
 import { LogViewer } from './LogViewer'
 
 interface SessionLogMeta {
@@ -40,6 +41,16 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
+function safeFileStem(name: string): string {
+  const cleaned = name.replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').trim()
+  return cleaned.slice(0, 60) || 'session'
+}
+
+function defaultExportName(log: SessionLogMeta): string {
+  const stamp = log.startedAt.replace(/[:.]/g, '-').slice(0, 19)
+  return `${safeFileStem(log.hostName)}-${stamp}.log`
+}
+
 function statusLabel(status: SessionLogMeta['status'], t: (k: string) => string): string {
   switch (status) {
     case 'connecting':
@@ -59,6 +70,7 @@ export function LogsPanel() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
+  const [menu, setMenu] = useState<{ x: number; y: number; logId: string } | null>(null)
 
   const refresh = useCallback(async () => {
     try {
@@ -96,7 +108,7 @@ export function LogsPanel() {
   const selected = logs.find((l) => l.id === selectedId) ?? null
   const isLive = selected != null && (selected.status === 'connecting' || selected.status === 'connected')
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = useCallback(async (id: string) => {
     if (!confirm(t('logs.deleteConfirm'))) return
     setBusy(true)
     try {
@@ -109,7 +121,7 @@ export function LogsPanel() {
     } finally {
       setBusy(false)
     }
-  }
+  }, [t, selectedId, refresh])
 
   const handleClear = async () => {
     if (!confirm(t('logs.clearConfirm'))) return
@@ -126,7 +138,54 @@ export function LogsPanel() {
     }
   }
 
+  const handleExport = useCallback(async (log: SessionLogMeta) => {
+    setBusy(true)
+    try {
+      const destPath = await window.electronAPI.saveFileDialog({
+        title: t('logs.exportTitle'),
+        defaultPath: defaultExportName(log),
+        filters: [
+          { name: t('logs.exportFilterLog'), extensions: ['log'] },
+          { name: t('logs.exportFilterTxt'), extensions: ['txt'] },
+        ],
+      })
+      if (!destPath) return
+      await window.electronAPI.logsExport(log.id, destPath)
+      setMessage(t('logs.exported'))
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : t('logs.exportFail'))
+    } finally {
+      setBusy(false)
+    }
+  }, [t])
+
+  const menuItems = useCallback(
+    (logId: string): ContextMenuItem[] => {
+      const log = logs.find((l) => l.id === logId)
+      return [
+        {
+          id: 'export',
+          label: t('logs.export'),
+          disabled: busy || !log,
+          onClick: () => {
+            if (log) void handleExport(log)
+          },
+        },
+        {
+          id: 'delete',
+          label: t('logs.deleteThis'),
+          danger: true,
+          disabled: busy,
+          separatorBefore: true,
+          onClick: () => void handleDelete(logId),
+        },
+      ]
+    },
+    [logs, t, busy, handleExport, handleDelete],
+  )
+
   return (
+    <>
     <div className="flex-1 flex flex-col page-shell min-h-0 w-full">
       <div className="page-header px-8 py-6 shrink-0">
         <h2 className="text-2xl font-bold tracking-tight text-app">{t('logs.title')}</h2>
@@ -167,6 +226,10 @@ export function LogsPanel() {
                     <button
                       type="button"
                       onClick={() => setSelectedId(log.id)}
+                      onContextMenu={(e) => {
+                        e.preventDefault()
+                        setMenu({ x: e.clientX, y: e.clientY, logId: log.id })
+                      }}
                       className={`w-full text-left px-3 py-3 rounded-lg transition-colors hover:bg-app-hover ${
                         selectedId === log.id ? 'bg-app-hover-strong' : ''
                       }`}
@@ -204,7 +267,15 @@ export function LogsPanel() {
         <div className="panel-card flex-1 min-w-0 min-h-0 rounded-xl overflow-hidden flex flex-col">
           {selected ? (
             <>
-              <div className="shrink-0 flex items-center justify-end px-4 py-2 border-b border-app">
+              <div className="shrink-0 flex items-center justify-end gap-3 px-4 py-2 border-b border-app">
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void handleExport(selected)}
+                  className="text-action"
+                >
+                  {t('logs.export')}
+                </button>
                 <button
                   type="button"
                   disabled={busy}
@@ -231,5 +302,14 @@ export function LogsPanel() {
         </div>
       </div>
     </div>
+    {menu && (
+      <ContextMenu
+        x={menu.x}
+        y={menu.y}
+        items={menuItems(menu.logId)}
+        onClose={() => setMenu(null)}
+      />
+    )}
+    </>
   )
 }

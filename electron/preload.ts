@@ -17,6 +17,10 @@ const electronAPI = {
   saveKey: (key: unknown) => ipcRenderer.invoke('data:saveKey', key),
   deleteKey: (id: string) => ipcRenderer.invoke('data:deleteKey', id),
 
+  getPasswords: () => ipcRenderer.invoke('data:getPasswords'),
+  savePassword: (entry: unknown) => ipcRenderer.invoke('data:savePassword', entry),
+  deletePassword: (id: string) => ipcRenderer.invoke('data:deletePassword', id),
+
   // 端口转发规则
   getPortForwards: (hostId?: string) => ipcRenderer.invoke('data:getPortForwards', hostId),
   savePortForward: (forward: unknown) => ipcRenderer.invoke('data:savePortForward', forward),
@@ -106,8 +110,11 @@ const electronAPI = {
     ipcRenderer.invoke('dialog:openFile', options) as Promise<string[] | null>,
   openDirectoryDialog: (options?: { title?: string }) =>
     ipcRenderer.invoke('dialog:openDirectory', options) as Promise<string | null>,
-  saveFileDialog: (options?: { title?: string; defaultPath?: string }) =>
-    ipcRenderer.invoke('dialog:saveFile', options) as Promise<string | null>,
+  saveFileDialog: (options?: {
+    title?: string
+    defaultPath?: string
+    filters?: { name: string; extensions: string[] }[]
+  }) => ipcRenderer.invoke('dialog:saveFile', options) as Promise<string | null>,
 
   // SSH
   sshConnect: (sessionId: string, hostId: string, size?: { cols: number; rows: number }) =>
@@ -125,6 +132,8 @@ const electronAPI = {
   // 连接日志
   logsList: () => ipcRenderer.invoke('logs:list'),
   logsGet: (id: string) => ipcRenderer.invoke('logs:get', id) as Promise<string>,
+  logsExport: (id: string, destPath: string) =>
+    ipcRenderer.invoke('logs:export', id, destPath) as Promise<boolean>,
   logsDelete: (id: string) => ipcRenderer.invoke('logs:delete', id),
   logsClear: () => ipcRenderer.invoke('logs:clear'),
   sessionLogPrepare: (sessionId: string, hostId: string) =>

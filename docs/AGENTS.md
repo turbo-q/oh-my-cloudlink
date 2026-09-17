@@ -8,8 +8,8 @@
 
 **Oh My CloudLink**（原「云连 SSH」）是类 Termius 的桌面 SSH 客户端：
 
-- 主机 / 分组 / 标签、SSH 密钥、多标签终端
-- SFTP（及 FTP）双栏文件、端口转发、命令片段
+- 主机 / 分组 / 标签、SSH 密钥与可复用主机密码（凭证）、多标签终端
+- SFTP（及 FTP）双栏文件、端口转发（列表按最近连接排序，可按名称/主机筛选）、命令片段
 - 会话日志回放、导入导出 / 备份、主密码保险库加密
 
 技术栈：**Electron + React 19 + TypeScript + Tailwind 4 + xterm.js + ssh2 + 本地 SQLite**。
@@ -91,6 +91,7 @@ npm run lint         # oxlint
 - `findNext/Previous` 带 SearchAddon `decorations`（黄底 = 全部命中）
 - 通过 patch `registerDecoration` 注入 `foregroundColor: #000`（Addon 本身不支持字色）
 - **不要在每次 find 时重设整份 `term.options.theme`**，否则会刷掉装饰
+- 搜索栏须 `relative` + `z-index`（仅写 `z-10` 无效）；终端区域加 `overflow-hidden`，避免 WebGL canvas 盖住 ✕ 导致只清选区、关不掉搜索框
 
 接入点：`TerminalPanel.tsx`、`LogViewer.tsx`。
 
@@ -111,10 +112,14 @@ npm run lint         # oxlint
 - 最多保留最近 **20** 条（`MAX_SESSION_LOGS`），超出 prune 旧项，不是「满 20 全清」
 - 单条约 **2MB** 上限
 - UI 列表来自 `manifest.json`；磁盘上可能残留孤儿 `.log`
+- 启动时若 manifest 缺项会从 `{uuid}.log` **自动重建索引**（主机名可能显示为 `session-xxxxxxxx`）
+- `manifest.json` 使用临时文件 + `rename` 原子写入，避免重启打断写盘后解析失败再被 `close()` 落成 `[]`
+- 面板可导出当前日志：`logs:export`（`.log` 保留 ANSI；`.txt` 去颜色码）
 
 ### 安全相关
 
 - 主机密码 / 私钥等经 vault 加密入库；导出备份为密封 envelope（见 `crypto-vault.ts`）
+- **凭证库**：导航「凭证」含 SSH 密钥与可复用主机密码；主机通过 `passwordId` 引用密码库，或使用一次性 inline `password`
 - 不要把密钥、`.env`、vault 材料打进 git 或 commit
 - 会话日志 ID 必须是 UUID v4（防路径穿越）
 

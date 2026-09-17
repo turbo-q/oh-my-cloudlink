@@ -59,7 +59,11 @@ export class SshManager {
       throw new Error('FTP 主机请使用 SFTP 菜单进行文件传输')
     }
 
-    const config: ConnectConfig = buildSshConnectConfig(options.host, options.keys)
+    const config: ConnectConfig = buildSshConnectConfig(
+      options.host,
+      options.keys,
+      options.passwords,
+    )
     return this.connectWithConfig(sessionId, config, win, hooks, size)
   }
 

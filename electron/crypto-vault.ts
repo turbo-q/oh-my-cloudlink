@@ -274,6 +274,7 @@ function isPlainDataFile(raw: unknown): raw is Partial<DataFile> {
     Array.isArray(o.hosts) ||
     Array.isArray(o.groups) ||
     Array.isArray(o.keys) ||
+    Array.isArray(o.passwords) ||
     Array.isArray(o.portForwards) ||
     Array.isArray(o.snippets)
   )
@@ -289,6 +290,7 @@ function normalizeDataFile(parsed: Partial<DataFile>): DataFile {
     hosts: Array.isArray(parsed.hosts) ? parsed.hosts : [],
     groups: Array.isArray(parsed.groups) ? parsed.groups : [],
     keys: Array.isArray(parsed.keys) ? parsed.keys : [],
+    passwords: Array.isArray(parsed.passwords) ? parsed.passwords : [],
     portForwards: Array.isArray(parsed.portForwards) ? parsed.portForwards : [],
     snippets: Array.isArray(parsed.snippets)
       ? parsed.snippets.map((s) => {

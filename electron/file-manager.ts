@@ -1,4 +1,4 @@
-import type { StoredHost, StoredKey } from './data-store'
+import type { StoredHost, StoredKey, StoredPassword } from './data-store'
 import { SftpManager } from './sftp-manager'
 import type { RemoteFileEntry } from './auth-config'
 import type { TransferProgressCallback } from './transfer-progress'
@@ -16,9 +16,14 @@ export class FileManager {
     sessionId: string,
     host: StoredHost,
     keys: StoredKey[],
+    passwords: StoredPassword[] = [],
     parentWindow?: BrowserWindow | null,
   ): Promise<string> {
-    const homePath = await this.sftp.connect(sessionId, { host, keys }, parentWindow)
+    const homePath = await this.sftp.connect(
+      sessionId,
+      { host, keys, passwords },
+      parentWindow,
+    )
     this.meta.set(sessionId, { homePath })
     return homePath
   }

@@ -43,7 +43,7 @@ export class SftpManager {
       await this.disconnect(sessionId)
     }
 
-    const config = buildSshConnectConfig(options.host, options.keys)
+    const config = buildSshConnectConfig(options.host, options.keys, options.passwords)
     attachHostKeyVerification(config, {
       hostname: options.host.hostname,
       port: options.host.port,

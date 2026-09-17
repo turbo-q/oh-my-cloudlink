@@ -87,8 +87,12 @@ export function TerminalPanel({
     if (term) applyTerminalSearchTheme(term)
   }, [])
   const closeSearch = useCallback(() => {
-    endTerminalSearch(searchAddonRef.current, terminalRef.current)
     setSearchOpen(false)
+    try {
+      endTerminalSearch(searchAddonRef.current, terminalRef.current)
+    } catch {
+      // Theme / decoration cleanup must not block dismissing the bar.
+    }
   }, [])
 
   const openSnippet = useCallback(() => {
@@ -356,7 +360,7 @@ export function TerminalPanel({
   }, [active, searchOpen, snippetOpen, sessionId])
 
   return (
-    <div className={`absolute inset-0 flex flex-col min-h-0 bg-app ${active ? 'block' : 'hidden'}`}>
+    <div className={`absolute inset-0 flex flex-col min-h-0 bg-app ${active ? '' : 'hidden'}`}>
       <TerminalSearchBar
         open={searchOpen}
         query={query}
@@ -366,7 +370,8 @@ export function TerminalPanel({
         placeholder={t('terminal.searchPlaceholder')}
         focusNonce={searchFocusNonce}
       />
-      <div className="relative flex-1 min-h-0">
+      {/* overflow-hidden: keep WebGL/xterm layers from covering the search bar above */}
+      <div className="relative flex-1 min-h-0 overflow-hidden">
         <TerminalSnippetPicker
           open={snippetOpen}
           hostId={hostId}
