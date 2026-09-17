@@ -570,6 +570,8 @@ function registerIpcHandlers(): void {
     return false
   })
 
+  safeHandle('app:getVersion', () => app.getVersion())
+
   console.log('[main] IPC handlers registered (local:home, local:list ready)')
 }
 

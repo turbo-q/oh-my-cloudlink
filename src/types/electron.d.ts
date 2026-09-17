@@ -196,6 +196,7 @@ export interface ElectronAPI {
   setNativeTheme: (source: 'system' | 'light' | 'dark') => Promise<boolean>
   onCloseTabShortcut: (callback: () => void) => () => void
   closeWindow: () => Promise<boolean>
+  getAppVersion: () => Promise<string>
 }
 
 declare global {
