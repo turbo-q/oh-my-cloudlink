@@ -101,6 +101,11 @@ export function LocalFilePane({ sessionId, remoteConnected = false }: LocalFileP
     }
   }
 
+  const listPathEntries = useCallback(async (dirPath: string) => {
+    const localList = assertElectronMethod('localList')
+    return localList(dirPath)
+  }, [])
+
   return (
     <FileListPane
       title={t('files.local')}
@@ -117,6 +122,8 @@ export function LocalFilePane({ sessionId, remoteConnected = false }: LocalFileP
       onGoHome={() => void loadDirectory()}
       onRefresh={() => void loadDirectory(currentPath)}
       onPathSubmit={(path) => void loadDirectory(path)}
+      listPathEntries={listPathEntries}
+      pathCompleteCaseInsensitive
       onFileDrop={remoteConnected ? handleDropFromRemote : undefined}
     />
   )

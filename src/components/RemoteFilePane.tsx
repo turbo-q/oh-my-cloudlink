@@ -253,6 +253,11 @@ export function RemoteFilePane({
     }
   }
 
+  const listPathEntries = useCallback(
+    (dirPath: string) => window.electronAPI.fileList(sessionId, dirPath),
+    [sessionId],
+  )
+
   return (
     <>
       <FileListPane
@@ -274,6 +279,7 @@ export function RemoteFilePane({
         }}
         onRefresh={() => void loadDirectory(currentPath)}
         onPathSubmit={(path) => void loadDirectory(path)}
+        listPathEntries={listPathEntries}
         onFileDrop={handleDropFromLocal}
         onUpload={() => void handleUpload()}
         onMkdir={() => setNamePrompt({ kind: 'mkdir' })}

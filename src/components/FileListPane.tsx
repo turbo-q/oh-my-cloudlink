@@ -4,6 +4,7 @@ import { formatFileSize, formatTransferSpeed } from '../types'
 import type { TransferProgress } from '../hooks/useTransferProgress'
 import { useI18n } from '../i18n/I18nProvider'
 import { formatDateLocalized, formatEtaLocalized } from '../i18n/format'
+import { PathBar } from './PathBar'
 
 export const SFTP_FILE_DRAG_MIME = 'application/x-yunlian-sftp-file'
 
@@ -30,6 +31,10 @@ export interface FileListPaneProps {
   onGoHome: () => void
   onRefresh: () => void
   onPathSubmit?: (path: string) => void
+  /** List directory entries for path-bar autocomplete (directories used). */
+  listPathEntries?: (dirPath: string) => Promise<RemoteFileEntry[]>
+  /** Case-insensitive path completion (typical for local disks). */
+  pathCompleteCaseInsensitive?: boolean
   onFileDrop?: (items: FileDragData[]) => void | Promise<void>
   onUpload?: () => void
   onMkdir?: () => void
@@ -115,6 +120,8 @@ export function FileListPane({
   onGoHome,
   onRefresh,
   onPathSubmit,
+  listPathEntries,
+  pathCompleteCaseInsensitive = false,
   onFileDrop,
   onUpload,
   onMkdir,
@@ -245,19 +252,32 @@ export function FileListPane({
       </div>
 
       <div className="flex items-center gap-2 px-4 py-2 border-b border-app shrink-0 bg-surface-2">
-        <input
-          type="text"
-          value={pathInput}
-          onChange={(e) => setPathInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') submitPath()
-            if (e.key === 'Escape') setPathInput(currentPath)
-          }}
-          disabled={operating || !onPathSubmit}
-          placeholder={t('files.pathPlaceholder')}
-          className="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg bg-app border border-app-strong text-xs font-mono text-app-secondary placeholder:text-app-faint focus:outline-none focus:border-emerald-500/50 disabled:opacity-50"
-          spellCheck={false}
-        />
+        {onPathSubmit && listPathEntries ? (
+          <PathBar
+            value={pathInput}
+            currentPath={currentPath}
+            disabled={operating}
+            listDirectories={listPathEntries}
+            caseInsensitive={pathCompleteCaseInsensitive}
+            onChange={setPathInput}
+            onSubmit={(path) => onPathSubmit(path)}
+            onCancel={() => setPathInput(currentPath)}
+          />
+        ) : (
+          <input
+            type="text"
+            value={pathInput}
+            onChange={(e) => setPathInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') submitPath()
+              if (e.key === 'Escape') setPathInput(currentPath)
+            }}
+            disabled={operating || !onPathSubmit}
+            placeholder={t('files.pathPlaceholder')}
+            className="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg bg-app border border-app-strong text-xs font-mono text-app-secondary placeholder:text-app-faint focus:outline-none focus:border-emerald-500/50 disabled:opacity-50"
+            spellCheck={false}
+          />
+        )}
       </div>
 
       <div className="flex items-center gap-1 px-4 py-1.5 text-xs text-app-subtle border-b border-app overflow-x-auto shrink-0">
