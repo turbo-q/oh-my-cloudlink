@@ -366,6 +366,7 @@ export const zh = {
     downloadedFolder: '已下载文件夹 {name}',
     downloadedFile: '已下载 {name}',
     mkdirPrompt: '请输入新文件夹名称：',
+    renameTitle: '重命名',
     creatingFolder: '创建文件夹',
     createFail: '创建失败',
     createdFolder: '已创建文件夹 {name}',

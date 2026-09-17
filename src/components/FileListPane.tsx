@@ -1,4 +1,4 @@
-import { useEffect, useState, type DragEvent } from 'react'
+import { useEffect, useRef, useState, type DragEvent, type MouseEvent } from 'react'
 import type { RemoteFileEntry } from '../types'
 import { formatFileSize, formatTransferSpeed } from '../types'
 import type { TransferProgress } from '../hooks/useTransferProgress'
@@ -128,6 +128,9 @@ export function FileListPane({
   const canGoUp = segments.length > 1 || (currentPath !== '/' && currentPath.length > 3)
   const [pathInput, setPathInput] = useState(currentPath)
   const [dragOver, setDragOver] = useState(false)
+  /** Suppress row click after a real drag so transfer doesn't also navigate. */
+  const skipClickRef = useRef(false)
+  const dragOriginRef = useRef<{ x: number; y: number } | null>(null)
 
   useEffect(() => {
     setPathInput(currentPath)
@@ -140,6 +143,8 @@ export function FileListPane({
   }
 
   const handleDragStart = (entry: RemoteFileEntry) => (e: DragEvent) => {
+    dragOriginRef.current = { x: e.clientX, y: e.clientY }
+    skipClickRef.current = false
     const payload: FileDragData = {
       source: variant,
       path: entry.path,
@@ -148,6 +153,30 @@ export function FileListPane({
     }
     e.dataTransfer.setData(SFTP_FILE_DRAG_MIME, JSON.stringify(payload))
     e.dataTransfer.effectAllowed = 'copy'
+  }
+
+  const handleDragEnd = (e: DragEvent) => {
+    const origin = dragOriginRef.current
+    dragOriginRef.current = null
+    if (!origin) return
+    const dx = Math.abs(e.clientX - origin.x)
+    const dy = Math.abs(e.clientY - origin.y)
+    // Only treat as a drag when the pointer actually moved.
+    if (dx > 4 || dy > 4) skipClickRef.current = true
+  }
+
+  const handleRowClick = (entry: RemoteFileEntry) => {
+    if (skipClickRef.current) {
+      skipClickRef.current = false
+      return
+    }
+    onNavigate(entry)
+  }
+
+  /** Keep action buttons from starting a row drag (would eat the first click). */
+  const stopRowDrag = (e: MouseEvent) => {
+    e.stopPropagation()
+    e.preventDefault()
   }
 
   const handleDragOver = (e: DragEvent) => {
@@ -285,10 +314,11 @@ export function FileListPane({
               {entries.map((entry) => (
                 <tr
                   key={entry.path}
-                  draggable
+                  draggable={!operating}
                   onDragStart={handleDragStart(entry)}
-                  className="border-t border-app hover:bg-app-hover transition-colors cursor-grab active:cursor-grabbing"
-                  onClick={() => onNavigate(entry)}
+                  onDragEnd={handleDragEnd}
+                  className="border-t border-app hover:bg-app-hover transition-colors cursor-default"
+                  onClick={() => handleRowClick(entry)}
                   onDoubleClick={() => {
                     if (entry.isDirectory) onNavigate(entry)
                     else if (onDownload) onDownload(entry)
@@ -305,10 +335,15 @@ export function FileListPane({
                   </td>
                   <td className="px-4 py-2 text-right text-app-subtle text-xs">{formatDateLocalized(locale, entry.modifiedAt)}</td>
                   {(onDownload || onDelete || onRename) && (
-                    <td className="px-4 py-2 text-right" onClick={(e) => e.stopPropagation()}>
+                    <td
+                      className="px-4 py-2 text-right"
+                      onMouseDown={stopRowDrag}
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       <div className="flex items-center justify-end gap-1">
                         {onDownload && (
                           <button
+                            type="button"
                             onClick={() => onDownload(entry)}
                             disabled={operating}
                             className="p-1 rounded hover:bg-emerald-500/20 text-emerald-400 text-xs"
@@ -319,18 +354,22 @@ export function FileListPane({
                         )}
                         {onRename && (
                           <button
+                            type="button"
                             onClick={() => onRename(entry)}
                             disabled={operating}
                             className="p-1 rounded hover:bg-app-hover-strong text-app-muted text-xs"
+                            title={t('common.edit')}
                           >
                             ✎
                           </button>
                         )}
                         {onDelete && (
                           <button
+                            type="button"
                             onClick={() => onDelete(entry)}
                             disabled={operating}
                             className="p-1 rounded hover:bg-red-500/20 text-red-400 text-xs"
+                            title={t('common.delete')}
                           >
                             ×
                           </button>

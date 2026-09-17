@@ -371,6 +371,7 @@ export const en: Messages = {
     downloadedFolder: 'Downloaded folder {name}',
     downloadedFile: 'Downloaded {name}',
     mkdirPrompt: 'New folder name:',
+    renameTitle: 'Rename',
     creatingFolder: 'Creating folder',
     createFail: 'Create failed',
     createdFolder: 'Created folder {name}',

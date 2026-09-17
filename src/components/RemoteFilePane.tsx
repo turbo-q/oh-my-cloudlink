@@ -1,9 +1,15 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { RemoteFileEntry } from '../types'
 import { FileListPane, joinPath, parentPath, type FileDragData } from './FileListPane'
+import { NamePromptModal } from './NamePromptModal'
 import { useTransferProgress } from '../hooks/useTransferProgress'
 import { formatTransferError } from '../utils/transferError'
 import { useI18n } from '../i18n/I18nProvider'
+
+type NamePromptState =
+  | { kind: 'mkdir' }
+  | { kind: 'rename'; entry: RemoteFileEntry }
+  | null
 
 interface RemoteFilePaneProps {
   sessionId: string
@@ -31,6 +37,7 @@ export function RemoteFilePane({
   const [operating, setOperating] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [messageError, setMessageError] = useState(false)
+  const [namePrompt, setNamePrompt] = useState<NamePromptState>(null)
   const { transfer, start, tick, applyFileProgress, succeed, fail } = useTransferProgress()
 
   const loadDirectory = useCallback(
@@ -170,16 +177,16 @@ export function RemoteFilePane({
     }
   }
 
-  const handleMkdir = async () => {
-    const name = prompt(t('files.mkdirPrompt'))
-    if (!name?.trim()) return
+  const createFolder = async (name: string) => {
+    const folderName = name.trim()
+    if (!folderName) return
 
     setOperating(true)
     start(t('files.creatingFolder'), 1)
-    tick(0, name.trim())
+    tick(0, folderName)
     try {
-      await window.electronAPI.fileMkdir(sessionId, joinPath(currentPath, name.trim()))
-      succeed(t('files.createdFolder', { name: name.trim() }))
+      await window.electronAPI.fileMkdir(sessionId, joinPath(currentPath, folderName))
+      succeed(t('files.createdFolder', { name: folderName }))
       await loadDirectory(currentPath)
     } catch (err) {
       fail(t('files.createFail'), formatTransferError(err, t))
@@ -206,17 +213,17 @@ export function RemoteFilePane({
     }
   }
 
-  const handleRename = async (entry: RemoteFileEntry) => {
-    const newName = prompt(t('files.renamePrompt'), entry.name)
-    if (!newName?.trim() || newName.trim() === entry.name) return
+  const renameEntry = async (entry: RemoteFileEntry, newName: string) => {
+    const trimmed = newName.trim()
+    if (!trimmed || trimmed === entry.name) return
 
     setOperating(true)
     start(t('files.renaming'), 1)
-    tick(0, newName.trim())
+    tick(0, trimmed)
     try {
-      const newPath = joinPath(parentPath(entry.path), newName.trim())
+      const newPath = joinPath(parentPath(entry.path), trimmed)
       await window.electronAPI.fileRename(sessionId, entry.path, newPath)
-      succeed(t('files.renamed', { name: newName.trim() }))
+      succeed(t('files.renamed', { name: trimmed }))
       await loadDirectory(currentPath)
     } catch (err) {
       fail(t('files.renameFail'), formatTransferError(err, t))
@@ -247,32 +254,53 @@ export function RemoteFilePane({
   }
 
   return (
-    <FileListPane
-      title={t('files.remote')}
-      variant="remote"
-      subtitle={hostName}
-      currentPath={currentPath}
-      entries={entries}
-      loading={loading}
-      message={message}
-      messageError={messageError}
-      transfer={transfer}
-      operating={operating}
-      onNavigate={navigateTo}
-      onGoUp={() => void loadDirectory(parentPath(currentPath))}
-      onGoHome={async () => {
-        const home = await window.electronAPI.fileHome(sessionId)
-        void loadDirectory(home)
-      }}
-      onRefresh={() => void loadDirectory(currentPath)}
-      onPathSubmit={(path) => void loadDirectory(path)}
-      onFileDrop={handleDropFromLocal}
-      onUpload={() => void handleUpload()}
-      onMkdir={() => void handleMkdir()}
-      onDownload={(e) => void handleDownload(e)}
-      onDelete={(e) => void handleDelete(e)}
-      onRename={(e) => void handleRename(e)}
-      onDisconnect={onDisconnect}
-    />
+    <>
+      <FileListPane
+        title={t('files.remote')}
+        variant="remote"
+        subtitle={hostName}
+        currentPath={currentPath}
+        entries={entries}
+        loading={loading}
+        message={message}
+        messageError={messageError}
+        transfer={transfer}
+        operating={operating}
+        onNavigate={navigateTo}
+        onGoUp={() => void loadDirectory(parentPath(currentPath))}
+        onGoHome={async () => {
+          const home = await window.electronAPI.fileHome(sessionId)
+          void loadDirectory(home)
+        }}
+        onRefresh={() => void loadDirectory(currentPath)}
+        onPathSubmit={(path) => void loadDirectory(path)}
+        onFileDrop={handleDropFromLocal}
+        onUpload={() => void handleUpload()}
+        onMkdir={() => setNamePrompt({ kind: 'mkdir' })}
+        onDownload={(e) => void handleDownload(e)}
+        onDelete={(e) => void handleDelete(e)}
+        onRename={(e) => setNamePrompt({ kind: 'rename', entry: e })}
+        onDisconnect={onDisconnect}
+      />
+      <NamePromptModal
+        open={namePrompt !== null}
+        title={
+          namePrompt?.kind === 'rename' ? t('files.renameTitle') : t('files.newFolder')
+        }
+        label={
+          namePrompt?.kind === 'rename' ? t('files.renamePrompt') : t('files.mkdirPrompt')
+        }
+        initialValue={namePrompt?.kind === 'rename' ? namePrompt.entry.name : ''}
+        onConfirm={(name) => {
+          const prompt = namePrompt
+          if (prompt?.kind === 'rename') {
+            void renameEntry(prompt.entry, name)
+            return
+          }
+          void createFolder(name)
+        }}
+        onClose={() => setNamePrompt(null)}
+      />
+    </>
   )
 }
