@@ -162,14 +162,6 @@ export const zh = {
     import: '导入配置',
     about: '关于',
     aboutBlurb: '类 Termius 的 SSH / SFTP 连接管理工具',
-    roadmap: '路线图',
-    roadmapItems: {
-      ssh: 'SSH 终端连接',
-      sftp: 'SFTP / FTP 文件传输',
-      forward: '端口转发',
-      snippets: '命令片段',
-      encryption: '数据加密存储',
-    },
   },
   hosts: {
     welcome: '欢迎使用 Oh My CloudLink',

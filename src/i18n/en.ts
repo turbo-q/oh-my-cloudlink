@@ -167,14 +167,6 @@ export const en: Messages = {
     import: 'Import',
     about: 'About',
     aboutBlurb: 'SSH / SFTP connection manager inspired by Termius',
-    roadmap: 'Roadmap',
-    roadmapItems: {
-      ssh: 'SSH terminal',
-      sftp: 'SFTP / FTP file transfer',
-      forward: 'Port forwarding',
-      snippets: 'Command snippets',
-      encryption: 'Encrypted data storage',
-    },
   },
   hosts: {
     welcome: 'Welcome to Oh My CloudLink',
