@@ -237,6 +237,21 @@ const electronAPI = {
   closeWindow: () => ipcRenderer.invoke('window:close') as Promise<boolean>,
   getAppVersion: () => ipcRenderer.invoke('app:getVersion') as Promise<string>,
   openExternal: (url: string) => ipcRenderer.invoke('shell:openExternal', url) as Promise<boolean>,
+  setUiLocale: (copy: {
+    close: string
+    cancel: string
+    trust: string
+    mismatchTitle: string
+    mismatchMessage: string
+    mismatchDetail: string
+    unknownTitle: string
+    unknownMessage: string
+    unknownDetail: string
+    writeFailTitle: string
+    writeFailMessage: string
+  }) => {
+    ipcRenderer.send('ui:setLocale', copy)
+  },
 }
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPI)

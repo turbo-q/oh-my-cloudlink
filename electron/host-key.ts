@@ -4,6 +4,7 @@ import os from 'os'
 import path from 'path'
 import { dialog, type BrowserWindow } from 'electron'
 import type { ConnectConfig } from 'ssh2'
+import { fillTemplate, hostKeyCopy } from './ui-locale'
 
 export type HostKeyCheckResult = 'match' | 'mismatch' | 'unknown'
 
@@ -160,45 +161,48 @@ export function attachHostKeyVerification(
         const keyType = parseHostKeyType(keyBuf)
         const hostLabel = `${hostname}:${port}`
 
+        const copy = hostKeyCopy()
+        const params = { host: hostLabel, keyType, fingerprint: fp }
+
         if (result === 'match') {
           verify(true)
+          return
+        }
+
+        if (!copy) {
+          console.error('[host-key] dialog copy not ready')
+          verify(false)
           return
         }
 
         if (result === 'mismatch') {
           await showHostKeyDialog(options.parentWindow, {
             type: 'error',
-            buttons: ['关闭'],
+            buttons: [copy.close],
             defaultId: 0,
             cancelId: 0,
-            title: '主机密钥不匹配',
-            message: '远程主机密钥与 known_hosts 记录不一致',
-            detail:
-              `连接已拒绝，这可能表示中间人攻击，或服务器已更换密钥。\n\n` +
-              `主机: ${hostLabel}\n` +
-              `密钥类型: ${keyType}\n` +
-              `当前指纹: ${fp}\n\n` +
-              `若确认服务器已更换密钥，请手动编辑 ~/.ssh/known_hosts 后重试。`,
+            noLink: true,
+            title: copy.mismatchTitle,
+            message: copy.mismatchMessage,
+            detail: fillTemplate(copy.mismatchDetail, params),
           })
           verify(false)
           return
         }
 
+        // Cancel is the default so Enter does not trust an unknown host.
         const { response } = await showHostKeyDialog(options.parentWindow, {
           type: 'warning',
-          buttons: ['信任并继续', '取消'],
+          buttons: [copy.cancel, copy.trust],
           defaultId: 0,
-          cancelId: 1,
-          title: '未知的主机密钥',
-          message: '无法验证远程主机身份（首次连接或尚未收录）',
-          detail:
-            `主机: ${hostLabel}\n` +
-            `密钥类型: ${keyType}\n` +
-            `指纹: ${fp}\n\n` +
-            `信任后将写入 ~/.ssh/known_hosts。`,
+          cancelId: 0,
+          noLink: true,
+          title: copy.unknownTitle,
+          message: copy.unknownMessage,
+          detail: fillTemplate(copy.unknownDetail, params),
         })
 
-        if (response !== 0) {
+        if (response !== 1) {
           verify(false)
           return
         }
@@ -209,10 +213,12 @@ export function attachHostKeyVerification(
           console.error('[host-key] append known_hosts failed:', err)
           await showHostKeyDialog(options.parentWindow, {
             type: 'error',
-            buttons: ['关闭'],
+            buttons: [copy.close],
             defaultId: 0,
-            title: '写入 known_hosts 失败',
-            message: '无法保存主机密钥',
+            cancelId: 0,
+            noLink: true,
+            title: copy.writeFailTitle,
+            message: copy.writeFailMessage,
             detail: err instanceof Error ? err.message : String(err),
           })
           verify(false)

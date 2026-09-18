@@ -194,6 +194,21 @@ export const zh = {
     authHint: '使用 IdentityFile 或系统 ssh-agent 认证',
     openConfig: '打开 SSH 配置',
   },
+  hostKey: {
+    close: '关闭',
+    cancel: '取消',
+    trust: '信任并继续',
+    mismatchTitle: '主机密钥不匹配',
+    mismatchMessage: '远程主机密钥与 known_hosts 记录不一致',
+    mismatchDetail:
+      '连接已拒绝，这可能表示中间人攻击，或服务器已更换密钥。\n\n主机: {host}\n密钥类型: {keyType}\n当前指纹: {fingerprint}\n\n若确认服务器已更换密钥，请手动编辑 ~/.ssh/known_hosts 后重试。',
+    unknownTitle: '未知的主机密钥',
+    unknownMessage: '无法验证远程主机身份（首次连接或尚未收录）',
+    unknownDetail:
+      '主机: {host}\n密钥类型: {keyType}\n指纹: {fingerprint}\n\n信任后将写入 ~/.ssh/known_hosts。',
+    writeFailTitle: '写入 known_hosts 失败',
+    writeFailMessage: '无法保存主机密钥',
+  },
   keys: {
     title: '凭证',
     subtitle: '管理 SSH 密钥与可复用的主机登录密码',

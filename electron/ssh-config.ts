@@ -2,6 +2,7 @@ import fs from 'fs'
 import os from 'os'
 import path from 'path'
 import type { ConnectConfig } from 'ssh2'
+import { SSH_KEEPALIVE_COUNT_MAX, SSH_KEEPALIVE_INTERVAL_MS } from './auth-config'
 
 export interface SshConfigHost {
   alias: string
@@ -191,7 +192,14 @@ export function resolveSshConnectConfig(target: string): { config: ConnectConfig
   const defaultFiles = DEFAULT_IDENTITIES.map((name) => path.join(os.homedir(), '.ssh', name))
   const identityFile = [...identityFiles, ...defaultFiles].find((file) => fs.existsSync(file))
 
-  const config: ConnectConfig = { host: hostname, port, username, readyTimeout: 20_000 }
+  const config: ConnectConfig = {
+    host: hostname,
+    port,
+    username,
+    readyTimeout: 20_000,
+    keepaliveInterval: SSH_KEEPALIVE_INTERVAL_MS,
+    keepaliveCountMax: SSH_KEEPALIVE_COUNT_MAX,
+  }
   if (identityFile) config.privateKey = fs.readFileSync(identityFile, 'utf-8')
   const configuredAgent = first(values, 'identityagent')
   const agent = configuredAgent && configuredAgent.toLowerCase() !== 'none'

@@ -199,6 +199,21 @@ export const en: Messages = {
     authHint: 'Uses IdentityFile or system ssh-agent',
     openConfig: 'Open SSH Config',
   },
+  hostKey: {
+    close: 'Close',
+    cancel: 'Cancel',
+    trust: 'Trust and continue',
+    mismatchTitle: 'Host key mismatch',
+    mismatchMessage: 'The remote host key does not match known_hosts',
+    mismatchDetail:
+      'The connection was refused. This may be a man-in-the-middle attack, or the server key may have changed.\n\nHost: {host}\nKey type: {keyType}\nFingerprint: {fingerprint}\n\nIf you confirmed the server key changed, edit ~/.ssh/known_hosts and try again.',
+    unknownTitle: 'Unknown host key',
+    unknownMessage: 'The remote host identity could not be verified (first connection or not yet saved)',
+    unknownDetail:
+      'Host: {host}\nKey type: {keyType}\nFingerprint: {fingerprint}\n\nTrusting this host writes the key to ~/.ssh/known_hosts.',
+    writeFailTitle: 'Could not update known_hosts',
+    writeFailMessage: 'The host key could not be saved',
+  },
   keys: {
     title: 'Credentials',
     subtitle: 'Manage SSH keys and reusable host login passwords',

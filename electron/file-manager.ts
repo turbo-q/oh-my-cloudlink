@@ -29,7 +29,6 @@ export class FileManager {
   }
 
   async disconnect(sessionId: string): Promise<void> {
-    if (!this.meta.has(sessionId)) return
     await this.sftp.disconnect(sessionId)
     this.meta.delete(sessionId)
   }

@@ -12,6 +12,7 @@ import {
   type RemoteFileEntry,
 } from './auth-config'
 import { attachHostKeyVerification } from './host-key'
+import { ConnectAbortedError } from './connect-abort'
 import {
   countLocalTree,
   type TransferProgressCallback,
@@ -33,16 +34,20 @@ interface TransferState {
 
 export class SftpManager {
   private sessions = new Map<string, SftpSession>()
+  private connectGeneration = new Map<string, number>()
+  private pendingClients = new Map<string, Client>()
+  private connectReject = new Map<string, (err: Error) => void>()
 
   async connect(
     sessionId: string,
     options: ConnectOptions,
     parentWindow?: BrowserWindow | null,
   ): Promise<string> {
-    if (this.sessions.has(sessionId)) {
+    if (this.sessions.has(sessionId) || this.pendingClients.has(sessionId)) {
       await this.disconnect(sessionId)
     }
 
+    const gen = this.bumpGeneration(sessionId)
     const config = buildSshConnectConfig(options.host, options.keys, options.passwords)
     attachHostKeyVerification(config, {
       hostname: options.host.hostname,
@@ -51,31 +56,88 @@ export class SftpManager {
     })
 
     return new Promise((resolve, reject) => {
+      let settled = false
+      const rejectOnce = (err: unknown) => {
+        if (settled) return
+        settled = true
+        if (this.connectReject.get(sessionId) === rejectOnce) {
+          this.connectReject.delete(sessionId)
+        }
+        reject(err instanceof Error ? err : new Error(String(err)))
+      }
+      const resolveOnce = (homePath: string) => {
+        if (settled) return
+        settled = true
+        if (this.connectReject.get(sessionId) === rejectOnce) {
+          this.connectReject.delete(sessionId)
+        }
+        resolve(homePath)
+      }
+      this.connectReject.set(sessionId, rejectOnce)
+
       const client = new Client()
+      this.pendingClients.set(sessionId, client)
+      const stale = () => this.connectGeneration.get(sessionId) !== gen
+
+      const dropPending = () => {
+        if (this.pendingClients.get(sessionId) === client) {
+          this.pendingClients.delete(sessionId)
+        }
+      }
 
       client.on('ready', () => {
+        if (stale()) {
+          client.end()
+          dropPending()
+          rejectOnce(new ConnectAbortedError())
+          return
+        }
+
         client.sftp((err, sftp) => {
+          if (stale()) {
+            client.end()
+            dropPending()
+            rejectOnce(new ConnectAbortedError())
+            return
+          }
           if (err) {
             client.end()
-            reject(err)
+            dropPending()
+            rejectOnce(err)
             return
           }
 
           sftp.realpath('.', (realErr, homePath) => {
+            if (stale()) {
+              client.end()
+              dropPending()
+              rejectOnce(new ConnectAbortedError())
+              return
+            }
+            dropPending()
             const resolvedHome = realErr ? '/' : normalizeRemotePath(homePath)
             this.sessions.set(sessionId, { client, sftp, homePath: resolvedHome })
-            resolve(resolvedHome)
+            resolveOnce(resolvedHome)
           })
         })
       })
 
       client.on('error', (err) => {
+        dropPending()
+        if (stale()) {
+          rejectOnce(new ConnectAbortedError())
+          return
+        }
         this.cleanup(sessionId)
-        reject(err)
+        rejectOnce(err)
       })
 
       client.on('close', () => {
-        this.cleanup(sessionId)
+        dropPending()
+        if (stale() || !this.sessions.has(sessionId)) {
+          rejectOnce(stale() ? new ConnectAbortedError() : new Error('SFTP connection closed'))
+        }
+        if (!stale()) this.cleanup(sessionId)
       })
 
       client.connect(config)
@@ -83,6 +145,14 @@ export class SftpManager {
   }
 
   async disconnect(sessionId: string): Promise<void> {
+    this.bumpGeneration(sessionId)
+    this.abortConnect(sessionId)
+    const pending = this.pendingClients.get(sessionId)
+    if (pending) {
+      this.pendingClients.delete(sessionId)
+      pending.end()
+    }
+
     const session = this.sessions.get(sessionId)
     if (!session) return
 
@@ -100,7 +170,8 @@ export class SftpManager {
   }
 
   disconnectAll(): void {
-    for (const sessionId of this.sessions.keys()) {
+    const ids = new Set([...this.sessions.keys(), ...this.pendingClients.keys()])
+    for (const sessionId of ids) {
       void this.disconnect(sessionId)
     }
   }
@@ -449,5 +520,17 @@ export class SftpManager {
 
   private cleanup(sessionId: string): void {
     this.sessions.delete(sessionId)
+  }
+
+  private bumpGeneration(sessionId: string): number {
+    const next = (this.connectGeneration.get(sessionId) ?? 0) + 1
+    this.connectGeneration.set(sessionId, next)
+    return next
+  }
+
+  private abortConnect(sessionId: string): void {
+    const rejectConnect = this.connectReject.get(sessionId)
+    if (!rejectConnect) return
+    rejectConnect(new ConnectAbortedError())
   }
 }

@@ -18,6 +18,7 @@ import { TerminalSearchBar, useTerminalSearchShortcut } from './TerminalSearchBa
 import { TerminalSnippetPicker, useTerminalSnippetShortcut } from './TerminalSnippetPicker'
 import { useI18n } from '../i18n/I18nProvider'
 import { getStoredLocalePreference, resolveLocale, translate } from '../i18n'
+import { isConnectAbortedMessage } from '../utils/connectAbort'
 import { openExternalLink } from '../utils/openExternalLink'
 import 'xterm/css/xterm.css'
 
@@ -198,7 +199,7 @@ export function TerminalPanel({
           }
         })
         .catch((err: Error) => {
-          if (disposed) return
+          if (disposed || isConnectAbortedMessage(err?.message)) return
           const fail = `\r\n\x1b[31m${msg('terminal.connectFail', { message: err.message })}\x1b[0m\r\n`
           term.writeln(fail)
           appendLog(fail)

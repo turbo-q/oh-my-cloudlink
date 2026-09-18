@@ -1,6 +1,10 @@
 import type { ConnectConfig } from 'ssh2'
 import type { StoredHost, StoredKey, StoredPassword } from './data-store'
 
+/** Same keepalive as port forwards — idle NAT/firewall drops otherwise. */
+export const SSH_KEEPALIVE_INTERVAL_MS = 15_000
+export const SSH_KEEPALIVE_COUNT_MAX = 3
+
 export interface ConnectOptions {
   host: StoredHost
   keys: StoredKey[]
@@ -17,6 +21,8 @@ export function buildSshConnectConfig(
     port: host.port,
     username: host.username,
     readyTimeout: 20000,
+    keepaliveInterval: SSH_KEEPALIVE_INTERVAL_MS,
+    keepaliveCountMax: SSH_KEEPALIVE_COUNT_MAX,
   }
 
   if (host.authType === 'password') {

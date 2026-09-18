@@ -57,7 +57,33 @@ export function applyLocale(pref: LocalePreference): Locale {
   window.dispatchEvent(
     new CustomEvent(LOCALE_CHANGE_EVENT, { detail: { preference: pref, locale } }),
   )
+  publishHostKeyCopy(locale)
   return locale
+}
+
+const HOST_KEY_COPY_KEYS = [
+  'close',
+  'cancel',
+  'trust',
+  'mismatchTitle',
+  'mismatchMessage',
+  'mismatchDetail',
+  'unknownTitle',
+  'unknownMessage',
+  'unknownDetail',
+  'writeFailTitle',
+  'writeFailMessage',
+] as const
+
+/** Native host-key dialogs run in the main process; push the active strings over. */
+function publishHostKeyCopy(locale: Locale): void {
+  const api = window.electronAPI
+  if (!api?.setUiLocale) return
+  const copy = {} as Record<(typeof HOST_KEY_COPY_KEYS)[number], string>
+  for (const key of HOST_KEY_COPY_KEYS) {
+    copy[key] = translate(locale, `hostKey.${key}`)
+  }
+  api.setUiLocale(copy)
 }
 
 export function initLocale(): Locale {
