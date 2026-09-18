@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState, type DragEvent, type MouseEvent } from 'react'
+import { useCallback, useEffect, useRef, useState, type DragEvent, type MouseEvent } from 'react'
 import type { RemoteFileEntry } from '../types'
 import { formatFileSize, formatTransferSpeed } from '../types'
 import type { TransferProgress } from '../hooks/useTransferProgress'
 import { useI18n } from '../i18n/I18nProvider'
 import { formatDateLocalized, formatEtaLocalized } from '../i18n/format'
 import { PathBar } from './PathBar'
+import { ContextMenu, type ContextMenuItem } from './ContextMenu'
 
 export const SFTP_FILE_DRAG_MIME = 'application/x-yunlian-sftp-file'
 
@@ -37,6 +38,7 @@ export interface FileListPaneProps {
   pathCompleteCaseInsensitive?: boolean
   onFileDrop?: (items: FileDragData[]) => void | Promise<void>
   onUpload?: () => void
+  /** Create folder in the current directory (exposed via context menu, not toolbar). */
   onMkdir?: () => void
   onDownload?: (entry: RemoteFileEntry) => void
   onDelete?: (entry: RemoteFileEntry) => void
@@ -138,6 +140,71 @@ export function FileListPane({
   /** Suppress row click after a real drag so transfer doesn't also navigate. */
   const skipClickRef = useRef(false)
   const dragOriginRef = useRef<{ x: number; y: number } | null>(null)
+  const [menu, setMenu] = useState<{
+    x: number
+    y: number
+    entry: RemoteFileEntry | null
+  } | null>(null)
+
+  const hasContextActions = Boolean(onMkdir || onDownload || onDelete || onRename)
+
+  const openContextMenu = useCallback(
+    (e: MouseEvent, entry: RemoteFileEntry | null) => {
+      if (!hasContextActions || operating) return
+      e.preventDefault()
+      e.stopPropagation()
+      setMenu({ x: e.clientX, y: e.clientY, entry })
+    },
+    [hasContextActions, operating],
+  )
+
+  const contextItems = useCallback((): ContextMenuItem[] => {
+    if (!menu) return []
+    const entry = menu.entry
+    const items: ContextMenuItem[] = []
+
+    if (onMkdir) {
+      items.push({
+        id: 'mkdir',
+        label: t('files.newFolder'),
+        disabled: operating,
+        onClick: () => onMkdir(),
+      })
+    }
+
+    if (entry) {
+      if (onDownload) {
+        items.push({
+          id: 'download',
+          label: entry.isDirectory ? t('files.downloadFolder') : t('files.download'),
+          disabled: operating,
+          separatorBefore: items.length > 0,
+          onClick: () => onDownload(entry),
+        })
+      }
+      if (onRename) {
+        items.push({
+          id: 'rename',
+          label: t('files.renameTitle'),
+          disabled: operating,
+          separatorBefore: !onDownload && items.length > 0,
+          onClick: () => onRename(entry),
+        })
+      }
+      if (onDelete) {
+        items.push({
+          id: 'delete',
+          label: t('common.delete'),
+          danger: true,
+          disabled: operating,
+          separatorBefore: true,
+          onClick: () => onDelete(entry),
+        })
+      }
+    }
+
+    return items
+  }, [menu, onMkdir, onDownload, onRename, onDelete, operating, t])
 
   useEffect(() => {
     setPathInput(currentPath)
@@ -208,6 +275,7 @@ export function FileListPane({
   }
 
   return (
+    <>
     <div className="flex flex-col h-full min-w-0 border-r border-app last:border-r-0">
       <div className="flex items-center gap-2 px-4 py-3 border-b border-app bg-surface shrink-0">
         <span className="text-sm font-semibold text-app shrink-0">{title}</span>
@@ -239,11 +307,6 @@ export function FileListPane({
         >
           ↻
         </button>
-        {onMkdir && (
-          <button onClick={onMkdir} disabled={operating} className="btn-secondary text-xs py-1 px-2">
-            {t('files.newFolder')}
-          </button>
-        )}
         {onUpload && (
           <button onClick={onUpload} disabled={operating} className="btn-primary text-xs py-1 px-2">
             {t('files.upload')}
@@ -311,6 +374,7 @@ export function FileListPane({
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
+        onContextMenu={(e) => openContextMenu(e, null)}
       >
         {loading ? (
           <div className="flex items-center justify-center h-full text-app-subtle text-sm">{t('files.loading')}</div>
@@ -339,6 +403,7 @@ export function FileListPane({
                   onDragEnd={handleDragEnd}
                   className="border-t border-app hover:bg-app-hover transition-colors cursor-default"
                   onClick={() => handleRowClick(entry)}
+                  onContextMenu={(e) => openContextMenu(e, entry)}
                   onDoubleClick={() => {
                     if (entry.isDirectory) onNavigate(entry)
                     else if (onDownload) onDownload(entry)
@@ -406,6 +471,15 @@ export function FileListPane({
 
       {transfer && <TransferStatusBar transfer={transfer} locale={locale} t={t} />}
     </div>
+    {menu && contextItems().length > 0 && (
+      <ContextMenu
+        x={menu.x}
+        y={menu.y}
+        items={contextItems()}
+        onClose={() => setMenu(null)}
+      />
+    )}
+    </>
   )
 }
 
