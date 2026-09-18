@@ -122,6 +122,7 @@ npm run lint         # oxlint
 - **凭证库**：导航「凭证」含 SSH 密钥与可复用主机密码；主机通过 `passwordId` 引用密码库，或使用一次性 inline `password`
 - 不要把密钥、`.env`、vault 材料打进 git 或 commit
 - 会话日志 ID 必须是 UUID v4（防路径穿越）
+- 终端 / 日志里的 URL：经 `shell.openExternal` 用系统浏览器打开；主窗口禁止 `window.open` 与意外 `will-navigate`（仅允许本应用页面）
 
 ## UI / 代码约定
 

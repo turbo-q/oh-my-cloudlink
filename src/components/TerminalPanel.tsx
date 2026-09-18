@@ -18,6 +18,7 @@ import { TerminalSearchBar, useTerminalSearchShortcut } from './TerminalSearchBa
 import { TerminalSnippetPicker, useTerminalSnippetShortcut } from './TerminalSnippetPicker'
 import { useI18n } from '../i18n/I18nProvider'
 import { getStoredLocalePreference, resolveLocale, translate } from '../i18n'
+import { openExternalLink } from '../utils/openExternalLink'
 import 'xterm/css/xterm.css'
 
 interface TerminalPanelProps {
@@ -150,7 +151,7 @@ export function TerminalPanel({
     const searchAddon = new SearchAddon()
     term.loadAddon(fitAddon)
     term.loadAddon(searchAddon)
-    term.loadAddon(new WebLinksAddon())
+    term.loadAddon(new WebLinksAddon((_event, uri) => openExternalLink(uri)))
     term.open(containerRef.current)
     const disposeWebgl = attachTerminalWebgl(term)
     fitAddon.fit()

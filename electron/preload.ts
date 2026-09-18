@@ -236,6 +236,7 @@ const electronAPI = {
 
   closeWindow: () => ipcRenderer.invoke('window:close') as Promise<boolean>,
   getAppVersion: () => ipcRenderer.invoke('app:getVersion') as Promise<string>,
+  openExternal: (url: string) => ipcRenderer.invoke('shell:openExternal', url) as Promise<boolean>,
 }
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPI)

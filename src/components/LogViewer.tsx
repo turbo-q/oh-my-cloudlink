@@ -12,6 +12,7 @@ import {
   patchTerminalSearchForeground,
   runTerminalFind,
 } from '../utils/terminalSearch'
+import { openExternalLink } from '../utils/openExternalLink'
 import 'xterm/css/xterm.css'
 
 interface LogViewerProps {
@@ -81,7 +82,7 @@ export function LogViewer({ logId, title, live = false }: LogViewerProps) {
     const searchAddon = new SearchAddon()
     term.loadAddon(fitAddon)
     term.loadAddon(searchAddon)
-    term.loadAddon(new WebLinksAddon())
+    term.loadAddon(new WebLinksAddon((_event, uri) => openExternalLink(uri)))
     term.open(containerRef.current)
     fitAddon.fit()
 
