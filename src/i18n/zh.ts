@@ -8,6 +8,7 @@ export const zh = {
     refresh: '刷新',
     loading: '加载中...',
     confirm: '确定',
+    confirmTitle: '请确认',
     close: '关闭',
     unknownHost: '未知主机',
     search: '搜索',

@@ -3,6 +3,7 @@ import { useI18n } from '../i18n/I18nProvider'
 import { dateLocaleTag } from '../i18n'
 import { ContextMenu, type ContextMenuItem } from './ContextMenu'
 import { LogViewer } from './LogViewer'
+import { useConfirmDialog } from '../hooks/useConfirmDialog'
 
 interface SessionLogMeta {
   id: string
@@ -66,6 +67,7 @@ function statusLabel(status: SessionLogMeta['status'], t: (k: string) => string)
 
 export function LogsPanel() {
   const { t, locale } = useI18n()
+  const { ask: confirmAsk, dialog: confirmDialog } = useConfirmDialog()
   const [logs, setLogs] = useState<SessionLogMeta[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -109,7 +111,13 @@ export function LogsPanel() {
   const isLive = selected != null && (selected.status === 'connecting' || selected.status === 'connected')
 
   const handleDelete = useCallback(async (id: string) => {
-    if (!confirm(t('logs.deleteConfirm'))) return
+    const ok = await confirmAsk({
+      title: t('common.confirmTitle'),
+      message: t('logs.deleteConfirm'),
+      danger: true,
+      confirmLabel: t('common.delete'),
+    })
+    if (!ok) return
     setBusy(true)
     try {
       await window.electronAPI.logsDelete(id)
@@ -121,10 +129,16 @@ export function LogsPanel() {
     } finally {
       setBusy(false)
     }
-  }, [t, selectedId, refresh])
+  }, [t, selectedId, refresh, confirmAsk])
 
   const handleClear = async () => {
-    if (!confirm(t('logs.clearConfirm'))) return
+    const ok = await confirmAsk({
+      title: t('common.confirmTitle'),
+      message: t('logs.clearConfirm'),
+      danger: true,
+      confirmLabel: t('common.delete'),
+    })
+    if (!ok) return
     setBusy(true)
     try {
       await window.electronAPI.logsClear()
@@ -310,6 +324,7 @@ export function LogsPanel() {
         onClose={() => setMenu(null)}
       />
     )}
+    {confirmDialog}
     </>
   )
 }

@@ -15,6 +15,7 @@ import { SshConfigConnectModal } from './components/SshConfigConnectModal'
 import { VaultGate } from './components/VaultPasswordModal'
 import { ImportDialogUi } from './components/ImportDialogUi'
 import { useImportDialog } from './hooks/useImportDialog'
+import { useConfirmDialog } from './hooks/useConfirmDialog'
 import type { Host, Group, SSHKey, HostPassword, AppSession, DiscoveredKey, PortForward, Snippet, SshConfigHost } from './types'
 import type { AppPanel } from './types/app'
 import { isFileProtocol, isSshHost, getHostFileProtocol, GROUP_COLORS } from './types'
@@ -98,7 +99,7 @@ export default function App() {
       }
     },
   })
-
+  const { ask: confirmAsk, dialog: confirmDialog } = useConfirmDialog()
   const [searchQuery, setSearchQuery] = useState('')
   const [groupFilter, setGroupFilter] = useState<GroupFilter>(null)
   const [browsePanel, setBrowsePanel] = useState<AppPanel>('hosts')
@@ -316,13 +317,25 @@ export default function App() {
   }
 
   const handleDeleteHost = async (host: Host) => {
-    if (!confirm(t('app.deleteHost', { name: host.name }))) return
+    const ok = await confirmAsk({
+      title: t('common.confirmTitle'),
+      message: t('app.deleteHost', { name: host.name }),
+      danger: true,
+      confirmLabel: t('common.delete'),
+    })
+    if (!ok) return
     await deleteHost(host.id)
     if (selectedHostId === host.id) setSelectedHostId(null)
   }
 
   const handleDeleteGroup = async (group: Group) => {
-    if (!confirm(t('app.deleteGroup', { name: group.name }))) return
+    const ok = await confirmAsk({
+      title: t('common.confirmTitle'),
+      message: t('app.deleteGroup', { name: group.name }),
+      danger: true,
+      confirmLabel: t('common.delete'),
+    })
+    if (!ok) return
     await deleteGroup(group.id)
     if (groupFilter === group.id) setGroupFilter(null)
   }
@@ -336,22 +349,46 @@ export default function App() {
   )
 
   const handleDeleteKey = async (key: SSHKey) => {
-    if (!confirm(t('app.deleteKey', { name: key.name }))) return
+    const ok = await confirmAsk({
+      title: t('common.confirmTitle'),
+      message: t('app.deleteKey', { name: key.name }),
+      danger: true,
+      confirmLabel: t('common.delete'),
+    })
+    if (!ok) return
     await deleteKey(key.id)
   }
 
   const handleDeletePassword = async (entry: HostPassword) => {
-    if (!confirm(t('app.deletePassword', { name: entry.name }))) return
+    const ok = await confirmAsk({
+      title: t('common.confirmTitle'),
+      message: t('app.deletePassword', { name: entry.name }),
+      danger: true,
+      confirmLabel: t('common.delete'),
+    })
+    if (!ok) return
     await deletePassword(entry.id)
   }
 
   const handleDeleteForward = async (forward: PortForward) => {
-    if (!confirm(t('app.deleteForward', { name: forward.name }))) return
+    const ok = await confirmAsk({
+      title: t('common.confirmTitle'),
+      message: t('app.deleteForward', { name: forward.name }),
+      danger: true,
+      confirmLabel: t('common.delete'),
+    })
+    if (!ok) return
     await deletePortForward(forward.id)
   }
 
   const handleDeleteSnippet = async (snippet: Snippet) => {
-    if (!confirm(t('app.deleteSnippet', { name: snippet.name }))) return
+    const ok = await confirmAsk({
+      title: t('common.confirmTitle'),
+      message: t('app.deleteSnippet', { name: snippet.name }),
+      danger: true,
+      confirmLabel: t('common.delete'),
+    })
+    if (!ok) return
     await deleteSnippet(snippet.id)
   }
 
@@ -612,6 +649,7 @@ export default function App() {
       />
 
       <ImportDialogUi dialog={importDialog} />
+      {confirmDialog}
     </div>
   )
 }

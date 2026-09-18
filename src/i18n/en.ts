@@ -10,6 +10,7 @@ export const en: Messages = {
     refresh: 'Refresh',
     loading: 'Loading...',
     confirm: 'OK',
+    confirmTitle: 'Confirm',
     close: 'Close',
     unknownHost: 'Unknown host',
     search: 'Search',
