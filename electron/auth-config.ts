@@ -1,4 +1,4 @@
-import type { ConnectConfig } from 'ssh2'
+import type { Client, ConnectConfig } from 'ssh2'
 import type { StoredHost, StoredKey, StoredPassword } from './data-store'
 
 /** Same keepalive as port forwards — idle NAT/firewall drops otherwise. */
@@ -52,6 +52,15 @@ export function buildSshConnectConfig(
   }
 
   return config
+}
+
+/**
+ * ssh2 leaves Nagle enabled. OpenSSH sets TCP_NODELAY; without it, 1-byte
+ * keystrokes sit until delayed ACK (~100–200ms) and typing feels sticky.
+ */
+export function connectSshClient(client: Client, config: ConnectConfig): void {
+  client.connect(config)
+  client.setNoDelay(true)
 }
 
 export function normalizeRemotePath(path: string): string {

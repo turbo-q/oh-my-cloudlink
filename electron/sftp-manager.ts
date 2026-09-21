@@ -4,6 +4,7 @@ import type { BrowserWindow } from 'electron'
 import { Client, type SFTPWrapper } from 'ssh2'
 import {
   buildSshConnectConfig,
+  connectSshClient,
   joinRemotePath,
   normalizeRemotePath,
   parentRemotePath,
@@ -140,7 +141,7 @@ export class SftpManager {
         if (!stale()) this.cleanup(sessionId)
       })
 
-      client.connect(config)
+      connectSshClient(client, config)
     })
   }
 

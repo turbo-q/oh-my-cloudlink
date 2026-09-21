@@ -1,7 +1,7 @@
 import net from 'net'
 import { BrowserWindow } from 'electron'
 import { Client, type ConnectConfig, type ClientChannel } from 'ssh2'
-import { buildSshConnectConfig } from './auth-config'
+import { buildSshConnectConfig, connectSshClient } from './auth-config'
 import { attachHostKeyVerification } from './host-key'
 import type { StoredHost, StoredKey, StoredPassword, StoredPortForward } from './data-store'
 
@@ -278,7 +278,7 @@ export class PortForwardManager {
       }
       client.once('ready', onReady)
       client.once('error', onError)
-      client.connect(config)
+      connectSshClient(client, config)
     })
   }
 

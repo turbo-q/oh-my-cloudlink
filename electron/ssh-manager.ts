@@ -1,6 +1,6 @@
 import { BrowserWindow } from 'electron'
 import { Client, type ConnectConfig, type ClientChannel } from 'ssh2'
-import { buildSshConnectConfig, type ConnectOptions } from './auth-config'
+import { buildSshConnectConfig, connectSshClient, type ConnectOptions } from './auth-config'
 import { ConnectAbortedError } from './connect-abort'
 import { attachHostKeyVerification } from './host-key'
 import { detectRemoteOs } from './os-detect'
@@ -218,7 +218,7 @@ export class SshManager {
         rejectOnce(new Error('SSH connection closed'))
       })
 
-      client.connect(config)
+      connectSshClient(client, config)
     })
   }
 
