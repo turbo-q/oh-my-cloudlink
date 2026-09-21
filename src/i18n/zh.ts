@@ -198,10 +198,13 @@ export const zh = {
     close: '关闭',
     cancel: '取消',
     trust: '信任并继续',
+    replace: '用新密钥替换',
     mismatchTitle: '主机密钥不匹配',
     mismatchMessage: '远程主机密钥与 known_hosts 记录不一致',
     mismatchDetail:
-      '连接已拒绝，这可能表示中间人攻击，或服务器已更换密钥。\n\n主机: {host}\n密钥类型: {keyType}\n当前指纹: {fingerprint}\n\n若确认服务器已更换密钥，请手动编辑 ~/.ssh/known_hosts 后重试。',
+      '这可能表示中间人攻击，或服务器已更换密钥。\n\n主机: {host}\n密钥类型: {keyType}\n当前指纹: {fingerprint}\n\n关闭将保持原记录并拒绝连接。若确认服务器已更换密钥，替换会用这次的新公钥覆盖旧记录并继续。',
+    mismatchRevokedDetail:
+      '连接已拒绝。该主机密钥已被标记为吊销。\n\n主机: {host}\n密钥类型: {keyType}\n当前指纹: {fingerprint}\n\n如需更改，请手动编辑 ~/.ssh/known_hosts。',
     unknownTitle: '未知的主机密钥',
     unknownMessage: '无法验证远程主机身份（首次连接或尚未收录）',
     unknownDetail:

@@ -3,9 +3,11 @@ export interface HostKeyDialogCopy {
   close: string
   cancel: string
   trust: string
+  replace: string
   mismatchTitle: string
   mismatchMessage: string
   mismatchDetail: string
+  mismatchRevokedDetail: string
   unknownTitle: string
   unknownMessage: string
   unknownDetail: string
@@ -17,9 +19,11 @@ const FIELDS: (keyof HostKeyDialogCopy)[] = [
   'close',
   'cancel',
   'trust',
+  'replace',
   'mismatchTitle',
   'mismatchMessage',
   'mismatchDetail',
+  'mismatchRevokedDetail',
   'unknownTitle',
   'unknownMessage',
   'unknownDetail',

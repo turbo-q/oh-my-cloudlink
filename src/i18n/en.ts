@@ -203,10 +203,13 @@ export const en: Messages = {
     close: 'Close',
     cancel: 'Cancel',
     trust: 'Trust and continue',
+    replace: 'Replace with new key',
     mismatchTitle: 'Host key mismatch',
     mismatchMessage: 'The remote host key does not match known_hosts',
     mismatchDetail:
-      'The connection was refused. This may be a man-in-the-middle attack, or the server key may have changed.\n\nHost: {host}\nKey type: {keyType}\nFingerprint: {fingerprint}\n\nIf you confirmed the server key changed, edit ~/.ssh/known_hosts and try again.',
+      'This may be a man-in-the-middle attack, or the server key may have changed.\n\nHost: {host}\nKey type: {keyType}\nFingerprint: {fingerprint}\n\nClose keeps the saved key and refuses the connection. If you confirmed the server key changed, replace overwrites the old entry with this key and continues.',
+    mismatchRevokedDetail:
+      'The connection was refused. This host key is marked revoked.\n\nHost: {host}\nKey type: {keyType}\nFingerprint: {fingerprint}\n\nEdit ~/.ssh/known_hosts manually if you need to change it.',
     unknownTitle: 'Unknown host key',
     unknownMessage: 'The remote host identity could not be verified (first connection or not yet saved)',
     unknownDetail:

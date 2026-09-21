@@ -120,7 +120,7 @@ npm run lint         # oxlint
 
 - 主机密码 / 私钥等经 vault 加密入库；导出备份为密封 envelope（见 `crypto-vault.ts`）
 - **凭证库**：导航「凭证」含 SSH 密钥与可复用主机密码；主机通过 `passwordId` 引用密码库，或使用一次性 inline `password`
-- 主机密钥对照 `~/.ssh/known_hosts`。未知主机对话框默认按钮是「取消」（回车不信任）；文案走 `src/i18n` 的 `hostKey`，由 `ui:setLocale` 同步到主进程
+- 主机密钥对照 `~/.ssh/known_hosts`。未知主机对话框默认按钮是「取消」（回车不信任）。密钥不匹配时默认仍是「关闭」；只有点「用新密钥替换」才会用本次公钥盖掉该主机同类型旧记录并继续连接。已吊销（`@revoked`）的密钥不提供替换。文案走 `src/i18n` 的 `hostKey`，由 `ui:setLocale` 同步到主进程
 - SSH / SFTP / `~/.ssh/config` 连接默认 keepalive 15s（`SSH_KEEPALIVE_INTERVAL_MS`），并关闭 Nagle（`setNoDelay`）。不关的话单字节回显会多等一轮 TCP delayed ACK，大约 100–200ms，系统 `ssh` 没有这个延迟
 - 不要把密钥、`.env`、vault 材料打进 git 或 commit
 - 会话日志 ID 必须是 UUID v4（防路径穿越）

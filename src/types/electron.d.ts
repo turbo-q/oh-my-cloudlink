@@ -202,9 +202,11 @@ export interface ElectronAPI {
     close: string
     cancel: string
     trust: string
+    replace: string
     mismatchTitle: string
     mismatchMessage: string
     mismatchDetail: string
+    mismatchRevokedDetail: string
     unknownTitle: string
     unknownMessage: string
     unknownDetail: string
