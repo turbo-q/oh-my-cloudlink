@@ -197,6 +197,22 @@ export interface ElectronAPI {
   onCloseTabShortcut: (callback: () => void) => () => void
   closeWindow: () => Promise<boolean>
   getAppVersion: () => Promise<string>
+  openExternal: (url: string) => Promise<boolean>
+  setUiLocale: (copy: {
+    close: string
+    cancel: string
+    trust: string
+    replace: string
+    mismatchTitle: string
+    mismatchMessage: string
+    mismatchDetail: string
+    mismatchRevokedDetail: string
+    unknownTitle: string
+    unknownMessage: string
+    unknownDetail: string
+    writeFailTitle: string
+    writeFailMessage: string
+  }) => void
 }
 
 declare global {

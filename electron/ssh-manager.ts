@@ -1,6 +1,7 @@
 import { BrowserWindow } from 'electron'
 import { Client, type ConnectConfig, type ClientChannel } from 'ssh2'
-import { buildSshConnectConfig, type ConnectOptions } from './auth-config'
+import { buildSshConnectConfig, connectSshClient, type ConnectOptions } from './auth-config'
+import { ConnectAbortedError } from './connect-abort'
 import { attachHostKeyVerification } from './host-key'
 import { detectRemoteOs } from './os-detect'
 import { tryPostSshData, unbindSshIoPort } from './ssh-io-ports'
@@ -47,6 +48,7 @@ export class SshManager {
   /** Bumped on each connect/disconnect to drop stale in-flight handshakes. */
   private connectGeneration = new Map<string, number>()
   private pendingClients = new Map<string, Client>()
+  private connectReject = new Map<string, (err: Error) => void>()
 
   async connect(
     sessionId: string,
@@ -84,10 +86,30 @@ export class SshManager {
       parentWindow: win,
     })
 
-    await this.cancelPending(sessionId)
     const gen = this.bumpGeneration(sessionId)
+    this.abortConnect(sessionId)
+    await this.cancelPending(sessionId)
 
     return new Promise((resolve, reject) => {
+      let settled = false
+      const rejectOnce = (err: unknown) => {
+        if (settled) return
+        settled = true
+        if (this.connectReject.get(sessionId) === rejectOnce) {
+          this.connectReject.delete(sessionId)
+        }
+        reject(err instanceof Error ? err : new Error(String(err)))
+      }
+      const resolveOnce = () => {
+        if (settled) return
+        settled = true
+        if (this.connectReject.get(sessionId) === rejectOnce) {
+          this.connectReject.delete(sessionId)
+        }
+        resolve()
+      }
+      this.connectReject.set(sessionId, rejectOnce)
+
       const client = new Client()
       this.pendingClients.set(sessionId, client)
 
@@ -103,6 +125,7 @@ export class SshManager {
         if (stale()) {
           client.end()
           dropPending()
+          rejectOnce(new ConnectAbortedError())
           return
         }
 
@@ -122,13 +145,14 @@ export class SshManager {
           if (stale()) {
             client.end()
             dropPending()
+            rejectOnce(new ConnectAbortedError())
             return
           }
 
           if (err) {
             client.end()
             dropPending()
-            reject(err)
+            rejectOnce(err)
             return
           }
 
@@ -160,7 +184,7 @@ export class SshManager {
             this.enqueueOutput(sessionId, data.toString('utf-8'))
           })
 
-          resolve()
+          resolveOnce()
         })
       })
 
@@ -168,26 +192,33 @@ export class SshManager {
         dropPending()
         if (stale()) {
           client.end()
+          rejectOnce(new ConnectAbortedError())
           return
         }
         this.flushOutput(sessionId)
         this.cleanup(sessionId)
         hooks?.onError?.(err.message)
         if (!win.isDestroyed()) win.webContents.send('ssh:error', sessionId, err.message)
-        reject(err)
+        rejectOnce(err)
       })
 
       client.on('close', () => {
         dropPending()
-        if (this.sessions.has(sessionId)) {
+        if (this.sessions.has(sessionId) && !stale()) {
           this.flushOutput(sessionId)
           this.cleanup(sessionId)
           hooks?.onClose?.()
           if (!win.isDestroyed()) win.webContents.send('ssh:close', sessionId)
+          return
         }
+        if (stale()) {
+          rejectOnce(new ConnectAbortedError())
+          return
+        }
+        rejectOnce(new Error('SSH connection closed'))
       })
 
-      client.connect(config)
+      connectSshClient(client, config)
     })
   }
 
@@ -208,6 +239,7 @@ export class SshManager {
 
   async disconnect(sessionId: string, hooks?: Pick<SshSessionHooks, 'onClose'>): Promise<void> {
     this.bumpGeneration(sessionId)
+    this.abortConnect(sessionId)
     await this.cancelPending(sessionId)
 
     const session = this.sessions.get(sessionId)
@@ -330,6 +362,12 @@ export class SshManager {
     if (!pending) return
     this.pendingClients.delete(sessionId)
     pending.end()
+  }
+
+  private abortConnect(sessionId: string): void {
+    const rejectConnect = this.connectReject.get(sessionId)
+    if (!rejectConnect) return
+    rejectConnect(new ConnectAbortedError())
   }
 
   private cleanup(sessionId: string): void {

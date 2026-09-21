@@ -2,6 +2,7 @@ import { app, BrowserWindow, ipcMain, dialog, nativeTheme, shell, type IpcMainEv
 import fs from 'fs'
 import path from 'path'
 import { ensureAppPaths } from './app-paths'
+import { isConnectAborted } from './connect-abort'
 import { CryptoVaultError } from './crypto-vault'
 import type { ImportOptions } from './import-merge'
 import { DataStore } from './data-store'
@@ -14,6 +15,8 @@ import { SessionLogStore } from './session-log-store'
 import { getSshConfigPath, listSshConfigHosts, resolveSshConnectConfig } from './ssh-config'
 import { clearLogAppend, enqueueLogAppend, flushLogAppend } from './log-append-bus'
 import { bindSshIoPort, setSshIoWriteHandler, unbindAllSshIoPorts } from './ssh-io-ports'
+import { isSafeExternalUrl } from './safe-external-url'
+import { setHostKeyDialogCopy } from './ui-locale'
 
 // Must run before DataStore reads userData (keep path ASCII-only)
 ensureAppPaths()
@@ -92,6 +95,26 @@ function createWindow(): void {
   } else {
     void mainWindow.loadFile(path.join(__dirname, '../dist/index.html'))
   }
+
+  // Never open arbitrary URLs inside the app — use the system browser.
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (isSafeExternalUrl(url)) {
+      void shell.openExternal(url)
+    }
+    return { action: 'deny' }
+  })
+
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    const allowedDev =
+      url.startsWith('http://localhost:5173') || url.startsWith('http://127.0.0.1:5173')
+    const allowed =
+      (isDev && allowedDev) || (!isDev && (url.startsWith('file:') || url.startsWith('file://')))
+    if (allowed) return
+    event.preventDefault()
+    if (isSafeExternalUrl(url)) {
+      void shell.openExternal(url)
+    }
+  })
 
   mainWindow.on('closed', () => {
     mainWindow = null
@@ -387,7 +410,9 @@ function registerIpcHandlers(): void {
         bindSshIoPort(sessionId, mainWindow)
         sessionLogStore.updateStatus(sessionId, 'connected')
       } catch (err) {
-        sessionLogStore.endSession(sessionId, 'error')
+        if (!isConnectAborted(err)) {
+          sessionLogStore.endSession(sessionId, 'error')
+        }
         throw err
       }
     },
@@ -410,7 +435,9 @@ function registerIpcHandlers(): void {
         bindSshIoPort(sessionId, mainWindow)
         sessionLogStore.updateStatus(sessionId, 'connected')
       } catch (err) {
-        sessionLogStore.endSession(sessionId, 'error')
+        if (!isConnectAborted(err)) {
+          sessionLogStore.endSession(sessionId, 'error')
+        }
         throw err
       }
     },
@@ -570,7 +597,19 @@ function registerIpcHandlers(): void {
     return false
   })
 
+  safeHandle('shell:openExternal', async (_e, url: string) => {
+    if (!isSafeExternalUrl(url)) {
+      throw new Error('不允许打开该链接')
+    }
+    await shell.openExternal(url)
+    return true
+  })
+
   safeHandle('app:getVersion', () => app.getVersion())
+
+  safeOn('ui:setLocale', (_e, copy: unknown) => {
+    setHostKeyDialogCopy(copy)
+  })
 
   console.log('[main] IPC handlers registered (local:home, local:list ready)')
 }

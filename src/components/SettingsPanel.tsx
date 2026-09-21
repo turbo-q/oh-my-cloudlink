@@ -143,14 +143,6 @@ export function SettingsPanel({ onExport, onImport, onDataRestored }: SettingsPa
     }
   }
 
-  const roadmapItems = [
-    t('settings.roadmapItems.ssh'),
-    t('settings.roadmapItems.sftp'),
-    t('settings.roadmapItems.forward'),
-    t('settings.roadmapItems.snippets'),
-    t('settings.roadmapItems.encryption'),
-  ]
-
   const langLabel =
     preference === 'system'
       ? `${t(locale === 'zh' ? 'settings.langZh' : 'settings.langEn')}${t('settings.followingSystem')}`
@@ -324,20 +316,6 @@ export function SettingsPanel({ onExport, onImport, onDataRestored }: SettingsPa
                 </p>
                 <p className="text-app-subtle">{t('settings.aboutBlurb')}</p>
               </div>
-            </section>
-
-            <section>
-              <h3 className="text-sm font-medium text-app-muted uppercase tracking-wider mb-4">
-                {t('settings.roadmap')}
-              </h3>
-              <ul className="text-sm text-app-subtle space-y-2 rounded-xl border border-app-strong bg-app-card p-5">
-                {roadmapItems.map((item) => (
-                  <li key={item} className="flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-emerald-400" />
-                    {item}
-                  </li>
-                ))}
-              </ul>
             </section>
           </div>
         </div>

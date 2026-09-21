@@ -8,6 +8,7 @@ export const zh = {
     refresh: '刷新',
     loading: '加载中...',
     confirm: '确定',
+    confirmTitle: '请确认',
     close: '关闭',
     unknownHost: '未知主机',
     search: '搜索',
@@ -161,14 +162,6 @@ export const zh = {
     import: '导入配置',
     about: '关于',
     aboutBlurb: '类 Termius 的 SSH / SFTP 连接管理工具',
-    roadmap: '路线图',
-    roadmapItems: {
-      ssh: 'SSH 终端连接',
-      sftp: 'SFTP / FTP 文件传输',
-      forward: '端口转发',
-      snippets: '命令片段',
-      encryption: '数据加密存储',
-    },
   },
   hosts: {
     welcome: '欢迎使用 Oh My CloudLink',
@@ -200,6 +193,24 @@ export const zh = {
     empty: '未找到匹配配置，可直接输入 user@hostname 连接',
     authHint: '使用 IdentityFile 或系统 ssh-agent 认证',
     openConfig: '打开 SSH 配置',
+  },
+  hostKey: {
+    close: '关闭',
+    cancel: '取消',
+    trust: '信任并继续',
+    replace: '用新密钥替换',
+    mismatchTitle: '主机密钥不匹配',
+    mismatchMessage: '远程主机密钥与 known_hosts 记录不一致',
+    mismatchDetail:
+      '这可能表示中间人攻击，或服务器已更换密钥。\n\n主机: {host}\n密钥类型: {keyType}\n当前指纹: {fingerprint}\n\n关闭将保持原记录并拒绝连接。若确认服务器已更换密钥，替换会用这次的新公钥覆盖旧记录并继续。',
+    mismatchRevokedDetail:
+      '连接已拒绝。该主机密钥已被标记为吊销。\n\n主机: {host}\n密钥类型: {keyType}\n当前指纹: {fingerprint}\n\n如需更改，请手动编辑 ~/.ssh/known_hosts。',
+    unknownTitle: '未知的主机密钥',
+    unknownMessage: '无法验证远程主机身份（首次连接或尚未收录）',
+    unknownDetail:
+      '主机: {host}\n密钥类型: {keyType}\n指纹: {fingerprint}\n\n信任后将写入 ~/.ssh/known_hosts。',
+    writeFailTitle: '写入 known_hosts 失败',
+    writeFailMessage: '无法保存主机密钥',
   },
   keys: {
     title: '凭证',

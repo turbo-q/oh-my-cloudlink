@@ -10,6 +10,7 @@ export const en: Messages = {
     refresh: 'Refresh',
     loading: 'Loading...',
     confirm: 'OK',
+    confirmTitle: 'Confirm',
     close: 'Close',
     unknownHost: 'Unknown host',
     search: 'Search',
@@ -166,14 +167,6 @@ export const en: Messages = {
     import: 'Import',
     about: 'About',
     aboutBlurb: 'SSH / SFTP connection manager inspired by Termius',
-    roadmap: 'Roadmap',
-    roadmapItems: {
-      ssh: 'SSH terminal',
-      sftp: 'SFTP / FTP file transfer',
-      forward: 'Port forwarding',
-      snippets: 'Command snippets',
-      encryption: 'Encrypted data storage',
-    },
   },
   hosts: {
     welcome: 'Welcome to Oh My CloudLink',
@@ -205,6 +198,24 @@ export const en: Messages = {
     empty: 'No matching config. Enter user@hostname to connect.',
     authHint: 'Uses IdentityFile or system ssh-agent',
     openConfig: 'Open SSH Config',
+  },
+  hostKey: {
+    close: 'Close',
+    cancel: 'Cancel',
+    trust: 'Trust and continue',
+    replace: 'Replace with new key',
+    mismatchTitle: 'Host key mismatch',
+    mismatchMessage: 'The remote host key does not match known_hosts',
+    mismatchDetail:
+      'This may be a man-in-the-middle attack, or the server key may have changed.\n\nHost: {host}\nKey type: {keyType}\nFingerprint: {fingerprint}\n\nClose keeps the saved key and refuses the connection. If you confirmed the server key changed, replace overwrites the old entry with this key and continues.',
+    mismatchRevokedDetail:
+      'The connection was refused. This host key is marked revoked.\n\nHost: {host}\nKey type: {keyType}\nFingerprint: {fingerprint}\n\nEdit ~/.ssh/known_hosts manually if you need to change it.',
+    unknownTitle: 'Unknown host key',
+    unknownMessage: 'The remote host identity could not be verified (first connection or not yet saved)',
+    unknownDetail:
+      'Host: {host}\nKey type: {keyType}\nFingerprint: {fingerprint}\n\nTrusting this host writes the key to ~/.ssh/known_hosts.',
+    writeFailTitle: 'Could not update known_hosts',
+    writeFailMessage: 'The host key could not be saved',
   },
   keys: {
     title: 'Credentials',

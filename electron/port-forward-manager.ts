@@ -1,7 +1,7 @@
 import net from 'net'
 import { BrowserWindow } from 'electron'
 import { Client, type ConnectConfig, type ClientChannel } from 'ssh2'
-import { buildSshConnectConfig } from './auth-config'
+import { buildSshConnectConfig, connectSshClient } from './auth-config'
 import { attachHostKeyVerification } from './host-key'
 import type { StoredHost, StoredKey, StoredPassword, StoredPortForward } from './data-store'
 
@@ -185,11 +185,7 @@ export class PortForwardManager {
 
     this.validateRule(rule)
 
-    const config: ConnectConfig = {
-      ...buildSshConnectConfig(host, keys, passwords),
-      keepaliveInterval: 15000,
-      keepaliveCountMax: 3,
-    }
+    const config: ConnectConfig = buildSshConnectConfig(host, keys, passwords)
     attachHostKeyVerification(config, {
       hostname: host.hostname,
       port: host.port,
@@ -282,7 +278,7 @@ export class PortForwardManager {
       }
       client.once('ready', onReady)
       client.once('error', onError)
-      client.connect(config)
+      connectSshClient(client, config)
     })
   }
 

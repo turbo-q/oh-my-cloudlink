@@ -2,8 +2,10 @@ import { useCallback, useEffect, useState } from 'react'
 import type { RemoteFileEntry } from '../types'
 import { FileListPane, joinPath, parentPath, type FileDragData } from './FileListPane'
 import { NamePromptModal } from './NamePromptModal'
+import { useConfirmDialog } from '../hooks/useConfirmDialog'
 import { useTransferProgress } from '../hooks/useTransferProgress'
 import { formatTransferError } from '../utils/transferError'
+import { isConnectAbortedMessage } from '../utils/connectAbort'
 import { useI18n } from '../i18n/I18nProvider'
 
 type NamePromptState =
@@ -31,6 +33,7 @@ export function RemoteFilePane({
   onDisconnect,
 }: RemoteFilePaneProps) {
   const { t } = useI18n()
+  const { ask: confirmAsk, dialog: confirmDialog } = useConfirmDialog()
   const [currentPath, setCurrentPath] = useState('/')
   const [entries, setEntries] = useState<RemoteFileEntry[]>([])
   const [loading, setLoading] = useState(true)
@@ -71,7 +74,7 @@ export function RemoteFilePane({
         return loadDirectory(homePath)
       })
       .catch((err: Error) => {
-        if (cancelled) return
+        if (cancelled || isConnectAbortedMessage(err?.message)) return
         onStatusChange(sessionId, 'error', err.message)
         setMessage(t('files.connectFail', { message: err.message }))
         setMessageError(true)
@@ -197,7 +200,13 @@ export function RemoteFilePane({
 
   const handleDelete = async (entry: RemoteFileEntry) => {
     const type = entry.isDirectory ? t('files.deleteFolder') : t('files.deleteFile')
-    if (!confirm(t('files.deleteConfirm', { type, name: entry.name }))) return
+    const ok = await confirmAsk({
+      title: t('common.confirmTitle'),
+      message: t('files.deleteConfirm', { type, name: entry.name }),
+      danger: true,
+      confirmLabel: t('common.delete'),
+    })
+    if (!ok) return
 
     setOperating(true)
     start(t('files.deleting'), 1)
@@ -307,6 +316,7 @@ export function RemoteFilePane({
         }}
         onClose={() => setNamePrompt(null)}
       />
+      {confirmDialog}
     </>
   )
 }

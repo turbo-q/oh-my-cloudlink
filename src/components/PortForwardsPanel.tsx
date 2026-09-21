@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useI18n } from '../i18n/I18nProvider'
 import type { Host, PortForward, PortForwardRuntime, PortForwardType } from '../types'
 import { isSshHost } from '../types'
+import { useConfirmDialog } from '../hooks/useConfirmDialog'
 
 interface PortForwardsPanelProps {
   hosts: Host[]
@@ -125,6 +126,7 @@ export function PortForwardsPanel({
   onConnected,
 }: PortForwardsPanelProps) {
   const { t, locale } = useI18n()
+  const { ask: confirmAsk, dialog: confirmDialog } = useConfirmDialog()
   const [runtime, setRuntime] = useState<Record<string, PortForwardRuntime>>({})
   const [busyId, setBusyId] = useState<string | null>(null)
   const [query, setQuery] = useState('')
@@ -200,7 +202,13 @@ export function PortForwardsPanel({
   }
 
   const handleStopAll = async () => {
-    if (!confirm(t('forwards.stopAllConfirm'))) return
+    const ok = await confirmAsk({
+      title: t('common.confirmTitle'),
+      message: t('forwards.stopAllConfirm'),
+      danger: true,
+      confirmLabel: t('forwards.stopAll'),
+    })
+    if (!ok) return
     await window.electronAPI.forwardStopAll()
     setRuntime({})
   }
@@ -208,6 +216,7 @@ export function PortForwardsPanel({
   const runningCount = Object.values(runtime).filter((r) => r.status === 'running').length
 
   return (
+    <>
     <div className="flex-1 flex flex-col page-shell min-h-0">
       <div className="page-header px-8 py-6 flex items-center justify-between gap-4">
         <div>
@@ -364,5 +373,7 @@ export function PortForwardsPanel({
         </div>
       </div>
     </div>
+    {confirmDialog}
+    </>
   )
 }
