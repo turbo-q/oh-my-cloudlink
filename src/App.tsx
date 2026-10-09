@@ -244,7 +244,7 @@ export default function App() {
     if (activeSession && isFileProtocol(activeSession.protocol)) {
       setBrowsePanel('sftp')
       setShowSession(false)
-      setActiveSessionId(remaining.length > 0 ? remaining[remaining.length - 1].id : null)
+      setActiveSessionId(null)
       return
     }
 
@@ -262,14 +262,17 @@ export default function App() {
 
   // ⌘W (macOS) / Ctrl+W (Win/Linux) — main intercepts before window close; close active session or the window
   const activeSessionIdRef = useRef(activeSessionId)
+  const showSessionRef = useRef(showSession)
   const closeSessionRef = useRef(closeSession)
   activeSessionIdRef.current = activeSessionId
+  showSessionRef.current = showSession
   closeSessionRef.current = closeSession
 
   useEffect(() => {
     if (!window.electronAPI?.onCloseTabShortcut) return
     return window.electronAPI.onCloseTabShortcut(() => {
-      const id = activeSessionIdRef.current
+      // Only close a tab while a session panel is visible; browse views must not kill background sessions
+      const id = showSessionRef.current ? activeSessionIdRef.current : null
       if (id) {
         closeSessionRef.current(id)
         return
