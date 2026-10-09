@@ -338,6 +338,8 @@ export const zh = {
     connectTitle: '连接主机',
     selectHostBtn: '选择主机',
     selectHost: '选择主机',
+    searchPlaceholder: '搜索主机名称、地址或标签…',
+    noMatch: '没有匹配的主机',
     connect: '连接 →',
     otherHosts: '其他主机',
     emptyHint: '连接已保存的主机，即可通过 SFTP 管理远程文件',

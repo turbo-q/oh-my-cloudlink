@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import type { Host, Group } from '../types'
 import { useI18n } from '../i18n/I18nProvider'
+import { filterHosts } from '../utils/filterHosts'
 import { LocalFilePane } from './LocalFilePane'
 import { RemoteFilePane } from './RemoteFilePane'
 import { HostOsIcon } from './HostOsIcon'
@@ -72,6 +73,27 @@ function HostSelectPane({
 }) {
   const { t } = useI18n()
   const [showPicker, setShowPicker] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+
+  const filteredHosts = useMemo(
+    () => filterHosts(hosts, searchQuery, null),
+    [hosts, searchQuery],
+  )
+  const ungroupedHosts = useMemo(
+    () => (groups.length > 0 ? filteredHosts.filter((h) => !h.groupId) : filteredHosts),
+    [filteredHosts, groups.length],
+  )
+
+  const openPicker = () => {
+    setSearchQuery('')
+    setShowPicker(true)
+  }
+
+  const handleSearchKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && filteredHosts.length === 1) {
+      onConnect(filteredHosts[0])
+    }
+  }
 
   if (!showPicker) {
     return (
@@ -88,7 +110,7 @@ function HostSelectPane({
           <h3 className="text-lg font-semibold text-app mb-2">{t('sftp.connectTitle')}</h3>
           <p className="text-sm text-app-subtle mb-6 max-w-xs leading-relaxed">{t('sftp.emptyHint')}</p>
           <button
-            onClick={() => setShowPicker(true)}
+            onClick={openPicker}
             className="px-6 py-2.5 rounded-xl bg-surface border border-app-strong text-sm font-medium text-app hover:bg-app-hover transition-colors"
           >
             {t('sftp.selectHostBtn')}
@@ -102,51 +124,91 @@ function HostSelectPane({
     <div className="flex flex-col h-full border-l border-app page-shell">
       <div className="flex items-center justify-between px-5 py-4 border-b border-app page-header">
         <span className="text-sm font-semibold text-app">{t('sftp.selectHost')}</span>
-        <button onClick={() => setShowPicker(false)} className="text-action">
+        <button
+          onClick={() => {
+            setShowPicker(false)
+            setSearchQuery('')
+          }}
+          className="text-action"
+        >
           {t('common.back')}
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-6">
-        {groups.length > 0 && (
-          <section>
-            <h4 className="text-xs font-medium text-app-subtle uppercase tracking-wider mb-3">{t('sftp.groups')}</h4>
-            <div className="space-y-2">
-              {groups.map((group) => {
-                const groupHosts = hosts.filter((h) => h.groupId === group.id)
-                if (groupHosts.length === 0) return null
-                return (
-                  <div key={group.id}>
-                    <div className="flex items-center gap-2 px-1 py-1 text-xs text-app-subtle mb-1">
-                      <span className="w-2 h-2 rounded-full" style={{ background: group.color }} />
-                      {group.name}
-                    </div>
-                    <div className="space-y-1">
-                      {groupHosts.map((host) => (
-                        <HostRow key={host.id} host={host} group={group} onConnect={onConnect} />
-                      ))}
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </section>
-        )}
+      <div className="px-4 pt-3 pb-2">
+        <div className="relative">
+          <svg
+            className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-app-subtle"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+            />
+          </svg>
+          <input
+            autoFocus
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onKeyDown={handleSearchKeyDown}
+            className="w-full pl-9 pr-3 py-2 bg-surface border border-app-strong rounded-xl text-sm text-app-secondary placeholder:text-app-faint focus:outline-none focus:border-emerald-500/40"
+            placeholder={t('sftp.searchPlaceholder')}
+          />
+        </div>
+      </div>
 
-        <section>
-          <h4 className="text-xs font-medium text-app-subtle uppercase tracking-wider mb-3">
-            {groups.length > 0 ? t('sftp.otherHosts') : t('sftp.hosts')}
-          </h4>
-          {hosts.filter((h) => !h.groupId).length === 0 && hosts.length === 0 ? (
-            <p className="text-sm text-app-faint py-4">{t('sftp.noHosts')}</p>
-          ) : (
-            <div className="space-y-1">
-              {(groups.length > 0 ? hosts.filter((h) => !h.groupId) : hosts).map((host) => (
-                <HostRow key={host.id} host={host} onConnect={onConnect} />
-              ))}
-            </div>
-          )}
-        </section>
+      <div className="flex-1 overflow-y-auto p-4 pt-2 space-y-6">
+        {hosts.length === 0 ? (
+          <p className="text-sm text-app-faint py-4">{t('sftp.noHosts')}</p>
+        ) : filteredHosts.length === 0 ? (
+          <p className="text-sm text-app-faint py-4">{t('sftp.noMatch')}</p>
+        ) : (
+          <>
+            {groups.length > 0 && (
+              <section>
+                <h4 className="text-xs font-medium text-app-subtle uppercase tracking-wider mb-3">
+                  {t('sftp.groups')}
+                </h4>
+                <div className="space-y-2">
+                  {groups.map((group) => {
+                    const groupHosts = filteredHosts.filter((h) => h.groupId === group.id)
+                    if (groupHosts.length === 0) return null
+                    return (
+                      <div key={group.id}>
+                        <div className="flex items-center gap-2 px-1 py-1 text-xs text-app-subtle mb-1">
+                          <span className="w-2 h-2 rounded-full" style={{ background: group.color }} />
+                          {group.name}
+                        </div>
+                        <div className="space-y-1">
+                          {groupHosts.map((host) => (
+                            <HostRow key={host.id} host={host} group={group} onConnect={onConnect} />
+                          ))}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </section>
+            )}
+
+            {(groups.length === 0 || ungroupedHosts.length > 0) && (
+              <section>
+                <h4 className="text-xs font-medium text-app-subtle uppercase tracking-wider mb-3">
+                  {groups.length > 0 ? t('sftp.otherHosts') : t('sftp.hosts')}
+                </h4>
+                <div className="space-y-1">
+                  {ungroupedHosts.map((host) => (
+                    <HostRow key={host.id} host={host} onConnect={onConnect} />
+                  ))}
+                </div>
+              </section>
+            )}
+          </>
+        )}
       </div>
     </div>
   )

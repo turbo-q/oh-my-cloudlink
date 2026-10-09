@@ -343,6 +343,8 @@ export const en: Messages = {
     connectTitle: 'Connect to host',
     selectHostBtn: 'Select host',
     selectHost: 'Select host',
+    searchPlaceholder: 'Search name, address, or tags…',
+    noMatch: 'No matching hosts',
     connect: 'Connect →',
     otherHosts: 'Other hosts',
     emptyHint: 'Connect a saved host to browse files over SFTP',
