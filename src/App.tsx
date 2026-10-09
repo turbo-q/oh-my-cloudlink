@@ -36,6 +36,19 @@ type ModalState =
   | { type: 'snippet'; snippet?: Snippet }
   | { type: 'sshConfig' }
 
+/** Prefill host form as a new entry (no id); keep auth/group/tags, clear probed OS. */
+function hostDraftFromCopy(host: Host, nameSuffix: string): Host {
+  return {
+    ...host,
+    id: '',
+    name: `${host.name}${nameSuffix}`,
+    tags: [...host.tags],
+    osId: undefined,
+    createdAt: '',
+    updatedAt: '',
+  }
+}
+
 export default function App() {
   const { t } = useI18n()
   const [vaultScreen, setVaultScreen] = useState<VaultScreen>('checking')
@@ -498,6 +511,9 @@ export default function App() {
             onSelectHost={(h) => setSelectedHostId(h.id)}
             onConnect={handleConnectFromPanel}
             onEditHost={(h) => setModal({ type: 'host', host: h })}
+            onDuplicateHost={(h) =>
+              setModal({ type: 'host', host: hostDraftFromCopy(h, t('hosts.copyNameSuffix')) })
+            }
             onDeleteHost={handleDeleteHost}
             onAddHost={() => setModal({ type: 'host' })}
             onConnectViaSshConfig={() => setModal({ type: 'sshConfig' })}

@@ -132,6 +132,7 @@ npm run lint         # oxlint
 - **主题**：`theme.ts` + CSS 变量；终端主题用 `getTerminalTheme`
 - **组件**：现有面板模式（`*Panel.tsx`），优先扩展而非新造平行体系
 - **会话关闭焦点**：关闭**当前活跃**的 SFTP/FTP 会话后，应回到 `browsePanel === 'sftp'` 的重选主机页（`showSession = false`），不要自动切到剩余的最近 SSH 标签；关闭 SSH 会话仍回退到最近剩余会话
+- **主机拷贝**：主机卡片右键「拷贝」打开新建表单并预填字段（无 `id`，名称加副本后缀，清除 `osId`）；保存走新建而非更新
 - **Tailwind**：跟现有 utility / `index.css` 变量；不要引入另一套设计系统
 - **类型**：改 IPC 必须同步 `preload.ts` 与 `electron.d.ts`
 - **范围**：只改任务相关文件；不顺手大重构

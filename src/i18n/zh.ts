@@ -184,6 +184,8 @@ export const zh = {
     noHostsInGroup: '该分组下暂无主机',
     edit: '编辑',
     delete: '删除',
+    duplicate: '拷贝',
+    copyNameSuffix: ' 副本',
   },
   sshConfig: {
     subtitle: '通过 ~/.ssh/config',

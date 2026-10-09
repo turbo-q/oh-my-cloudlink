@@ -189,6 +189,8 @@ export const en: Messages = {
     noHostsInGroup: 'No hosts in this group',
     edit: 'Edit',
     delete: 'Delete',
+    duplicate: 'Copy',
+    copyNameSuffix: ' (copy)',
   },
   sshConfig: {
     subtitle: 'via ~/.ssh/config',
