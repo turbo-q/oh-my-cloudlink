@@ -207,6 +207,11 @@ export default function App() {
   const closeSessionsByIds = useCallback((sessionIds: string[]) => {
     if (sessionIds.length === 0) return
     const idSet = new Set(sessionIds)
+    const closingActive = activeSessionId != null && idSet.has(activeSessionId)
+    const activeSession = closingActive
+      ? sessions.find((s) => s.id === activeSessionId)
+      : undefined
+    const remaining = sessions.filter((s) => !idSet.has(s.id))
 
     setSessions((prev) => {
       const toClose = prev.filter((s) => idSet.has(s.id))
@@ -220,16 +225,23 @@ export default function App() {
       return next
     })
 
-    setActiveSessionId((current) => {
-      if (!current || !idSet.has(current)) return current
-      const remaining = sessions.filter((s) => !idSet.has(s.id))
-      if (remaining.length === 0) {
-        setShowSession(false)
-        return null
-      }
-      return remaining[remaining.length - 1].id
-    })
-  }, [disconnectSessions, sessions])
+    if (!closingActive) return
+
+    // SFTP/FTP 断开后优先回到文件页重选主机，避免被其它 SSH 标签抢走焦点
+    if (activeSession && isFileProtocol(activeSession.protocol)) {
+      setBrowsePanel('sftp')
+      setShowSession(false)
+      setActiveSessionId(remaining.length > 0 ? remaining[remaining.length - 1].id : null)
+      return
+    }
+
+    if (remaining.length === 0) {
+      setShowSession(false)
+      setActiveSessionId(null)
+      return
+    }
+    setActiveSessionId(remaining[remaining.length - 1].id)
+  }, [activeSessionId, disconnectSessions, sessions])
 
   const closeSession = useCallback((sessionId: string) => {
     closeSessionsByIds([sessionId])
