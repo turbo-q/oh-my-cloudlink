@@ -107,6 +107,8 @@ export interface AppSession {
   tabLabel?: string
   /** Insert snippet command once after SSH connects. */
   pendingSnippet?: { command: string; run: boolean }
+  /** Bumped to remount the session panel and reconnect in place. */
+  refreshNonce?: number
 }
 
 /** @deprecated 使用 AppSession */

@@ -1,9 +1,10 @@
-import { useMemo } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { useI18n } from '../i18n/I18nProvider'
 import type { Host, Group } from '../types'
 import { getDefaultPort } from '../types'
 import type { AppPanel } from '../types/app'
 import { filterHosts, type GroupFilter } from '../utils/filterHosts'
+import { ContextMenu, type ContextMenuItem } from './ContextMenu'
 import { HostOsIcon } from './HostOsIcon'
 
 /** Always-visible connect target for picking hosts in a narrow window. */
@@ -25,6 +26,7 @@ interface HostOverviewPanelProps {
   onSelectHost: (host: Host) => void
   onConnect: (host: Host) => void
   onEditHost: (host: Host) => void
+  onDuplicateHost: (host: Host) => void
   onDeleteHost: (host: Host) => void
   onAddHost: () => void
   onConnectViaSshConfig: () => void
@@ -45,6 +47,7 @@ export function HostOverviewPanel({
   onSelectHost,
   onConnect,
   onEditHost,
+  onDuplicateHost,
   onDeleteHost,
   onAddHost,
   onConnectViaSshConfig,
@@ -54,6 +57,37 @@ export function HostOverviewPanel({
 }: HostOverviewPanelProps) {
   const { t } = useI18n()
   const isSftp = panel === 'sftp'
+  const [menu, setMenu] = useState<{ host: Host; x: number; y: number } | null>(null)
+
+  const closeMenu = useCallback(() => setMenu(null), [])
+
+  const hostMenuItems = useCallback(
+    (host: Host): ContextMenuItem[] => [
+      {
+        id: 'connect',
+        label: isSftp ? t('hosts.sftp') : t('hosts.connect'),
+        onClick: () => onConnect(host),
+      },
+      {
+        id: 'edit',
+        label: t('hosts.edit'),
+        onClick: () => onEditHost(host),
+      },
+      {
+        id: 'duplicate',
+        label: t('hosts.duplicate'),
+        onClick: () => onDuplicateHost(host),
+      },
+      {
+        id: 'delete',
+        label: t('hosts.delete'),
+        danger: true,
+        separatorBefore: true,
+        onClick: () => onDeleteHost(host),
+      },
+    ],
+    [isSftp, onConnect, onDeleteHost, onDuplicateHost, onEditHost, t],
+  )
 
   const searchFilteredHosts = useMemo(
     () => filterHosts(allHosts, searchQuery, null),
@@ -297,12 +331,25 @@ export function HostOverviewPanel({
                   onConnect={() => onConnect(host)}
                   onEdit={() => onEditHost(host)}
                   onDelete={() => onDeleteHost(host)}
+                  onContextMenu={(x, y) => {
+                    onSelectHost(host)
+                    setMenu({ host, x, y })
+                  }}
                 />
               ))}
             </div>
           )}
         </section>
       </div>
+
+      {menu && (
+        <ContextMenu
+          x={menu.x}
+          y={menu.y}
+          items={hostMenuItems(menu.host)}
+          onClose={closeMenu}
+        />
+      )}
     </div>
   )
 }
@@ -315,6 +362,7 @@ function HostCard({
   onConnect,
   onEdit,
   onDelete,
+  onContextMenu,
 }: {
   host: Host
   group?: Group
@@ -323,6 +371,7 @@ function HostCard({
   onConnect: () => void
   onEdit: () => void
   onDelete: () => void
+  onContextMenu: (x: number, y: number) => void
 }) {
   const { t } = useI18n()
   const endpoint = formatHostEndpoint(host)
@@ -332,6 +381,10 @@ function HostCard({
     <div
       onClick={onSelect}
       onDoubleClick={onConnect}
+      onContextMenu={(e) => {
+        e.preventDefault()
+        onContextMenu(e.clientX, e.clientY)
+      }}
       className={`group relative rounded-2xl border px-5 py-4 cursor-pointer transition-all ${
         isSelected
           ? 'border-blue-500/60 bg-blue-500/5 shadow-lg shadow-blue-500/10'

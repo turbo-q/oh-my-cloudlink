@@ -36,6 +36,19 @@ type ModalState =
   | { type: 'snippet'; snippet?: Snippet }
   | { type: 'sshConfig' }
 
+/** Prefill host form as a new entry (no id); keep auth/group/tags, clear probed OS. */
+function hostDraftFromCopy(host: Host, nameSuffix: string): Host {
+  return {
+    ...host,
+    id: '',
+    name: `${host.name}${nameSuffix}`,
+    tags: [...host.tags],
+    osId: undefined,
+    createdAt: '',
+    updatedAt: '',
+  }
+}
+
 export default function App() {
   const { t } = useI18n()
   const [vaultScreen, setVaultScreen] = useState<VaultScreen>('checking')
@@ -207,6 +220,11 @@ export default function App() {
   const closeSessionsByIds = useCallback((sessionIds: string[]) => {
     if (sessionIds.length === 0) return
     const idSet = new Set(sessionIds)
+    const closingActive = activeSessionId != null && idSet.has(activeSessionId)
+    const activeSession = closingActive
+      ? sessions.find((s) => s.id === activeSessionId)
+      : undefined
+    const remaining = sessions.filter((s) => !idSet.has(s.id))
 
     setSessions((prev) => {
       const toClose = prev.filter((s) => idSet.has(s.id))
@@ -220,16 +238,23 @@ export default function App() {
       return next
     })
 
-    setActiveSessionId((current) => {
-      if (!current || !idSet.has(current)) return current
-      const remaining = sessions.filter((s) => !idSet.has(s.id))
-      if (remaining.length === 0) {
-        setShowSession(false)
-        return null
-      }
-      return remaining[remaining.length - 1].id
-    })
-  }, [disconnectSessions, sessions])
+    if (!closingActive) return
+
+    // SFTP/FTP 断开后优先回到文件页重选主机，避免被其它 SSH 标签抢走焦点
+    if (activeSession && isFileProtocol(activeSession.protocol)) {
+      setBrowsePanel('sftp')
+      setShowSession(false)
+      setActiveSessionId(null)
+      return
+    }
+
+    if (remaining.length === 0) {
+      setShowSession(false)
+      setActiveSessionId(null)
+      return
+    }
+    setActiveSessionId(remaining[remaining.length - 1].id)
+  }, [activeSessionId, disconnectSessions, sessions])
 
   const closeSession = useCallback((sessionId: string) => {
     closeSessionsByIds([sessionId])
@@ -237,14 +262,17 @@ export default function App() {
 
   // ⌘W (macOS) / Ctrl+W (Win/Linux) — main intercepts before window close; close active session or the window
   const activeSessionIdRef = useRef(activeSessionId)
+  const showSessionRef = useRef(showSession)
   const closeSessionRef = useRef(closeSession)
   activeSessionIdRef.current = activeSessionId
+  showSessionRef.current = showSession
   closeSessionRef.current = closeSession
 
   useEffect(() => {
     if (!window.electronAPI?.onCloseTabShortcut) return
     return window.electronAPI.onCloseTabShortcut(() => {
-      const id = activeSessionIdRef.current
+      // Only close a tab while a session panel is visible; browse views must not kill background sessions
+      const id = showSessionRef.current ? activeSessionIdRef.current : null
       if (id) {
         closeSessionRef.current(id)
         return
@@ -290,6 +318,42 @@ export default function App() {
     const mode = isFileProtocol(session.protocol) ? 'sftp' : 'ssh'
     connectHost(host, mode)
   }, [sessions, hosts, connectHost, connectSshConfigHost, t])
+
+  /** Disconnect then remount the same tab so SSH/SFTP reconnect in place. */
+  const refreshSession = useCallback((sessionId: string) => {
+    const session = sessions.find((s) => s.id === sessionId)
+    if (!session) return
+
+    setActiveSessionId(sessionId)
+    setShowSession(true)
+    setSessions((prev) =>
+      prev.map((s) =>
+        s.id === sessionId
+          ? { ...s, status: 'connecting', errorMessage: undefined }
+          : s,
+      ),
+    )
+
+    const disconnect = isFileProtocol(session.protocol)
+      ? window.electronAPI.fileDisconnect(sessionId)
+      : window.electronAPI.sshDisconnect(sessionId)
+
+    void disconnect.finally(() => {
+      setSessions((prev) => {
+        if (!prev.some((s) => s.id === sessionId)) return prev
+        return prev.map((s) =>
+          s.id === sessionId
+            ? {
+                ...s,
+                refreshNonce: (s.refreshNonce ?? 0) + 1,
+                status: 'connecting',
+                errorMessage: undefined,
+              }
+            : s,
+        )
+      })
+    })
+  }, [sessions])
 
   const renameSession = useCallback((sessionId: string, tabLabel: string) => {
     setSessions((prev) =>
@@ -469,6 +533,7 @@ export default function App() {
         onCloseSessionsToRight={closeSessionsToRight}
         onCloseAllSessions={closeAllSessions}
         onDuplicateSession={duplicateSession}
+        onRefreshSession={refreshSession}
         onRenameSession={renameSession}
       />
 
@@ -486,6 +551,9 @@ export default function App() {
             onSelectHost={(h) => setSelectedHostId(h.id)}
             onConnect={handleConnectFromPanel}
             onEditHost={(h) => setModal({ type: 'host', host: h })}
+            onDuplicateHost={(h) =>
+              setModal({ type: 'host', host: hostDraftFromCopy(h, t('hosts.copyNameSuffix')) })
+            }
             onDeleteHost={handleDeleteHost}
             onAddHost={() => setModal({ type: 'host' })}
             onConnectViaSshConfig={() => setModal({ type: 'sshConfig' })}
@@ -551,10 +619,12 @@ export default function App() {
               const session = sessions.find((s) => s.id === sessionId)
               if (!session) return null
 
+              const panelKey = `${sessionId}:${session.refreshNonce ?? 0}`
+
               if (isFileProtocol(session.protocol)) {
                 return (
                   <SftpPanel
-                    key={sessionId}
+                    key={panelKey}
                     sessionId={sessionId}
                     hostId={session.hostId}
                     hostName={session.hostName}
@@ -570,7 +640,7 @@ export default function App() {
 
               return (
                 <TerminalPanel
-                  key={sessionId}
+                  key={panelKey}
                   sessionId={sessionId}
                   hostId={session.hostId}
                   hostName={session.hostName}

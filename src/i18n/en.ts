@@ -189,6 +189,8 @@ export const en: Messages = {
     noHostsInGroup: 'No hosts in this group',
     edit: 'Edit',
     delete: 'Delete',
+    duplicate: 'Copy',
+    copyNameSuffix: ' (copy)',
   },
   sshConfig: {
     subtitle: 'via ~/.ssh/config',
@@ -341,6 +343,8 @@ export const en: Messages = {
     connectTitle: 'Connect to host',
     selectHostBtn: 'Select host',
     selectHost: 'Select host',
+    searchPlaceholder: 'Search name, address, or tags…',
+    noMatch: 'No matching hosts',
     connect: 'Connect →',
     otherHosts: 'Other hosts',
     emptyHint: 'Connect a saved host to browse files over SFTP',
@@ -522,6 +526,7 @@ export const en: Messages = {
   },
   sessionTab: {
     openNew: 'Open New',
+    refresh: 'Refresh',
     rename: 'Rename',
     renamePrompt: 'Enter tab name',
     close: 'Close',

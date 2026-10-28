@@ -184,6 +184,8 @@ export const zh = {
     noHostsInGroup: '该分组下暂无主机',
     edit: '编辑',
     delete: '删除',
+    duplicate: '拷贝',
+    copyNameSuffix: ' 副本',
   },
   sshConfig: {
     subtitle: '通过 ~/.ssh/config',
@@ -336,6 +338,8 @@ export const zh = {
     connectTitle: '连接主机',
     selectHostBtn: '选择主机',
     selectHost: '选择主机',
+    searchPlaceholder: '搜索主机名称、地址或标签…',
+    noMatch: '没有匹配的主机',
     connect: '连接 →',
     otherHosts: '其他主机',
     emptyHint: '连接已保存的主机，即可通过 SFTP 管理远程文件',
@@ -517,6 +521,7 @@ export const zh = {
   },
   sessionTab: {
     openNew: '新开',
+    refresh: '刷新',
     rename: '重命名',
     renamePrompt: '输入标签名称',
     close: '关闭',

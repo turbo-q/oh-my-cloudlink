@@ -19,6 +19,7 @@ interface SessionTabBarProps {
   onCloseSessionsToRight: (sessionId: string) => void
   onCloseAllSessions: () => void
   onDuplicateSession: (sessionId: string) => void
+  onRefreshSession: (sessionId: string) => void
   onRenameSession: (sessionId: string, tabLabel: string) => void
 }
 
@@ -46,6 +47,7 @@ export function SessionTabBar({
   onCloseSessionsToRight,
   onCloseAllSessions,
   onDuplicateSession,
+  onRefreshSession,
   onRenameSession,
 }: SessionTabBarProps) {
   const { t } = useI18n()
@@ -105,6 +107,11 @@ export function SessionTabBar({
           onClick: () => onDuplicateSession(sessionId),
         },
         {
+          id: 'refresh',
+          label: t('sessionTab.refresh'),
+          onClick: () => onRefreshSession(sessionId),
+        },
+        {
           id: 'rename',
           label: t('sessionTab.rename'),
           shortcut: SESSION_TAB_SHORTCUTS.rename(),
@@ -142,6 +149,7 @@ export function SessionTabBar({
       sessions,
       t,
       onDuplicateSession,
+      onRefreshSession,
       openRenameForSession,
       onCloseSession,
       onCloseOtherSessions,
@@ -167,7 +175,7 @@ export function SessionTabBar({
   return (
     <>
       <header className="shrink-0 bg-surface border-b border-app titlebar-safe drag-region shadow-[0_1px_0_rgb(255_255_255/0.03)]">
-        <div className="flex items-stretch h-11 overflow-x-auto no-drag">
+        <div className="flex items-stretch h-[52px] overflow-x-auto no-drag">
           <div className="flex items-center gap-2.5 px-4 border-r border-app shrink-0 h-full">
             <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-600 flex items-center justify-center shadow-lg shadow-emerald-500/20">
               <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -189,16 +197,19 @@ export function SessionTabBar({
             <div className="flex items-stretch border-l border-app ml-1 h-full">
               {sessions.map((session) => {
                 const label = getSessionTabLabel(session, sessions)
+                const hostAddr = session.hostname
+                const tabTitle = hostAddr ? `${label}\n${hostAddr}` : label
 
                 return (
                   <button
                     key={session.id}
+                    title={tabTitle}
                     onClick={() => onSelectSession(session.id)}
                     onContextMenu={(e) => {
                       e.preventDefault()
                       openContextMenu(session.id, e.clientX, e.clientY)
                     }}
-                    className={`flex items-center h-full gap-2 px-4 text-sm font-bold border-r border-app transition-colors shrink-0 max-w-[200px] ${
+                    className={`flex items-center h-full gap-2 px-3 text-sm font-bold border-r border-app transition-colors shrink-0 max-w-[220px] ${
                       showSession && activeSessionId === session.id
                         ? 'bg-app-hover-strong text-app'
                         : 'text-app-muted hover:text-app-secondary hover:bg-app-hover'
@@ -217,7 +228,14 @@ export function SessionTabBar({
                                 : '#64748b',
                       }}
                     />
-                    <span className="truncate">{label}</span>
+                    <span className="flex-1 min-w-0 flex flex-col items-start justify-center gap-0.5 leading-tight text-left">
+                      <span className="truncate w-full">{label}</span>
+                      {hostAddr ? (
+                        <span className="truncate w-full text-[10px] font-mono font-normal text-app-subtle">
+                          {hostAddr}
+                        </span>
+                      ) : null}
+                    </span>
                     <span
                       className="ml-auto p-0.5 rounded hover:bg-app-hover-strong text-app-subtle hover:text-app shrink-0"
                       onClick={(e) => {
