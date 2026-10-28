@@ -19,6 +19,7 @@ interface SessionTabBarProps {
   onCloseSessionsToRight: (sessionId: string) => void
   onCloseAllSessions: () => void
   onDuplicateSession: (sessionId: string) => void
+  onRefreshSession: (sessionId: string) => void
   onRenameSession: (sessionId: string, tabLabel: string) => void
 }
 
@@ -46,6 +47,7 @@ export function SessionTabBar({
   onCloseSessionsToRight,
   onCloseAllSessions,
   onDuplicateSession,
+  onRefreshSession,
   onRenameSession,
 }: SessionTabBarProps) {
   const { t } = useI18n()
@@ -105,6 +107,11 @@ export function SessionTabBar({
           onClick: () => onDuplicateSession(sessionId),
         },
         {
+          id: 'refresh',
+          label: t('sessionTab.refresh'),
+          onClick: () => onRefreshSession(sessionId),
+        },
+        {
           id: 'rename',
           label: t('sessionTab.rename'),
           shortcut: SESSION_TAB_SHORTCUTS.rename(),
@@ -142,6 +149,7 @@ export function SessionTabBar({
       sessions,
       t,
       onDuplicateSession,
+      onRefreshSession,
       openRenameForSession,
       onCloseSession,
       onCloseOtherSessions,

@@ -319,6 +319,42 @@ export default function App() {
     connectHost(host, mode)
   }, [sessions, hosts, connectHost, connectSshConfigHost, t])
 
+  /** Disconnect then remount the same tab so SSH/SFTP reconnect in place. */
+  const refreshSession = useCallback((sessionId: string) => {
+    const session = sessions.find((s) => s.id === sessionId)
+    if (!session) return
+
+    setActiveSessionId(sessionId)
+    setShowSession(true)
+    setSessions((prev) =>
+      prev.map((s) =>
+        s.id === sessionId
+          ? { ...s, status: 'connecting', errorMessage: undefined }
+          : s,
+      ),
+    )
+
+    const disconnect = isFileProtocol(session.protocol)
+      ? window.electronAPI.fileDisconnect(sessionId)
+      : window.electronAPI.sshDisconnect(sessionId)
+
+    void disconnect.finally(() => {
+      setSessions((prev) => {
+        if (!prev.some((s) => s.id === sessionId)) return prev
+        return prev.map((s) =>
+          s.id === sessionId
+            ? {
+                ...s,
+                refreshNonce: (s.refreshNonce ?? 0) + 1,
+                status: 'connecting',
+                errorMessage: undefined,
+              }
+            : s,
+        )
+      })
+    })
+  }, [sessions])
+
   const renameSession = useCallback((sessionId: string, tabLabel: string) => {
     setSessions((prev) =>
       prev.map((s) => (s.id === sessionId ? { ...s, tabLabel } : s)),
@@ -497,6 +533,7 @@ export default function App() {
         onCloseSessionsToRight={closeSessionsToRight}
         onCloseAllSessions={closeAllSessions}
         onDuplicateSession={duplicateSession}
+        onRefreshSession={refreshSession}
         onRenameSession={renameSession}
       />
 
@@ -582,10 +619,12 @@ export default function App() {
               const session = sessions.find((s) => s.id === sessionId)
               if (!session) return null
 
+              const panelKey = `${sessionId}:${session.refreshNonce ?? 0}`
+
               if (isFileProtocol(session.protocol)) {
                 return (
                   <SftpPanel
-                    key={sessionId}
+                    key={panelKey}
                     sessionId={sessionId}
                     hostId={session.hostId}
                     hostName={session.hostName}
@@ -601,7 +640,7 @@ export default function App() {
 
               return (
                 <TerminalPanel
-                  key={sessionId}
+                  key={panelKey}
                   sessionId={sessionId}
                   hostId={session.hostId}
                   hostName={session.hostName}

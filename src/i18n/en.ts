@@ -526,6 +526,7 @@ export const en: Messages = {
   },
   sessionTab: {
     openNew: 'Open New',
+    refresh: 'Refresh',
     rename: 'Rename',
     renamePrompt: 'Enter tab name',
     close: 'Close',

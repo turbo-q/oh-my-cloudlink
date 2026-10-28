@@ -76,8 +76,9 @@ export class SshManager {
     hooks?: SshSessionHooks,
     size?: SshTerminalSize,
   ): Promise<void> {
-    if (this.sessions.has(sessionId)) {
-      return
+    // Refresh / remount may reconnect with the same sessionId before cleanup finishes
+    if (this.sessions.has(sessionId) || this.pendingClients.has(sessionId)) {
+      await this.disconnect(sessionId)
     }
 
     attachHostKeyVerification(config, {

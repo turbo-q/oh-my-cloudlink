@@ -521,6 +521,7 @@ export const zh = {
   },
   sessionTab: {
     openNew: '新开',
+    refresh: '刷新',
     rename: '重命名',
     renamePrompt: '输入标签名称',
     close: '关闭',
