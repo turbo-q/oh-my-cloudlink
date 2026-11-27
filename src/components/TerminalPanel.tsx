@@ -3,7 +3,13 @@ import { Terminal } from 'xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { SearchAddon } from '@xterm/addon-search'
 import { WebLinksAddon } from '@xterm/addon-web-links'
-import { getStoredTheme, getTerminalTheme, resolveTheme, THEME_CHANGE_EVENT } from '../theme'
+import {
+  getStoredTheme,
+  getTerminalContrastRatio,
+  getTerminalTheme,
+  resolveTheme,
+  THEME_CHANGE_EVENT,
+} from '../theme'
 import type { Host, Snippet } from '../types'
 import { insertSnippetToSession } from '../utils/snippets'
 import { attachTerminalWebgl } from '../utils/attachTerminalWebgl'
@@ -138,11 +144,13 @@ export function TerminalPanel({
     const disconnectedText = msg('terminal.disconnected')
     const connectingText = msg('terminal.connecting')
 
+    const resolvedTheme = resolveTheme(getStoredTheme())
     const term = new Terminal({
       cursorBlink: true,
       fontSize: 14,
       fontFamily: '"JetBrains Mono", "SF Mono", Menlo, Monaco, "Courier New", monospace',
-      theme: getTerminalTheme(resolveTheme(getStoredTheme())),
+      theme: getTerminalTheme(resolvedTheme),
+      minimumContrastRatio: getTerminalContrastRatio(resolvedTheme),
       allowProposedApi: true,
       overviewRulerWidth: 12,
     })
@@ -297,6 +305,7 @@ export function TerminalPanel({
 
     const handleThemeChange = (event: Event) => {
       const { resolved } = (event as CustomEvent<{ resolved: 'light' | 'dark' }>).detail
+      term.options.minimumContrastRatio = getTerminalContrastRatio(resolved)
       if (searchOpenRef.current) {
         applyTerminalSearchTheme(term)
         return

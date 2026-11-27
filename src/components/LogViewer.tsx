@@ -3,7 +3,13 @@ import { Terminal } from 'xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { SearchAddon } from '@xterm/addon-search'
 import { WebLinksAddon } from '@xterm/addon-web-links'
-import { getStoredTheme, getTerminalTheme, resolveTheme, THEME_CHANGE_EVENT } from '../theme'
+import {
+  getStoredTheme,
+  getTerminalContrastRatio,
+  getTerminalTheme,
+  resolveTheme,
+  THEME_CHANGE_EVENT,
+} from '../theme'
 import { TerminalSearchBar, useTerminalSearchShortcut } from './TerminalSearchBar'
 import { useI18n } from '../i18n/I18nProvider'
 import {
@@ -65,6 +71,7 @@ export function LogViewer({ logId, title, live = false }: LogViewerProps) {
   useEffect(() => {
     if (!containerRef.current) return
 
+    const resolvedTheme = resolveTheme(getStoredTheme())
     const term = new Terminal({
       disableStdin: true,
       cursorInactiveStyle: 'none',
@@ -72,7 +79,8 @@ export function LogViewer({ logId, title, live = false }: LogViewerProps) {
       fontSize: 14,
       scrollback: 50000,
       fontFamily: '"JetBrains Mono", "SF Mono", Menlo, Monaco, "Courier New", monospace',
-      theme: getTerminalTheme(resolveTheme(getStoredTheme())),
+      theme: getTerminalTheme(resolvedTheme),
+      minimumContrastRatio: getTerminalContrastRatio(resolvedTheme),
       allowProposedApi: true,
       overviewRulerWidth: 12,
     })
@@ -92,6 +100,7 @@ export function LogViewer({ logId, title, live = false }: LogViewerProps) {
 
     const handleThemeChange = (event: Event) => {
       const { resolved } = (event as CustomEvent<{ resolved: 'light' | 'dark' }>).detail
+      term.options.minimumContrastRatio = getTerminalContrastRatio(resolved)
       if (searchOpenRef.current) {
         applyTerminalSearchTheme(term)
         return
